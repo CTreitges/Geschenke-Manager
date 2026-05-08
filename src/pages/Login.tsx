@@ -7,13 +7,13 @@ import { updateSettings } from "@/lib/storage";
 import { toast } from "sonner";
 
 export default function Login() {
-  const { settings } = useStore();
+  const { settings, loaded } = useStore();
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
 
   // First-time setup: no password set yet → use first input as the password
-  const firstTime = !settings.passwordHash;
+  const firstTime = loaded && !settings.passwordHash;
 
   useEffect(() => {
     document.title = "Geschenke-Manager — Login";
@@ -51,7 +51,11 @@ export default function Login() {
           <div className="text-5xl mb-3">🎁</div>
           <h1 className="text-2xl font-bold tracking-tight">Geschenke-Manager</h1>
           <p className="text-sm text-stone-500 mt-1">
-            {firstTime ? "Wähle ein Passwort für die Gruppe" : "Gemeinsames Passwort eingeben"}
+            {!loaded
+              ? "Verbinde mit Firebase…"
+              : firstTime
+                ? "Wähle ein Passwort für die Gruppe"
+                : "Gemeinsames Passwort eingeben"}
           </p>
         </div>
         <form onSubmit={submit} className="space-y-3">
@@ -62,8 +66,8 @@ export default function Login() {
             onChange={(e) => setPw(e.target.value)}
             autoFocus
           />
-          <Button type="submit" disabled={busy} className="w-full">
-            {firstTime ? "Passwort setzen" : "Reinkommen"}
+          <Button type="submit" disabled={busy || !loaded} className="w-full">
+            {!loaded ? "Lädt…" : firstTime ? "Passwort setzen" : "Reinkommen"}
           </Button>
         </form>
       </Card>

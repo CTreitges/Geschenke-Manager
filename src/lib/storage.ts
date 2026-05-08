@@ -1,6 +1,17 @@
+import {
+  collection,
+  doc,
+  onSnapshot,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  setDoc,
+  arrayUnion,
+  arrayRemove,
+  writeBatch,
+} from "firebase/firestore";
+import { db } from "./firebase";
 import type { Person, Gift, Suggestion, WishlistItem, Poll, Settings, ID } from "./types";
-
-const KEY = "gm:state:v1";
 
 interface State {
   persons: Person[];
@@ -9,6 +20,7 @@ interface State {
   wishlist: WishlistItem[];
   polls: Poll[];
   settings: Settings;
+  loaded: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -17,207 +29,186 @@ const DEFAULT_SETTINGS: Settings = {
   darkMode: false,
 };
 
-const EMPTY_STATE: State = {
+let state: State = {
   persons: [],
   gifts: [],
   suggestions: [],
   wishlist: [],
   polls: [],
   settings: DEFAULT_SETTINGS,
+  loaded: false,
 };
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
+let initialized = false;
 
-function load(): State {
-  try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return structuredClone(EMPTY_STATE);
-    const parsed = JSON.parse(raw) as Partial<State>;
-    return {
-      persons: parsed.persons ?? [],
-      gifts: parsed.gifts ?? [],
-      suggestions: parsed.suggestions ?? [],
-      wishlist: parsed.wishlist ?? [],
-      polls: parsed.polls ?? [],
-      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
-    };
-  } catch {
-    return structuredClone(EMPTY_STATE);
-  }
-}
-
-let state: State = load();
-
-function save() {
-  localStorage.setItem(KEY, JSON.stringify(state));
+function notify() {
+  state = { ...state }; // new ref so React picks up
   listeners.forEach((l) => l());
 }
 
+function init() {
+  if (initialized) return;
+  initialized = true;
+
+  onSnapshot(collection(db, "persons"), (snap) => {
+    state.persons = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Person, "id">) }));
+    notify();
+  });
+  onSnapshot(collection(db, "gifts"), (snap) => {
+    state.gifts = snap.docs.map((d) => {
+      const data = d.data() as Omit<Gift, "id">;
+      return { id: d.id, ...data, participantIds: data.participantIds ?? [] };
+    });
+    notify();
+  });
+  onSnapshot(collection(db, "suggestions"), (snap) => {
+    state.suggestions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Suggestion, "id">) }));
+    notify();
+  });
+  onSnapshot(collection(db, "wishlist"), (snap) => {
+    state.wishlist = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WishlistItem, "id">) }));
+    notify();
+  });
+  onSnapshot(collection(db, "polls"), (snap) => {
+    state.polls = snap.docs.map((d) => {
+      const data = d.data() as Omit<Poll, "giftId">;
+      return { giftId: d.id, ...data, votes: data.votes ?? {} };
+    });
+    notify();
+  });
+  onSnapshot(doc(db, "settings", "global"), (snap) => {
+    state.settings = { ...DEFAULT_SETTINGS, ...(snap.data() as Partial<Settings> | undefined) };
+    state.loaded = true;
+    notify();
+  });
+}
+
 export function subscribe(l: Listener): () => void {
+  init();
   listeners.add(l);
-  return () => listeners.delete(l);
+  return () => {
+    listeners.delete(l);
+  };
 }
 
 export function getSnapshot(): State {
   return state;
 }
 
-const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+// Strip undefined values — Firestore rejects them.
+function clean<T extends Record<string, unknown>>(obj: T): T {
+  const out = {} as T;
+  for (const k in obj) {
+    if (obj[k] !== undefined) out[k] = obj[k];
+  }
+  return out;
+}
 
 // ─── Persons ────────────────────────────────────────────
-export function addPerson(p: Omit<Person, "id" | "createdAt">): Person {
-  const person: Person = { ...p, id: uid(), createdAt: Date.now() };
-  state = { ...state, persons: [...state.persons, person] };
-  save();
-  return person;
+export async function addPerson(p: Omit<Person, "id" | "createdAt">) {
+  await addDoc(collection(db, "persons"), clean({ ...p, createdAt: Date.now() }));
 }
 
-export function updatePerson(id: ID, patch: Partial<Person>) {
-  state = {
-    ...state,
-    persons: state.persons.map((p) => (p.id === id ? { ...p, ...patch } : p)),
-  };
-  save();
+export async function updatePerson(id: ID, patch: Partial<Person>) {
+  await updateDoc(doc(db, "persons", id), clean(patch as Record<string, unknown>));
 }
 
-export function deletePerson(id: ID) {
-  state = {
-    ...state,
-    persons: state.persons.filter((p) => p.id !== id),
-    gifts: state.gifts.filter((g) => g.personId !== id),
-    wishlist: state.wishlist.filter((w) => w.personId !== id),
-  };
-  save();
+export async function deletePerson(id: ID) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "persons", id));
+  state.gifts.filter((g) => g.personId === id).forEach((g) => batch.delete(doc(db, "gifts", g.id)));
+  state.wishlist.filter((w) => w.personId === id).forEach((w) => batch.delete(doc(db, "wishlist", w.id)));
+  await batch.commit();
 }
 
 // ─── Gifts ──────────────────────────────────────────────
-export function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">): Gift {
-  const maxOrder = state.gifts.reduce((m, g) => Math.max(m, g.stackOrder), 0);
-  const gift: Gift = {
-    ...g,
-    id: uid(),
-    enteredStackAt: Date.now(),
-    stackOrder: maxOrder + 1,
-    participantIds: [],
-  };
-  state = { ...state, gifts: [...state.gifts, gift] };
-  save();
-  return gift;
-}
-
-export function updateGift(id: ID, patch: Partial<Gift>) {
-  state = {
-    ...state,
-    gifts: state.gifts.map((g) => (g.id === id ? { ...g, ...patch } : g)),
-  };
-  save();
-}
-
-export function reorderGifts(orderedIds: ID[]) {
-  const orderMap = Object.fromEntries(orderedIds.map((id, i) => [id, i + 1]));
-  state = {
-    ...state,
-    gifts: state.gifts.map((g) =>
-      orderMap[g.id] != null ? { ...g, stackOrder: orderMap[g.id] } : g,
-    ),
-  };
-  save();
-}
-
-export function toggleParticipant(giftId: ID, personId: ID) {
-  state = {
-    ...state,
-    gifts: state.gifts.map((g) => {
-      if (g.id !== giftId) return g;
-      const has = g.participantIds.includes(personId);
-      return {
-        ...g,
-        participantIds: has
-          ? g.participantIds.filter((p) => p !== personId)
-          : [...g.participantIds, personId],
-      };
+export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">) {
+  const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
+  await addDoc(
+    collection(db, "gifts"),
+    clean({
+      ...g,
+      enteredStackAt: Date.now(),
+      stackOrder: maxOrder + 1,
+      participantIds: [],
     }),
-  };
-  save();
+  );
 }
 
-export function markReceived(giftId: ID) {
-  updateGift(giftId, { status: "received", receivedAt: Date.now() });
+export async function updateGift(id: ID, patch: Partial<Gift>) {
+  await updateDoc(doc(db, "gifts", id), clean(patch as Record<string, unknown>));
+}
+
+export async function reorderGifts(orderedIds: ID[]) {
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, i) => {
+    batch.update(doc(db, "gifts", id), { stackOrder: i + 1 });
+  });
+  await batch.commit();
+}
+
+export async function toggleParticipant(giftId: ID, personId: ID) {
+  const gift = state.gifts.find((g) => g.id === giftId);
+  if (!gift) return;
+  const has = gift.participantIds.includes(personId);
+  await updateDoc(doc(db, "gifts", giftId), {
+    participantIds: has ? arrayRemove(personId) : arrayUnion(personId),
+  });
+}
+
+export async function markReceived(giftId: ID) {
+  await updateGift(giftId, { status: "received", receivedAt: Date.now() });
 }
 
 // ─── Suggestions ────────────────────────────────────────
-export function addSuggestion(s: Omit<Suggestion, "id" | "createdAt">): Suggestion {
-  const sug: Suggestion = { ...s, id: uid(), createdAt: Date.now() };
-  state = { ...state, suggestions: [...state.suggestions, sug] };
-  save();
-  return sug;
+export async function addSuggestion(s: Omit<Suggestion, "id" | "createdAt">) {
+  await addDoc(collection(db, "suggestions"), clean({ ...s, createdAt: Date.now() }));
 }
 
-export function deleteSuggestion(id: ID) {
-  state = {
-    ...state,
-    suggestions: state.suggestions.filter((s) => s.id !== id),
-  };
-  save();
+export async function deleteSuggestion(id: ID) {
+  await deleteDoc(doc(db, "suggestions", id));
 }
 
 // ─── Wishlist ───────────────────────────────────────────
-export function addWishItem(w: Omit<WishlistItem, "id" | "createdAt">): WishlistItem {
-  const item: WishlistItem = { ...w, id: uid(), createdAt: Date.now() };
-  state = { ...state, wishlist: [...state.wishlist, item] };
-  save();
-  return item;
+export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt">) {
+  await addDoc(collection(db, "wishlist"), clean({ ...w, createdAt: Date.now() }));
 }
 
-export function deleteWishItem(id: ID) {
-  state = { ...state, wishlist: state.wishlist.filter((w) => w.id !== id) };
-  save();
+export async function deleteWishItem(id: ID) {
+  await deleteDoc(doc(db, "wishlist", id));
 }
 
 // ─── Polls ──────────────────────────────────────────────
-function getOrCreatePoll(giftId: ID): Poll {
-  const existing = state.polls.find((p) => p.giftId === giftId);
-  if (existing) return existing;
-  const fresh: Poll = { giftId, status: "none", votes: {} };
-  state = { ...state, polls: [...state.polls, fresh] };
-  return fresh;
-}
-
-export function setPollStatus(giftId: ID, status: Poll["status"]) {
-  getOrCreatePoll(giftId);
+export async function setPollStatus(giftId: ID, status: Poll["status"]) {
+  const ref = doc(db, "polls", giftId);
   const now = Date.now();
-  state = {
-    ...state,
-    polls: state.polls.map((p) =>
-      p.giftId === giftId
-        ? {
-            ...p,
-            status,
-            startedAt: status === "active" ? now : p.startedAt,
-            closedAt: status === "closed" ? now : p.closedAt,
-          }
-        : p,
-    ),
-  };
-  save();
+  const existing = state.polls.find((p) => p.giftId === giftId);
+  await setDoc(
+    ref,
+    clean({
+      status,
+      votes: existing?.votes ?? {},
+      startedAt: status === "active" ? now : existing?.startedAt,
+      closedAt: status === "closed" ? now : existing?.closedAt,
+    }),
+    { merge: true },
+  );
 }
 
-export function castVote(giftId: ID, personId: ID, suggestionId: ID) {
-  getOrCreatePoll(giftId);
-  state = {
-    ...state,
-    polls: state.polls.map((p) =>
-      p.giftId === giftId
-        ? { ...p, votes: { ...p.votes, [personId]: suggestionId } }
-        : p,
-    ),
-  };
-  save();
+export async function castVote(giftId: ID, personId: ID, suggestionId: ID) {
+  const ref = doc(db, "polls", giftId);
+  await setDoc(
+    ref,
+    {
+      [`votes.${personId}`]: suggestionId,
+    },
+    { merge: true },
+  );
 }
 
 // ─── Settings ───────────────────────────────────────────
-export function updateSettings(patch: Partial<Settings>) {
-  state = { ...state, settings: { ...state.settings, ...patch } };
-  save();
+export async function updateSettings(patch: Partial<Settings>) {
+  await setDoc(doc(db, "settings", "global"), clean(patch as Record<string, unknown>), { merge: true });
 }

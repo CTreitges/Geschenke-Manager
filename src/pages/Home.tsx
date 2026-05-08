@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Badge, Button, Card, EmptyState, Modal, PageHeader } from "@/components/ui";
+import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import {
+  ageOnNextBirthday,
+  birthdayYearForPerson,
+  daysAgo,
   daysUntilBirthday,
   findHero,
   formatBirthday,
-  formatDaysUntil,
+  formatTodayHeader,
   isInStackWindow,
-  birthdayYearForPerson,
   sortStack,
 } from "@/lib/birthdays";
-import { addGift, reorderGifts, markReceived } from "@/lib/storage";
+import { addGift, markReceived, reorderGifts } from "@/lib/storage";
+import { getIdentity } from "@/lib/auth";
 import {
   DndContext,
   closestCenter,
@@ -73,57 +76,98 @@ export default function Home() {
     reorderGifts(reordered.map((g) => g.id));
   }
 
+  const myId = getIdentity();
+  const me = persons.find((p) => p.id === myId);
+  const heroDays = hero ? daysUntilBirthday(hero) : 0;
+
   return (
-    <>
-      <PageHeader title="Übersicht" />
-
-      {hero ? (
-        <Card
-          className="bg-gradient-to-br from-amber-100 to-orange-200 dark:from-amber-900/40 dark:to-orange-900/40 border-amber-200 dark:border-amber-800/50 mb-6"
-          onClick={() => nav(`/person/${hero.id}`)}
-        >
-          <div className="text-xs uppercase tracking-wide text-amber-800 dark:text-amber-300 font-semibold mb-2">
-            🎂 Als Nächstes hat Geburtstag
+    <div>
+      {/* Greeting */}
+      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
+        <div>
+          <div className="text-xs font-semibold text-stone-400 tracking-[0.05em] uppercase">
+            {formatTodayHeader()}
           </div>
-          <div className="text-3xl font-bold">{hero.name}</div>
-          <div className="mt-1 text-amber-900 dark:text-amber-200">
-            {formatDaysUntil(daysUntilBirthday(hero))} · {formatBirthday(hero)}
-          </div>
-        </Card>
-      ) : (
-        <Card className="mb-6">
-          <EmptyState
-            icon="👋"
-            title="Noch keine Personen"
-            hint="Lege unter Personen die ersten Freunde an."
-          />
-        </Card>
-      )}
-
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-lg font-semibold">
-          Aktueller Stack
-          {stack.length > 0 && (
-            <Badge tone="primary" className="ml-2">{stack.length}</Badge>
-          )}
-        </h2>
-        <Button size="sm" variant="secondary" onClick={() => setAddOpen(true)}>
-          + Manuell
-        </Button>
+          <h1 className="m-0 mt-0.5 text-[26px] font-extrabold text-stone-900 dark:text-stone-50 tracking-tight">
+            Hallo{me ? `, ${me.name}` : ""} 👋
+          </h1>
+        </div>
       </div>
 
-      {stack.length === 0 ? (
-        <Card>
-          <EmptyState
-            icon="🎉"
-            title="Stack ist leer"
-            hint="Es kommen automatisch Personen rein, deren Geburtstag in 30 Tagen ist."
-          />
-        </Card>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-          <SortableContext items={stack.map((g) => g.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-3">
+      {/* Hero card */}
+      {hero && (
+        <div className="px-4 pt-1 pb-4">
+          <div
+            onClick={() => {
+              const sg = stack.find((g) => g.personId === hero.id);
+              if (sg) nav(`/gift/${sg.id}`);
+              else nav(`/person/${hero.id}`);
+            }}
+            className="relative overflow-hidden rounded-3xl text-white cursor-pointer"
+            style={{
+              padding: "20px 20px 22px",
+              background: "linear-gradient(135deg, #FBBF24 0%, #F97316 100%)",
+              boxShadow:
+                "0 18px 36px -12px rgba(249,115,22,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)",
+            }}
+          >
+            <Confetti active={heroDays <= 3} />
+            <div className="flex items-center gap-2 text-[13px] font-semibold opacity-95">
+              <span>🎂</span> Als Nächstes hat Geburtstag …
+            </div>
+            <div className="flex items-end gap-3.5 mt-3">
+              <Avatar person={hero} size={56} />
+              <div className="flex-1 min-w-0">
+                <div className="text-[32px] font-extrabold leading-none tracking-tight mb-1">
+                  {hero.name}
+                </div>
+                <div className="text-[13px] opacity-95 font-medium">
+                  {formatBirthday(hero)}
+                  {ageOnNextBirthday(hero) && ` · wird ${ageOnNextBirthday(hero)}`}
+                </div>
+              </div>
+            </div>
+            <div
+              className="mt-3.5 px-3.5 py-2.5 rounded-2xl flex items-center justify-between"
+              style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)" }}
+            >
+              <div className="text-[22px] font-extrabold tracking-tight">
+                {heroDays === 0 ? "Heute! 🎉" : heroDays === 1 ? "Morgen" : `in ${heroDays} Tagen`}
+              </div>
+              <Icon.chev className="opacity-90" />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {!hero && (
+        <div className="px-4 pb-4">
+          <Card>
+            <EmptyState emoji="👋" title="Noch keine Personen" subtitle="Lege im Personen-Tab die ersten Freunde an." />
+          </Card>
+        </div>
+      )}
+
+      {/* Section header */}
+      <div className="px-5 pt-1.5 pb-2.5 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <h2 className="m-0 text-[17px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
+            Aktueller Stack
+          </h2>
+          <Chip variant="accent">{stack.length}</Chip>
+        </div>
+        <span className="text-xs text-stone-400 font-medium">ältest. oben</span>
+      </div>
+
+      {/* Stack */}
+      <div className="px-4 pb-24 flex flex-col gap-2.5">
+        {stack.length === 0 ? (
+          <Card>
+            <EmptyState emoji="🎉" title="Stack ist leer" subtitle="Personen erscheinen automatisch 30 Tage vor ihrem Geburtstag." />
+          </Card>
+        ) : (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
+            <SortableContext items={stack.map((g) => g.id)} strategy={verticalListSortingStrategy}>
               {stack.map((g) => {
                 const p = persons.find((x) => x.id === g.personId);
                 if (!p) return null;
@@ -131,9 +175,9 @@ export default function Home() {
                   <SortableStackCard
                     key={g.id}
                     giftId={g.id}
-                    name={p.name}
-                    bd={formatBirthday(p)}
+                    person={p}
                     days={daysUntilBirthday(p)}
+                    inStackDays={daysAgo(g.enteredStackAt)}
                     participants={g.participantIds.length}
                     budget={g.participantIds.length * g.budgetPerPerson}
                     onOpen={() => nav(`/gift/${g.id}`)}
@@ -146,80 +190,93 @@ export default function Home() {
                   />
                 );
               })}
-            </div>
-          </SortableContext>
-        </DndContext>
-      )}
+            </SortableContext>
+          </DndContext>
+        )}
+      </div>
 
-      <AddManualModal open={addOpen} onClose={() => setAddOpen(false)} />
-    </>
+      <FAB onClick={() => setAddOpen(true)} />
+      <AddManualDialog open={addOpen} onClose={() => setAddOpen(false)} />
+    </div>
   );
 }
 
 function SortableStackCard({
   giftId,
-  name,
-  bd,
+  person,
   days,
+  inStackDays,
   participants,
   budget,
   onOpen,
   onReceive,
 }: {
   giftId: string;
-  name: string;
-  bd: string;
+  person: import("@/lib/types").Person;
   days: number;
+  inStackDays: number;
   participants: number;
   budget: number;
   onOpen: () => void;
   onReceive: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: giftId,
-  });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: giftId });
   const style = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
+    opacity: isDragging ? 0.4 : 1,
   };
+  const isUrgent = days <= 7;
+
   return (
     <div ref={setNodeRef} style={style}>
-      <Card>
-        <div className="flex items-center gap-3">
-          <button
-            {...attributes}
-            {...listeners}
-            className="touch-none cursor-grab active:cursor-grabbing text-stone-400 hover:text-stone-600 px-1 -ml-1"
-            aria-label="Verschieben"
-          >
-            ⠿
-          </button>
-          <button onClick={onOpen} className="flex-1 text-left min-w-0">
-            <div className="font-semibold truncate">{name}</div>
-            <div className="text-sm text-stone-500 truncate">
-              {bd} · {formatDaysUntil(days)}
-            </div>
-          </button>
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex gap-1.5">
-              <Badge tone="neutral">{participants} 👥</Badge>
-              <Badge tone="primary">{budget} €</Badge>
-            </div>
-            <button
-              onClick={onReceive}
-              className="text-xs text-emerald-600 hover:text-emerald-700 font-medium"
-            >
-              ✓ erhalten
-            </button>
+      <div
+        className="flex items-center gap-2.5 pl-2 pr-3.5 py-3.5 bg-white dark:bg-stone-800 rounded-[18px] border border-[#F0EBE6] dark:border-[#3A3633] shadow-[0_1px_2px_rgba(28,25,23,0.04)]"
+      >
+        <button
+          {...attributes}
+          {...listeners}
+          aria-label="Verschieben"
+          className="touch-none cursor-grab active:cursor-grabbing text-stone-400 dark:text-stone-600 px-0.5 py-1"
+        >
+          <Icon.drag />
+        </button>
+        <Avatar person={person} size={42} />
+        <button onClick={onOpen} className="flex-1 min-w-0 text-left">
+          <div className="text-base font-bold text-stone-900 dark:text-stone-50 tracking-tight truncate">
+            {person.name}{" "}
+            <span className="text-stone-400 font-medium">· {formatBirthday(person)}</span>
           </div>
+          <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 flex gap-2 items-center">
+            <span
+              className={isUrgent ? "font-semibold" : "font-medium"}
+              style={{ color: isUrgent ? "var(--gm-urgent, #B45309)" : undefined }}
+            >
+              {days === 0 ? "🎂 heute!" : `in ${days} T.`}
+            </span>
+            <span className="opacity-50">·</span>
+            <span>seit {inStackDays} T. im Stack</span>
+          </div>
+        </button>
+        <div className="flex flex-col gap-1 items-end">
+          <Chip variant="neutral">
+            <Icon.users size={12} className="-mr-px" />
+            {participants}
+          </Chip>
+          <Chip variant="accent">{budget} €</Chip>
+          <button
+            onClick={onReceive}
+            className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-semibold mt-0.5"
+          >
+            ✓ erhalten
+          </button>
         </div>
-      </Card>
+      </div>
     </div>
   );
 }
 
-function AddManualModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { persons, settings } = useStore();
   const [personId, setPersonId] = useState("");
   const [year, setYear] = useState(new Date().getFullYear());
@@ -241,37 +298,39 @@ function AddManualModal({ open, onClose }: { open: boolean; onClose: () => void 
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Geschenk manuell hinzufügen">
+    <Dialog open={open} onClose={onClose} title="Geschenk manuell hinzufügen">
       <div className="space-y-3">
-        <label className="block text-sm font-medium">Person</label>
-        <select
-          value={personId}
-          onChange={(e) => setPersonId(e.target.value)}
-          className="h-11 w-full rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 px-4"
-        >
-          <option value="">— wählen —</option>
-          {persons.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-            </option>
-          ))}
-        </select>
-        <label className="block text-sm font-medium mt-3">Jahr</label>
-        <input
-          type="number"
-          value={year}
-          onChange={(e) => setYear(+e.target.value)}
-          className="h-11 w-full rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 px-4"
-        />
-        <div className="flex gap-2 mt-4">
-          <Button variant="secondary" onClick={onClose} className="flex-1">
-            Abbrechen
-          </Button>
-          <Button onClick={submit} disabled={!personId} className="flex-1">
-            Hinzufügen
-          </Button>
+        <div>
+          <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
+            Person
+          </label>
+          <select
+            value={personId}
+            onChange={(e) => setPersonId(e.target.value)}
+            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-[15px]"
+          >
+            <option value="">— wählen —</option>
+            {persons.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
+            Jahr
+          </label>
+          <input
+            type="number"
+            value={year}
+            onChange={(e) => setYear(+e.target.value)}
+            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-[15px]"
+          />
+        </div>
+        <div className="flex gap-2 pt-3">
+          <Button variant="secondary" onClick={onClose} className="flex-1">Abbrechen</Button>
+          <Button onClick={submit} disabled={!personId} className="flex-1">Hinzufügen</Button>
         </div>
       </div>
-    </Modal>
+    </Dialog>
   );
 }

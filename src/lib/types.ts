@@ -5,6 +5,7 @@ export interface Person {
   name: string;
   birthday: string; // "MM-DD" or "YYYY-MM-DD" (year ignored for birthday calc)
   email?: string;
+  color: string; // avatar background, hex
   createdAt: number;
 }
 

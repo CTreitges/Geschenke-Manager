@@ -22,6 +22,8 @@ export interface Gift {
   enteredStackAt: number;
   receivedAt?: number;
   participantIds: ID[];
+  /** Suggestions the group has decided to actually buy. Editable after a poll closes. */
+  selectedSuggestionIds?: ID[];
 }
 
 export interface Suggestion {

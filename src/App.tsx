@@ -7,6 +7,7 @@ import People from "@/pages/People";
 import PersonDetail from "@/pages/PersonDetail";
 import GiftDetail from "@/pages/GiftDetail";
 import Settings from "@/pages/Settings";
+import MyWishlist from "@/pages/MyWishlist";
 import { isAuthed } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
 
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/people" element={<People />} />
                 <Route path="/person/:id" element={<PersonDetail />} />
                 <Route path="/gift/:id" element={<GiftDetail />} />
+                <Route path="/wishlist" element={<MyWishlist />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

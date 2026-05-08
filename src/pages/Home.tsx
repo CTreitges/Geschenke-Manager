@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
@@ -13,7 +13,7 @@ import {
   isInStackWindow,
   sortStack,
 } from "@/lib/birthdays";
-import { addGift, deleteGift, markReceived } from "@/lib/storage";
+import { addGift, deleteGift, ensureAutoGift, markReceived } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 import type { Person } from "@/lib/types";
@@ -25,36 +25,21 @@ export default function Home() {
   const [addOpen, setAddOpen] = useState(false);
 
   // Auto-create gifts when persons enter the 30-day window.
-  // Wait for the first snapshots from Firestore before doing anything —
-  // otherwise the effect runs with empty arrays during initial mount
-  // and creates duplicate gifts on every reload.
-  // Plus: in-flight tracking prevents the same effect tick re-firing
-  // before the addGift write round-trips through the snapshot.
-  const inFlight = useRef<Set<string>>(new Set());
+  // Uses ensureAutoGift() which writes to a deterministic doc id
+  // (`${personId}_${year}`) — this makes the "does a gift already exist?"
+  // check an atomic Firestore-side getDoc() instead of relying on the
+  // local-snapshot cache, which previously produced duplicates on
+  // every reload due to the cache-vs-server snapshot race.
+  // Hydration gate is still useful so we only iterate once persons are loaded.
   useEffect(() => {
-    if (!giftsHydrated || !personsHydrated) return;
+    if (!personsHydrated) return;
     persons.forEach((p) => {
       if (!isInStackWindow(p)) return;
       const year = birthdayYearForPerson(p);
-      const key = `${p.id}:${year}`;
-      const exists = gifts.some(
-        (g) => g.personId === p.id && g.year === year && g.status === "open",
-      );
-      if (exists) {
-        inFlight.current.delete(key);
-        return;
-      }
-      if (inFlight.current.has(key)) return;
-      inFlight.current.add(key);
-      addGift({
-        personId: p.id,
-        year,
-        status: "open",
-        budgetPerPerson: settings.defaultBudget,
-        manuallyAdded: false,
-      });
+      ensureAutoGift(p.id, year, settings.defaultBudget);
     });
-  }, [persons, gifts, settings.defaultBudget, giftsHydrated, personsHydrated]);
+  }, [persons, settings.defaultBudget, personsHydrated]);
+  void giftsHydrated; // gate-only signal, kept for future use
 
   const stack = useMemo(() => sortStack(gifts, persons), [gifts, persons]);
   const hero = useMemo(() => findHero(persons), [persons]);

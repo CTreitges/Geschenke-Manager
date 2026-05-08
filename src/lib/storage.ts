@@ -9,6 +9,10 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
+  getDocs,
+  query,
+  where,
+  limit,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { Person, Gift, Suggestion, WishlistItem, Poll, Settings, ID } from "./types";
@@ -143,6 +147,49 @@ export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrde
       enteredStackAt: Date.now(),
       stackOrder: maxOrder + 1,
       participantIds: [],
+    }),
+  );
+}
+
+/**
+ * Auto-create a gift for (personId, year) IF none exists yet.
+ *
+ * Strategy: query the gifts collection by (personId, year, status=open)
+ * BEFORE creating. The query goes against Firestore directly (not the
+ * local snapshot cache) so it is race-safe across reloads, including
+ * the case where the local cache is empty during initial load.
+ *
+ * Uses a deterministic doc id "{personId}_{year}" for the new write so
+ * concurrent calls from two devices/tabs collapse to the same document.
+ */
+export async function ensureAutoGift(
+  personId: ID,
+  year: number,
+  budgetPerPerson: number,
+): Promise<void> {
+  const q = query(
+    collection(db, "gifts"),
+    where("personId", "==", personId),
+    where("year", "==", year),
+    where("status", "==", "open"),
+    limit(1),
+  );
+  const found = await getDocs(q);
+  if (!found.empty) return;
+
+  const ref = doc(db, "gifts", `${personId}_${year}`);
+  const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
+  await setDoc(
+    ref,
+    clean({
+      personId,
+      year,
+      status: "open" as const,
+      budgetPerPerson,
+      manuallyAdded: false,
+      enteredStackAt: Date.now(),
+      stackOrder: maxOrder + 1,
+      participantIds: [] as string[],
     }),
   );
 }

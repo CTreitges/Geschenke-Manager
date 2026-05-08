@@ -20,7 +20,13 @@ interface State {
   wishlist: WishlistItem[];
   polls: Poll[];
   settings: Settings;
+  /** settings/global has arrived — used by Login to wait for password hash. */
   loaded: boolean;
+  /** First gifts snapshot has been received — used by Home to avoid
+   *  auto-creating duplicate stack entries before initial data arrives. */
+  giftsHydrated: boolean;
+  /** First persons snapshot has been received. */
+  personsHydrated: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -37,6 +43,8 @@ let state: State = {
   polls: [],
   settings: DEFAULT_SETTINGS,
   loaded: false,
+  giftsHydrated: false,
+  personsHydrated: false,
 };
 
 type Listener = () => void;
@@ -54,6 +62,7 @@ function init() {
 
   onSnapshot(collection(db, "persons"), (snap) => {
     state.persons = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Person, "id">) }));
+    state.personsHydrated = true;
     notify();
   });
   onSnapshot(collection(db, "gifts"), (snap) => {
@@ -61,6 +70,7 @@ function init() {
       const data = d.data() as Omit<Gift, "id">;
       return { id: d.id, ...data, participantIds: data.participantIds ?? [] };
     });
+    state.giftsHydrated = true;
     notify();
   });
   onSnapshot(collection(db, "suggestions"), (snap) => {

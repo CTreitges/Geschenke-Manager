@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 export function Layout({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const tabs = [
-    { to: "/", label: "Stack", Icon: Icon.home },
+    { to: "/", label: "Übersicht", Icon: Icon.home },
     { to: "/people", label: "Personen", Icon: Icon.users },
     { to: "/wishlist", label: "Wunschliste", Icon: Icon.gift },
     { to: "/settings", label: "Einstellungen", Icon: Icon.cog },
@@ -22,7 +22,17 @@ export function Layout({ children }: { children: ReactNode }) {
           <Link to="/" className="text-base font-semibold tracking-tight">
             🎁 Geschenke
           </Link>
-          <IdentityChip />
+          <div className="flex items-center gap-2">
+            <Link
+              to="/tutorial"
+              aria-label="Tutorial"
+              title="So funktioniert's"
+              className="w-8 h-8 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 flex items-center justify-center text-sm font-bold"
+            >
+              ?
+            </Link>
+            <IdentityChip />
+          </div>
         </div>
       </header>
       <main className="max-w-2xl mx-auto pb-8">{children}</main>

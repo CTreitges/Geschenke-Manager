@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import Login from "@/pages/Login";
 import Home from "@/pages/Home";
@@ -20,6 +20,24 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v1";
+
+/**
+ * Auto-open the tutorial on first visit per browser. Marks itself as
+ * seen via localStorage so it never auto-opens again on this device.
+ */
+function FirstRunTutorial() {
+  const nav = useNavigate();
+  const location = useLocation();
+  useEffect(() => {
+    if (location.pathname === "/tutorial") return;
+    if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "yes") return;
+    localStorage.setItem(TUTORIAL_SEEN_KEY, "yes");
+    nav("/tutorial");
+  }, [location.pathname, nav]);
+  return null;
+}
+
 export default function App() {
   const { settings } = useStore();
 
@@ -35,6 +53,7 @@ export default function App() {
         path="/*"
         element={
           <RequireAuth>
+            <FirstRunTutorial />
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />

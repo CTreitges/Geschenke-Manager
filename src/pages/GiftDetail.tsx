@@ -13,6 +13,7 @@ import {
   setPollStatus,
   toggleParticipant,
   updateGift,
+  updateSuggestion,
 } from "@/lib/storage";
 import { ageOnNextBirthday, daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import { pickColor } from "@/lib/colors";
@@ -163,6 +164,14 @@ export default function GiftDetail() {
 
       {/* ── Vorschläge mit Auswahl ────────────────────────────── */}
       <Section title="Vorschläge" hint={`${giftSuggestions.length}`}>
+        {/* My-vote banner during active poll */}
+        {pollStatus === "active" && myId && (
+          <MyVoteBanner
+            mySuggestionId={poll?.votes[myId]}
+            suggestions={giftSuggestions}
+          />
+        )}
+
         {giftSuggestions.length === 0 ? (
           <EmptyState emoji="💡" title="Noch keine Ideen" />
         ) : (
@@ -182,9 +191,14 @@ export default function GiftDetail() {
                 onToggleSelect={() => toggleSelection(s.id)}
                 onVote={() => {
                   if (myId) {
-                    castVote(gift.id, myId, s.id);
-                    toast.success("Stimme gespeichert");
+                    castVote(giftId, myId, s.id);
+                    const had = poll?.votes[myId];
+                    toast.success(had && had !== s.id ? "Stimme geändert" : "Stimme gespeichert");
                   }
+                }}
+                onSave={(patch) => {
+                  updateSuggestion(s.id, patch);
+                  toast.success("Vorschlag gespeichert");
                 }}
                 onDelete={() => {
                   if (confirm(`Vorschlag „${s.title}" löschen?`)) {
@@ -196,22 +210,18 @@ export default function GiftDetail() {
             ))}
           </div>
         )}
-        <SuggestionAdder giftId={gift.id} myId={myId} />
+        <SuggestionAdder giftId={giftId} myId={myId} />
 
         {selectedIds.length > 0 && (
-          <div className="mt-3 px-3.5 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 flex items-center justify-between">
-            <div className="text-[13px]">
-              <div className="font-bold text-violet-700 dark:text-violet-300">
-                {selectedIds.length} ausgewählt
-              </div>
-              <div className="text-xs text-violet-600/80 dark:text-violet-400/80">
-                Theoretische Gesamtsumme
-              </div>
-            </div>
-            <div className="text-[22px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums">
-              {selectedSum} €
-            </div>
-          </div>
+          <SelectedSummary
+            selectedIds={selectedIds}
+            suggestions={giftSuggestions}
+            sum={selectedSum}
+            onRemove={(sid) =>
+              setGiftSelections(giftId, selectedIds.filter((x) => x !== sid))
+            }
+            onClear={() => setGiftSelections(giftId, [])}
+          />
         )}
       </Section>
 
@@ -437,7 +447,105 @@ function ParticipantBulkButtons({
   );
 }
 
-// ── Suggestion card ───────────────────────────────────────────
+// ── My-vote banner ────────────────────────────────────────────
+function MyVoteBanner({
+  mySuggestionId,
+  suggestions,
+}: {
+  mySuggestionId: string | undefined;
+  suggestions: Suggestion[];
+}) {
+  const my = mySuggestionId ? suggestions.find((s) => s.id === mySuggestionId) : null;
+  return (
+    <div
+      className="mb-2.5 px-3.5 py-2.5 rounded-xl flex items-center gap-2.5"
+      style={{
+        background: my ? "rgba(124, 58, 237, 0.08)" : "rgba(245, 158, 11, 0.08)",
+        border: `1px solid ${my ? "rgba(124, 58, 237, 0.2)" : "rgba(245, 158, 11, 0.25)"}`,
+      }}
+    >
+      <span className="text-base">{my ? "✓" : "🗳️"}</span>
+      <div className="flex-1 text-[13px]">
+        {my ? (
+          <>
+            <span className="text-stone-500 dark:text-stone-400">Du hast gewählt:</span>{" "}
+            <span className="font-semibold text-stone-900 dark:text-stone-50">{my.title}</span>
+            <div className="text-xs text-stone-400 mt-0.5">
+              Auf einen anderen Vorschlag klicken, um die Stimme zu ändern.
+            </div>
+          </>
+        ) : (
+          <span className="font-semibold text-amber-800 dark:text-amber-300">
+            Du hast noch nicht gestimmt — wähle einen Vorschlag.
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Selected summary ──────────────────────────────────────────
+function SelectedSummary({
+  selectedIds,
+  suggestions,
+  sum,
+  onRemove,
+  onClear,
+}: {
+  selectedIds: string[];
+  suggestions: Suggestion[];
+  sum: number;
+  onRemove: (id: string) => void;
+  onClear: () => void;
+}) {
+  const selected = selectedIds
+    .map((id) => suggestions.find((s) => s.id === id))
+    .filter((s): s is Suggestion => !!s);
+  return (
+    <div className="mt-3 px-3.5 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900">
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-[13px] font-bold text-violet-700 dark:text-violet-300">
+          {selected.length} ausgewählt · Theoretische Gesamtsumme
+        </div>
+        <div className="text-[20px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums">
+          {sum} €
+        </div>
+      </div>
+      <div className="flex flex-col gap-1">
+        {selected.map((s) => (
+          <div
+            key={s.id}
+            className="flex items-center justify-between gap-2 text-[13px] py-1"
+          >
+            <div className="flex-1 min-w-0 truncate text-stone-700 dark:text-stone-200">
+              {s.title}
+            </div>
+            <span className="text-violet-700 dark:text-violet-300 font-semibold tabular-nums">
+              {s.price != null ? `${s.price} €` : "—"}
+            </span>
+            <button
+              onClick={() => onRemove(s.id)}
+              className="text-stone-400 hover:text-red-500 px-1"
+              aria-label="Aus Auswahl entfernen"
+            >
+              <Icon.x size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+      {selected.length > 1 && (
+        <button
+          onClick={onClear}
+          className="mt-1.5 text-xs font-semibold text-violet-700/80 dark:text-violet-400/80"
+        >
+          Alle entfernen
+        </button>
+      )}
+    </div>
+  );
+}
+
+// ── Suggestion card (with inline edit) ────────────────────────
 function SuggestionCard({
   suggestion: s,
   author,
@@ -450,6 +558,7 @@ function SuggestionCard({
   isSelected,
   onToggleSelect,
   onVote,
+  onSave,
   onDelete,
 }: {
   suggestion: Suggestion;
@@ -463,8 +572,32 @@ function SuggestionCard({
   isSelected: boolean;
   onToggleSelect: () => void;
   onVote: () => void;
+  onSave: (patch: Partial<Suggestion>) => void;
   onDelete: () => void;
 }) {
+  const [editing, setEditing] = useState(false);
+  const [title, setTitle] = useState(s.title);
+  const [url, setUrl] = useState(s.url ?? "");
+  const [price, setPrice] = useState(s.price != null ? String(s.price) : "");
+
+  function startEdit() {
+    setTitle(s.title);
+    setUrl(s.url ?? "");
+    setPrice(s.price != null ? String(s.price) : "");
+    setEditing(true);
+  }
+
+  function save() {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    onSave({
+      title: trimmed,
+      url: url.trim() || undefined,
+      price: price ? +price : undefined,
+    });
+    setEditing(false);
+  }
+
   return (
     <div
       className="px-3.5 py-3.5 rounded-2xl relative bg-white dark:bg-stone-800 border"
@@ -502,52 +635,112 @@ function SuggestionCard({
         </button>
 
         <div className="flex-1 min-w-0">
-          <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 leading-tight">
-            {s.title}
-          </div>
-          <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
-            {s.price != null && (
-              <span className="text-violet-700 dark:text-violet-300 font-semibold">
-                {s.price} €
-              </span>
-            )}
-            {s.url && (
-              <a
-                href={s.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="text-stone-500 flex items-center gap-1"
-              >
-                <Icon.link /> Link
-              </a>
-            )}
-            <span className="text-stone-400">von {author?.name ?? "?"}</span>
-          </div>
+          {editing ? (
+            <div className="space-y-2">
+              <Input
+                placeholder="Titel"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                autoFocus
+                className="py-2 text-[14px]"
+              />
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Link (optional)"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  className="flex-[2] py-2 text-[13px]"
+                />
+                <Input
+                  placeholder="€"
+                  type="number"
+                  value={price}
+                  onChange={(e) => setPrice(e.target.value)}
+                  className="flex-1 py-2 text-[13px]"
+                />
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => setEditing(false)}
+                  className="text-xs font-semibold text-stone-500 px-2 py-1.5 rounded-md"
+                >
+                  Abbrechen
+                </button>
+                <button
+                  onClick={save}
+                  disabled={!title.trim()}
+                  className="text-xs font-semibold text-violet-700 dark:text-violet-300 px-2 py-1.5 rounded-md disabled:opacity-50"
+                >
+                  Speichern
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 leading-tight">
+                {s.title}
+              </div>
+              <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
+                {s.price != null && (
+                  <span className="text-violet-700 dark:text-violet-300 font-semibold">
+                    {s.price} €
+                  </span>
+                )}
+                {s.url && (
+                  <a
+                    href={s.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-stone-500 flex items-center gap-1"
+                  >
+                    <Icon.link /> Link
+                  </a>
+                )}
+                <span className="text-stone-400">von {author?.name ?? "?"}</span>
+              </div>
+            </>
+          )}
         </div>
 
-        {/* Vote-only-while-active */}
-        {pollStatus === "active" && myId && (
-          <button
-            onClick={onVote}
-            className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white"
-            style={{
-              border: myVote ? "none" : "2px solid #D6D3D1",
-              background: myVote
-                ? "linear-gradient(135deg, #4F46E5, #7C3AED)"
-                : "transparent",
-            }}
-          >
-            {myVote && <Icon.check size={14} />}
-          </button>
+        {!editing && (
+          <>
+            {pollStatus === "active" && myId && (
+              <button
+                onClick={onVote}
+                aria-label={myVote ? "Deine Stimme — klick zum Ändern" : "Wählen"}
+                className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white"
+                style={{
+                  border: myVote ? "none" : "2px solid #D6D3D1",
+                  background: myVote
+                    ? "linear-gradient(135deg, #4F46E5, #7C3AED)"
+                    : "transparent",
+                }}
+              >
+                {myVote && <Icon.check size={14} />}
+              </button>
+            )}
+            <button
+              onClick={startEdit}
+              className="text-stone-300 hover:text-violet-600 p-1"
+              aria-label="Bearbeiten"
+              title="Bearbeiten"
+            >
+              <Icon.pencil />
+            </button>
+            <button
+              onClick={onDelete}
+              className="text-stone-300 hover:text-red-500 p-1"
+              aria-label="Löschen"
+              title="Löschen"
+            >
+              <Icon.x size={16} />
+            </button>
+          </>
         )}
-
-        <button onClick={onDelete} className="text-stone-300 hover:text-red-500 p-1">
-          <Icon.x size={16} />
-        </button>
       </div>
 
-      {pollStatus !== "none" && voters.length > 0 && (
+      {!editing && pollStatus !== "none" && voters.length > 0 && (
         <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-stone-700 flex items-center gap-1.5 flex-wrap">
           <div className="flex">
             {voters.map((vid, i) => (

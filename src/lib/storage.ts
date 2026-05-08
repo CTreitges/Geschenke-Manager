@@ -189,6 +189,10 @@ export async function deleteSuggestion(id: ID) {
   await deleteDoc(doc(db, "suggestions", id));
 }
 
+export async function updateSuggestion(id: ID, patch: Partial<Suggestion>) {
+  await updateDoc(doc(db, "suggestions", id), clean(patch as Record<string, unknown>));
+}
+
 // ─── Wishlist ───────────────────────────────────────────
 export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt">) {
   await addDoc(collection(db, "wishlist"), clean({ ...w, createdAt: Date.now() }));

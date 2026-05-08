@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Chip, Dialog, EmptyState, FAB, Input, PageHeader } from "@/components/ui";
+import { BirthdayPicker } from "@/components/BirthdayPicker";
 import { useStore } from "@/lib/hooks";
 import { addPerson } from "@/lib/storage";
 import { daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
@@ -114,7 +115,7 @@ function AddPersonDialog({ open, onClose }: { open: boolean; onClose: () => void
     <Dialog open={open} onClose={onClose} title="Person hinzufügen">
       <div className="space-y-3">
         <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-        <Input label="Geburtstag" type="date" value={bd} onChange={(e) => setBd(e.target.value)} />
+        <BirthdayPicker value={bd} onChange={setBd} />
         <Input label="E-Mail (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         <div className="flex gap-2 pt-3">
           <Button variant="secondary" onClick={onClose} className="flex-1">Abbrechen</Button>

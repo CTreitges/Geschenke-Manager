@@ -41,6 +41,24 @@ export function formatBirthday(person: Person): string {
   return `${day}. ${months[month - 1]}`;
 }
 
+export function ageOnNextBirthday(person: Person, ref: Date = new Date()): number | null {
+  const parts = person.birthday.split("-");
+  if (parts.length !== 3) return null;
+  const birthYear = +parts[0];
+  if (!birthYear || birthYear < 1900) return null;
+  return nextBirthday(person, ref).getFullYear() - birthYear;
+}
+
+export function formatTodayHeader(d: Date = new Date()): string {
+  const days = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+  const months = ["Januar", "Februar", "März", "April", "Mai", "Juni", "Juli", "August", "September", "Oktober", "November", "Dezember"];
+  return `${days[d.getDay()]} · ${d.getDate()}. ${months[d.getMonth()]}`;
+}
+
+export function daysAgo(timestamp: number, ref: Date = new Date()): number {
+  return Math.max(0, Math.floor((ref.getTime() - timestamp) / 86400000));
+}
+
 export function formatDaysUntil(days: number): string {
   if (days === 0) return "heute! 🎉";
   if (days === 1) return "morgen";

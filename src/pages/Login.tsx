@@ -52,16 +52,16 @@ export default function Login() {
       className="min-h-screen flex flex-col justify-center px-6"
       style={{
         background:
-          "radial-gradient(120% 60% at 50% 0%, #FEF3C7 0%, var(--gm-bg) 55%)",
+          "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
       }}
     >
       <div className="text-center mb-7">
         <div
           className="w-[78px] h-[78px] mx-auto mb-4 rounded-3xl flex items-center justify-center text-[38px]"
           style={{
-            background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)",
+            background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
             boxShadow:
-              "0 12px 28px -8px rgba(249,115,22,0.5), inset 0 0 0 1px rgba(255,255,255,0.2)",
+              "0 12px 28px -8px rgba(124,58,237,0.5), inset 0 0 0 1px rgba(255,255,255,0.2)",
           }}
         >
           🎁

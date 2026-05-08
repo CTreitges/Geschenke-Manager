@@ -36,7 +36,7 @@ export function Layout({ children }: { children: ReactNode }) {
                 to={t.to}
                 className={cn(
                   "flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold",
-                  active ? "text-orange-600 dark:text-orange-400" : "text-stone-500",
+                  active ? "text-indigo-600 dark:text-indigo-400" : "text-stone-500",
                 )}
               >
                 <I size={20} />

@@ -106,9 +106,9 @@ export default function Home() {
             className="relative overflow-hidden rounded-3xl text-white cursor-pointer"
             style={{
               padding: "20px 20px 22px",
-              background: "linear-gradient(135deg, #FBBF24 0%, #F97316 100%)",
+              background: "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
               boxShadow:
-                "0 18px 36px -12px rgba(249,115,22,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)",
+                "0 18px 36px -12px rgba(124,58,237,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)",
             }}
           >
             <Confetti active={heroDays <= 3} />
@@ -250,7 +250,7 @@ function SortableStackCard({
           <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 flex gap-2 items-center">
             <span
               className={isUrgent ? "font-semibold" : "font-medium"}
-              style={{ color: isUrgent ? "var(--gm-urgent, #B45309)" : undefined }}
+              style={{ color: isUrgent ? "var(--gm-urgent, #5B21B6)" : undefined }}
             >
               {days === 0 ? "🎂 heute!" : `in ${days} T.`}
             </span>

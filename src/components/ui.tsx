@@ -145,9 +145,9 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
     };
     const variants: Record<BtnVariant, CSSProperties> = {
       primary: {
-        background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)",
+        background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
         color: "#fff",
-        boxShadow: "0 6px 16px -4px rgba(249,115,22,0.45), 0 1px 0 rgba(255,255,255,0.3) inset",
+        boxShadow: "0 6px 16px -4px rgba(124,58,237,0.45), 0 1px 0 rgba(255,255,255,0.3) inset",
       },
       secondary: {},
       ghost: { background: "transparent" },
@@ -195,7 +195,7 @@ type ChipVariant = "neutral" | "accent" | "success" | "info";
 export function Chip({ children, variant = "neutral", className, onClick, style }: { children: ReactNode; variant?: ChipVariant; className?: string; onClick?: () => void; style?: CSSProperties }) {
   const variants: Record<ChipVariant, string> = {
     neutral: "bg-[#F5F1ED] dark:bg-[#3A3633] text-stone-600 dark:text-stone-200",
-    accent: "bg-amber-100 dark:bg-[#451A03] text-amber-800 dark:text-amber-300",
+    accent: "bg-violet-100 dark:bg-[#2E1065] text-violet-800 dark:text-violet-300",
     success: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300",
     info: "bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300",
   };
@@ -231,7 +231,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
             "w-full px-3.5 py-3 text-[15px] rounded-xl outline-none font-[inherit]",
             "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50",
             "border border-stone-200 dark:border-stone-700",
-            "focus:border-orange-500 dark:focus:border-orange-500",
+            "focus:border-indigo-500 dark:focus:border-indigo-500",
             "placeholder:text-stone-400",
             className,
           )}
@@ -325,7 +325,7 @@ export function Confetti({ active }: { active: boolean }) {
   const dots = Array.from({ length: 18 }, (_, i) => ({
     left: `${(i * 7 + 5) % 100}%`,
     delay: (i * 0.18) % 3,
-    color: ["#F59E0B", "#F97316", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5],
+    color: ["#6366F1", "#7C3AED", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5],
     size: 4 + (i % 3) * 2,
   }));
   return (
@@ -358,7 +358,7 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) 
       className="w-[46px] h-7 rounded-full p-0.5 flex transition-colors"
       style={{
         background: on
-          ? "linear-gradient(135deg, #F59E0B, #F97316)"
+          ? "linear-gradient(135deg, #6366F1, #7C3AED)"
           : undefined,
       }}
     >
@@ -380,8 +380,8 @@ export function FAB({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       className="fixed right-5 bottom-24 z-40 w-14 h-14 rounded-full text-white border-none flex items-center justify-center"
       style={{
-        background: "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)",
-        boxShadow: "0 14px 28px -8px rgba(249,115,22,0.55), 0 0 0 1px rgba(255,255,255,0.2) inset",
+        background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
+        boxShadow: "0 14px 28px -8px rgba(124,58,237,0.55), 0 0 0 1px rgba(255,255,255,0.2) inset",
       }}
     >
       <Icon.plus size={26} />

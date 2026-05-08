@@ -13,7 +13,7 @@ import {
   isInStackWindow,
   sortStack,
 } from "@/lib/birthdays";
-import { addGift, deleteGift, ensureAutoGift, markReceived } from "@/lib/storage";
+import { addGift, deleteGift, ensureAutoGift } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 import type { Person } from "@/lib/types";
@@ -142,17 +142,12 @@ export default function Home() {
                 key={g.id}
                 giftId={g.id}
                 person={p}
+                year={g.year}
                 days={daysUntilBirthday(p)}
                 inStackDays={daysAgo(g.enteredStackAt)}
                 participants={g.participantIds.length}
                 budget={g.participantIds.length * g.budgetPerPerson}
                 onOpen={() => nav(`/gift/${g.id}`)}
-                onReceive={() => {
-                  if (confirm(`Geschenk für ${p.name} als erhalten markieren?`)) {
-                    markReceived(g.id);
-                    toast.success(`${p.name}: Geschenk erhalten ✓`);
-                  }
-                }}
                 onRemove={() => {
                   if (
                     confirm(
@@ -177,22 +172,22 @@ export default function Home() {
 
 function StackCard({
   person,
+  year,
   days,
   inStackDays,
   participants,
   budget,
   onOpen,
-  onReceive,
   onRemove,
 }: {
   giftId: string;
   person: Person;
+  year: number;
   days: number;
   inStackDays: number;
   participants: number;
   budget: number;
   onOpen: () => void;
-  onReceive: () => void;
   onRemove: () => void;
 }) {
   const isUrgent = days <= 7;
@@ -204,6 +199,9 @@ function StackCard({
         <div className="text-base font-bold text-stone-900 dark:text-stone-50 tracking-tight truncate">
           {person.name}{" "}
           <span className="text-stone-400 font-medium">· {formatBirthday(person)}</span>
+          <span className="ml-1.5 text-[10px] font-semibold text-stone-400 tracking-wide">
+            {year}
+          </span>
         </div>
         <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 flex gap-2 items-center">
           <span
@@ -224,24 +222,14 @@ function StackCard({
           </Chip>
           <Chip variant="accent">{budget} €</Chip>
         </div>
-        <div className="flex gap-1 mt-1">
-          <button
-            onClick={onReceive}
-            aria-label="Geschenk erhalten"
-            title="Geschenk erhalten"
-            className="w-7 h-7 rounded-full border border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 flex items-center justify-center"
-          >
-            <Icon.check size={14} />
-          </button>
-          <button
-            onClick={onRemove}
-            aria-label="Geschenk aus Stack löschen"
-            title="Aus Übersicht entfernen"
-            className="w-7 h-7 rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center"
-          >
-            <Icon.trash size={14} />
-          </button>
-        </div>
+        <button
+          onClick={onRemove}
+          aria-label="Geschenk aus Stack löschen"
+          title="Aus Übersicht entfernen"
+          className="mt-1 w-7 h-7 rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center"
+        >
+          <Icon.trash size={14} />
+        </button>
       </div>
     </div>
   );

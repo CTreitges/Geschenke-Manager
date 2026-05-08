@@ -66,11 +66,19 @@ export function formatDaysUntil(days: number): string {
   return `in ${days} Tagen`;
 }
 
-/** Sort gifts by stackOrder ascending (oldest entry top per spec). */
-export function sortStack(gifts: Gift[]): Gift[] {
+/** Sort open gifts by upcoming birthday (nearest first). */
+export function sortStack(gifts: Gift[], persons: Person[]): Gift[] {
+  const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
   return [...gifts]
     .filter((g) => g.status === "open")
-    .sort((a, b) => a.stackOrder - b.stackOrder);
+    .sort((a, b) => {
+      const pa = personById[a.personId];
+      const pb = personById[b.personId];
+      const da = pa ? daysUntilBirthday(pa) : 9999;
+      const db = pb ? daysUntilBirthday(pb) : 9999;
+      if (da !== db) return da - db;
+      return a.enteredStackAt - b.enteredStackAt;
+    });
 }
 
 /** Find the next person with the soonest upcoming birthday (open gift in stack OR scheduled). */

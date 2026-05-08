@@ -162,6 +162,24 @@ export async function markReceived(giftId: ID) {
   await updateGift(giftId, { status: "received", receivedAt: Date.now() });
 }
 
+export async function setGiftSelections(giftId: ID, ids: ID[]) {
+  await updateDoc(doc(db, "gifts", giftId), { selectedSuggestionIds: ids });
+}
+
+export async function setAllParticipants(giftId: ID, personIds: ID[]) {
+  await updateDoc(doc(db, "gifts", giftId), { participantIds: personIds });
+}
+
+export async function deleteGift(giftId: ID) {
+  const batch = writeBatch(db);
+  batch.delete(doc(db, "gifts", giftId));
+  state.suggestions
+    .filter((s) => s.giftId === giftId)
+    .forEach((s) => batch.delete(doc(db, "suggestions", s.id)));
+  batch.delete(doc(db, "polls", giftId));
+  await batch.commit();
+}
+
 // ─── Suggestions ────────────────────────────────────────
 export async function addSuggestion(s: Omit<Suggestion, "id" | "createdAt">) {
   await addDoc(collection(db, "suggestions"), clean({ ...s, createdAt: Date.now() }));

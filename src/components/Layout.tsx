@@ -9,6 +9,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const tabs = [
     { to: "/", label: "Stack", Icon: Icon.home },
     { to: "/people", label: "Personen", Icon: Icon.users },
+    { to: "/wishlist", label: "Wunschliste", Icon: Icon.gift },
     { to: "/settings", label: "Einstellungen", Icon: Icon.cog },
   ];
   return (

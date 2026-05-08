@@ -13,26 +13,10 @@ import {
   isInStackWindow,
   sortStack,
 } from "@/lib/birthdays";
-import { addGift, markReceived, reorderGifts } from "@/lib/storage";
+import { addGift, deleteGift, markReceived } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { toast } from "sonner";
+import type { Person } from "@/lib/types";
 
 export default function Home() {
   const { persons, gifts, settings } = useStore();
@@ -68,22 +52,8 @@ export default function Home() {
     });
   }, [persons, gifts, settings.defaultBudget]);
 
-  const stack = useMemo(() => sortStack(gifts), [gifts]);
+  const stack = useMemo(() => sortStack(gifts, persons), [gifts, persons]);
   const hero = useMemo(() => findHero(persons), [persons]);
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  function onDragEnd(e: DragEndEvent) {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    const oldIdx = stack.findIndex((g) => g.id === active.id);
-    const newIdx = stack.findIndex((g) => g.id === over.id);
-    const reordered = arrayMove(stack, oldIdx, newIdx);
-    reorderGifts(reordered.map((g) => g.id));
-  }
 
   const myId = useIdentity();
   const me = persons.find((p) => p.id === myId);
@@ -165,7 +135,7 @@ export default function Home() {
           </h2>
           <Chip variant="accent">{stack.length}</Chip>
         </div>
-        <span className="text-xs text-stone-400 font-medium">ältest. oben</span>
+        <span className="text-xs text-stone-400 font-medium">nächster oben</span>
       </div>
 
       {/* Stack */}
@@ -175,32 +145,38 @@ export default function Home() {
             <EmptyState emoji="🎉" title="Stack ist leer" subtitle="Personen erscheinen automatisch 30 Tage vor ihrem Geburtstag." />
           </Card>
         ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
-            <SortableContext items={stack.map((g) => g.id)} strategy={verticalListSortingStrategy}>
-              {stack.map((g) => {
-                const p = persons.find((x) => x.id === g.personId);
-                if (!p) return null;
-                return (
-                  <SortableStackCard
-                    key={g.id}
-                    giftId={g.id}
-                    person={p}
-                    days={daysUntilBirthday(p)}
-                    inStackDays={daysAgo(g.enteredStackAt)}
-                    participants={g.participantIds.length}
-                    budget={g.participantIds.length * g.budgetPerPerson}
-                    onOpen={() => nav(`/gift/${g.id}`)}
-                    onReceive={() => {
-                      if (confirm(`Geschenk für ${p.name} als erhalten markieren?`)) {
-                        markReceived(g.id);
-                        toast.success(`${p.name}: Geschenk erhalten ✓`);
-                      }
-                    }}
-                  />
-                );
-              })}
-            </SortableContext>
-          </DndContext>
+          stack.map((g) => {
+            const p = persons.find((x) => x.id === g.personId);
+            if (!p) return null;
+            return (
+              <StackCard
+                key={g.id}
+                giftId={g.id}
+                person={p}
+                days={daysUntilBirthday(p)}
+                inStackDays={daysAgo(g.enteredStackAt)}
+                participants={g.participantIds.length}
+                budget={g.participantIds.length * g.budgetPerPerson}
+                onOpen={() => nav(`/gift/${g.id}`)}
+                onReceive={() => {
+                  if (confirm(`Geschenk für ${p.name} als erhalten markieren?`)) {
+                    markReceived(g.id);
+                    toast.success(`${p.name}: Geschenk erhalten ✓`);
+                  }
+                }}
+                onRemove={() => {
+                  if (
+                    confirm(
+                      `Geschenk für ${p.name} (${g.year}) aus dem Stack entfernen?\n\nAlle Vorschläge + die Abstimmung gehen verloren.`,
+                    )
+                  ) {
+                    deleteGift(g.id);
+                    toast.success(`Geschenk entfernt`);
+                  }
+                }}
+              />
+            );
+          })
         )}
       </div>
 
@@ -210,8 +186,7 @@ export default function Home() {
   );
 }
 
-function SortableStackCard({
-  giftId,
+function StackCard({
   person,
   days,
   inStackDays,
@@ -219,65 +194,60 @@ function SortableStackCard({
   budget,
   onOpen,
   onReceive,
+  onRemove,
 }: {
   giftId: string;
-  person: import("@/lib/types").Person;
+  person: Person;
   days: number;
   inStackDays: number;
   participants: number;
   budget: number;
   onOpen: () => void;
   onReceive: () => void;
+  onRemove: () => void;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: giftId });
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  };
   const isUrgent = days <= 7;
 
   return (
-    <div ref={setNodeRef} style={style}>
-      <div
-        className="flex items-center gap-2.5 pl-2 pr-3.5 py-3.5 bg-white dark:bg-stone-800 rounded-[18px] border border-[#F0EBE6] dark:border-[#3A3633] shadow-[0_1px_2px_rgba(28,25,23,0.04)]"
-      >
-        <button
-          {...attributes}
-          {...listeners}
-          aria-label="Verschieben"
-          className="touch-none cursor-grab active:cursor-grabbing text-stone-400 dark:text-stone-600 px-0.5 py-1"
-        >
-          <Icon.drag />
-        </button>
-        <Avatar person={person} size={42} />
-        <button onClick={onOpen} className="flex-1 min-w-0 text-left">
-          <div className="text-base font-bold text-stone-900 dark:text-stone-50 tracking-tight truncate">
-            {person.name}{" "}
-            <span className="text-stone-400 font-medium">· {formatBirthday(person)}</span>
-          </div>
-          <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 flex gap-2 items-center">
-            <span
-              className={isUrgent ? "font-semibold" : "font-medium"}
-              style={{ color: isUrgent ? "var(--gm-urgent, #5B21B6)" : undefined }}
-            >
-              {days === 0 ? "🎂 heute!" : `in ${days} T.`}
-            </span>
-            <span className="opacity-50">·</span>
-            <span>seit {inStackDays} T. im Stack</span>
-          </div>
-        </button>
-        <div className="flex flex-col gap-1 items-end">
+    <div className="flex items-center gap-2.5 pl-3 pr-3 py-3.5 bg-white dark:bg-stone-800 rounded-[18px] border border-[#F0EBE6] dark:border-[#3A3633] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
+      <Avatar person={person} size={42} />
+      <button onClick={onOpen} className="flex-1 min-w-0 text-left">
+        <div className="text-base font-bold text-stone-900 dark:text-stone-50 tracking-tight truncate">
+          {person.name}{" "}
+          <span className="text-stone-400 font-medium">· {formatBirthday(person)}</span>
+        </div>
+        <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 flex gap-2 items-center">
+          <span
+            className={isUrgent ? "font-semibold" : "font-medium"}
+            style={{ color: isUrgent ? "#5B21B6" : undefined }}
+          >
+            {days === 0 ? "🎂 heute!" : `in ${days} T.`}
+          </span>
+          <span className="opacity-50">·</span>
+          <span>seit {inStackDays} T. im Stack</span>
+        </div>
+      </button>
+      <div className="flex flex-col gap-1 items-end">
+        <div className="flex gap-1">
           <Chip variant="neutral">
             <Icon.users size={12} className="-mr-px" />
             {participants}
           </Chip>
           <Chip variant="accent">{budget} €</Chip>
+        </div>
+        <div className="flex gap-2 mt-0.5 text-[10px]">
           <button
             onClick={onReceive}
-            className="text-[10px] text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-semibold mt-0.5"
+            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-semibold"
           >
             ✓ erhalten
+          </button>
+          <button
+            onClick={onRemove}
+            className="text-stone-400 hover:text-red-500 font-semibold"
+            aria-label="Geschenk löschen"
+          >
+            ✕ löschen
           </button>
         </div>
       </div>

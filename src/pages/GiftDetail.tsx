@@ -1,12 +1,15 @@
-import { useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Button, Chip, EmptyState, Icon, PageHeader } from "@/components/ui";
+import { Avatar, Button, Chip, Dialog, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import {
   addSuggestion,
   castVote,
+  deleteGift,
   deleteSuggestion,
   markReceived,
+  setAllParticipants,
+  setGiftSelections,
   setPollStatus,
   toggleParticipant,
   updateGift,
@@ -15,40 +18,66 @@ import { ageOnNextBirthday, daysUntilBirthday, formatBirthday } from "@/lib/birt
 import { pickColor } from "@/lib/colors";
 import { useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
-import type { ReactNode } from "react";
+import type { Gift, Suggestion, Poll, Person } from "@/lib/types";
 
 export default function GiftDetail() {
   const { id } = useParams<{ id: string }>();
   const { gifts, persons, suggestions, polls } = useStore();
   const nav = useNavigate();
+  const myId = useIdentity();
+  const [pollDetailsOpen, setPollDetailsOpen] = useState(false);
 
   const gift = gifts.find((g) => g.id === id);
   if (!gift) return <p className="px-4 py-8">Geschenk nicht gefunden.</p>;
   const person = persons.find((p) => p.id === gift.personId);
   if (!person) return <p className="px-4 py-8">Person nicht gefunden.</p>;
 
-  const giftSuggestions = suggestions.filter((s) => s.giftId === gift.id);
+  const giftId = gift.id;
+  const giftSuggestions = suggestions.filter((s) => s.giftId === giftId);
   const poll = polls.find((p) => p.giftId === gift.id);
   const pollStatus = poll?.status ?? "none";
-
-  const myId = useIdentity();
   const me = persons.find((p) => p.id === myId);
-
   const totalBudget = gift.participantIds.length * gift.budgetPerPerson;
+  const selectedIds = gift.selectedSuggestionIds ?? [];
 
-  // Tally votes
-  const voteTally: Record<string, string[]> = {};
-  giftSuggestions.forEach((s) => (voteTally[s.id] = []));
-  if (poll) {
-    Object.entries(poll.votes).forEach(([pid, sid]) => {
-      if (voteTally[sid]) voteTally[sid].push(pid);
-    });
-  }
+  // ── Vote tally ────────────────────────────────────────────────
+  const voteTally = useMemo(() => {
+    const tally: Record<string, string[]> = {};
+    giftSuggestions.forEach((s) => (tally[s.id] = []));
+    if (poll) {
+      Object.entries(poll.votes).forEach(([pid, sid]) => {
+        if (tally[sid]) tally[sid].push(pid);
+      });
+    }
+    return tally;
+  }, [giftSuggestions, poll]);
+
+  const totalVotes = Object.values(voteTally).reduce((a, v) => a + v.length, 0);
   const winnerId =
     pollStatus === "closed"
       ? Object.entries(voteTally).sort((a, b) => b[1].length - a[1].length)[0]?.[0]
       : null;
 
+  // ── Selection helpers ─────────────────────────────────────────
+  const selectedSum = selectedIds
+    .map((sid) => giftSuggestions.find((s) => s.id === sid)?.price ?? 0)
+    .reduce((a, b) => a + b, 0);
+
+  function toggleSelection(sid: string) {
+    const next = selectedIds.includes(sid)
+      ? selectedIds.filter((x) => x !== sid)
+      : [...selectedIds, sid];
+    setGiftSelections(giftId, next);
+  }
+
+  function autoSelectWinner() {
+    if (winnerId && !selectedIds.includes(winnerId)) {
+      setGiftSelections(giftId, [winnerId]);
+      toast.success("Gewinner übernommen");
+    }
+  }
+
+  // ── Render ────────────────────────────────────────────────────
   return (
     <div>
       <PageHeader
@@ -79,17 +108,24 @@ export default function GiftDetail() {
               {ageOnNextBirthday(person) && ` · wird ${ageOnNextBirthday(person)}`}
             </div>
           </div>
-          <button
-            onClick={() => nav(`/person/${person.id}`)}
-            className="text-stone-400 p-1.5"
-          >
+          <button onClick={() => nav(`/person/${person.id}`)} className="text-stone-400 p-1.5">
             <Icon.chev />
           </button>
         </div>
       </div>
 
-      {/* Teilnehmer */}
-      <Section title="Teilnehmer" hint={`${gift.participantIds.length} dabei`}>
+      {/* ── Teilnehmer ────────────────────────────────────────── */}
+      <Section
+        title="Teilnehmer"
+        hint={`${gift.participantIds.length} dabei`}
+        action={
+          <ParticipantBulkButtons
+            personIds={persons.filter((p) => p.id !== gift.personId).map((p) => p.id)}
+            participantIds={gift.participantIds}
+            onSet={(ids) => setAllParticipants(gift.id, ids)}
+          />
+        }
+      >
         {!me && (
           <div className="text-xs text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-950 rounded-xl px-3 py-2 mb-2.5">
             Wähle in den Einstellungen, wer du bist, bevor du teilnimmst oder abstimmst.
@@ -125,130 +161,75 @@ export default function GiftDetail() {
         <BudgetEditor gift={gift} totalBudget={totalBudget} />
       </Section>
 
-      {/* Vorschläge */}
+      {/* ── Vorschläge mit Auswahl ────────────────────────────── */}
       <Section title="Vorschläge" hint={`${giftSuggestions.length}`}>
         {giftSuggestions.length === 0 ? (
           <EmptyState emoji="💡" title="Noch keine Ideen" />
         ) : (
           <div className="flex flex-col gap-2 mb-2.5">
-            {giftSuggestions.map((s) => {
-              const author = persons.find((p) => p.id === s.suggestedBy);
-              const isWinner = s.id === winnerId;
-              const voters = voteTally[s.id] || [];
-              const myVote = poll && myId ? poll.votes[myId] === s.id : false;
-              return (
-                <div
-                  key={s.id}
-                  className="px-3.5 py-3.5 rounded-2xl relative"
-                  style={{
-                    background: isWinner
-                      ? "var(--gm-winner, #F5F3FF)"
-                      : undefined,
-                    border: isWinner
-                      ? "2px solid #7C3AED"
-                      : "1px solid #F0EBE6",
-                  }}
-                >
-                  {!isWinner && (
-                    <div className="absolute inset-0 rounded-2xl bg-white dark:bg-stone-800 -z-10 border border-[#F0EBE6] dark:border-[#3A3633]" />
-                  )}
-                  {isWinner && (
-                    <div
-                      className="absolute -top-2.5 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide text-white"
-                      style={{
-                        background: "linear-gradient(135deg, #6366F1, #7C3AED)",
-                        boxShadow: "0 4px 10px -2px rgba(124,58,237,0.5)",
-                      }}
-                    >
-                      🏆 Gewonnen
-                    </div>
-                  )}
-                  <div className="flex items-start gap-2.5">
-                    <div className="flex-1 min-w-0">
-                      <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 leading-tight">
-                        {s.title}
-                      </div>
-                      <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
-                        {s.price != null && (
-                          <span className="text-violet-700 dark:text-violet-400 font-semibold">
-                            {s.price} €
-                          </span>
-                        )}
-                        {s.url && (
-                          <a
-                            href={s.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-stone-500 flex items-center gap-1"
-                          >
-                            <Icon.link /> Link
-                          </a>
-                        )}
-                        <span className="text-stone-400">von {author?.name ?? "?"}</span>
-                      </div>
-                    </div>
-                    {pollStatus === "active" && myId && (
-                      <button
-                        onClick={() => {
-                          castVote(gift.id, myId, s.id);
-                          toast.success("Stimme gespeichert");
-                        }}
-                        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white"
-                        style={{
-                          border: myVote ? "none" : "2px solid #D6D3D1",
-                          background: myVote
-                            ? "linear-gradient(135deg, #6366F1, #7C3AED)"
-                            : "transparent",
-                        }}
-                      >
-                        {myVote && <Icon.check size={14} />}
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteSuggestion(s.id)}
-                      className="text-stone-300 hover:text-red-500 p-1"
-                    >
-                      <Icon.x size={16} />
-                    </button>
-                  </div>
-                  {pollStatus !== "none" && voters.length > 0 && (
-                    <div className="mt-2.5 pt-2.5 border-t border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-1.5 flex-wrap">
-                      <div className="flex">
-                        {voters.map((vid, i) => {
-                          const voter = persons.find((p) => p.id === vid);
-                          return (
-                            <div key={vid} style={{ marginLeft: i > 0 ? -6 : 0 }}>
-                              <Avatar person={voter} size={20} ring />
-                            </div>
-                          );
-                        })}
-                      </div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400 font-medium">
-                        {voters.map((v) => persons.find((p) => p.id === v)?.name).filter(Boolean).join(", ")}{" "}
-                        {voters.length === 1 ? "hat" : "haben"} gewählt
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {giftSuggestions.map((s) => (
+              <SuggestionCard
+                key={s.id}
+                suggestion={s}
+                author={persons.find((p) => p.id === s.suggestedBy)}
+                voters={voteTally[s.id] || []}
+                personsById={Object.fromEntries(persons.map((p) => [p.id, p]))}
+                pollStatus={pollStatus}
+                myVote={poll && myId ? poll.votes[myId] === s.id : false}
+                myId={myId}
+                isWinner={s.id === winnerId}
+                isSelected={selectedIds.includes(s.id)}
+                onToggleSelect={() => toggleSelection(s.id)}
+                onVote={() => {
+                  if (myId) {
+                    castVote(gift.id, myId, s.id);
+                    toast.success("Stimme gespeichert");
+                  }
+                }}
+                onDelete={() => {
+                  if (confirm(`Vorschlag „${s.title}" löschen?`)) {
+                    deleteSuggestion(s.id);
+                    toast.success("Gelöscht");
+                  }
+                }}
+              />
+            ))}
           </div>
         )}
         <SuggestionAdder giftId={gift.id} myId={myId} />
+
+        {selectedIds.length > 0 && (
+          <div className="mt-3 px-3.5 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900 flex items-center justify-between">
+            <div className="text-[13px]">
+              <div className="font-bold text-violet-700 dark:text-violet-300">
+                {selectedIds.length} ausgewählt
+              </div>
+              <div className="text-xs text-violet-600/80 dark:text-violet-400/80">
+                Theoretische Gesamtsumme
+              </div>
+            </div>
+            <div className="text-[22px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums">
+              {selectedSum} €
+            </div>
+          </div>
+        )}
       </Section>
 
-      {/* Abstimmung */}
+      {/* ── Abstimmung ────────────────────────────────────────── */}
       <Section title="Abstimmung">
         {pollStatus === "none" && (
           <div className="text-center py-1">
-            <Button onClick={() => {
-              if (giftSuggestions.length === 0) {
-                toast.error("Erst Vorschläge anlegen");
-                return;
-              }
-              setPollStatus(gift.id, "active");
-              toast.success("Abstimmung gestartet");
-            }} className="w-full">
+            <Button
+              onClick={() => {
+                if (giftSuggestions.length === 0) {
+                  toast.error("Erst Vorschläge anlegen");
+                  return;
+                }
+                setPollStatus(gift.id, "active");
+                toast.success("Abstimmung gestartet");
+              }}
+              className="w-full"
+            >
               <Icon.vote /> Abstimmung starten
             </Button>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 leading-snug">
@@ -256,16 +237,18 @@ export default function GiftDetail() {
             </p>
           </div>
         )}
+
         {pollStatus === "active" && (
           <div>
             <div
-              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-2.5"
-              style={{ background: "#EDE9FE" }}
+              className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-2.5 bg-violet-100 dark:bg-violet-950"
             >
               <span className="text-lg">🗳️</span>
               <div className="flex-1">
-                <div className="text-[13px] font-bold text-violet-900">Abstimmung läuft</div>
-                <div className="text-xs text-violet-800/80">
+                <div className="text-[13px] font-bold text-violet-800 dark:text-violet-300">
+                  Abstimmung läuft
+                </div>
+                <div className="text-xs text-violet-700/80 dark:text-violet-400/80">
                   {Object.keys(poll?.votes ?? {}).length} von {gift.participantIds.length} Stimmen
                 </div>
               </div>
@@ -282,24 +265,35 @@ export default function GiftDetail() {
             </Button>
           </div>
         )}
+
         {pollStatus === "closed" && (
-          <div
-            className="px-3.5 py-3.5 rounded-xl flex items-center gap-2.5"
-            style={{ background: "#EDE9FE" }}
-          >
-            <span className="text-2xl">🏆</span>
-            <div className="flex-1">
-              <div className="text-[13px] font-bold text-violet-900">Gewinner steht fest</div>
-              <div className="text-xs text-violet-800/85 mt-0.5">
-                {giftSuggestions.find((s) => s.id === winnerId)?.title ?? "—"}
-              </div>
-            </div>
-          </div>
+          <ClosedPollSummary
+            poll={poll!}
+            tally={voteTally}
+            totalVotes={totalVotes}
+            winnerId={winnerId}
+            suggestions={giftSuggestions}
+            onOpenDetails={() => setPollDetailsOpen(true)}
+            onAdoptWinner={autoSelectWinner}
+            onReopen={() => {
+              if (confirm("Abstimmung wieder öffnen? Bestehende Stimmen bleiben erhalten.")) {
+                setPollStatus(gift.id, "active");
+                toast.success("Abstimmung erneut geöffnet");
+              }
+            }}
+            onClear={() => {
+              if (confirm("Abstimmung komplett verwerfen? Stimmen gehen verloren.")) {
+                setPollStatus(gift.id, "none");
+                toast.success("Abstimmung verworfen");
+              }
+            }}
+          />
         )}
       </Section>
 
-      {gift.status === "open" && (
-        <div className="px-4 pt-2 pb-24">
+      {/* ── CTAs ─────────────────────────────────────────────── */}
+      <div className="px-4 pt-2 pb-2 space-y-2.5">
+        {gift.status === "open" && (
           <Button
             size="lg"
             onClick={() => {
@@ -312,25 +306,331 @@ export default function GiftDetail() {
           >
             <Icon.check /> Geschenk erhalten
           </Button>
-        </div>
+        )}
+        <Button
+          variant="danger"
+          onClick={() => {
+            if (
+              !confirm(
+                `Geschenk komplett löschen?\n\nAlle ${giftSuggestions.length} Vorschläge und die Abstimmung gehen verloren.`,
+              )
+            )
+              return;
+            deleteGift(gift.id);
+            toast.success("Geschenk gelöscht");
+            nav("/");
+          }}
+          className="w-full"
+        >
+          <Icon.trash /> Geschenk löschen
+        </Button>
+      </div>
+
+      <div className="pb-24" />
+
+      {/* ── Poll-Details Modal ────────────────────────────────── */}
+      {poll && pollStatus === "closed" && (
+        <Dialog open={pollDetailsOpen} onClose={() => setPollDetailsOpen(false)} title="Abstimmungs-Ergebnis">
+          <div className="space-y-3">
+            <div className="text-sm text-stone-500 dark:text-stone-400">
+              {totalVotes} {totalVotes === 1 ? "Stimme" : "Stimmen"} insgesamt
+            </div>
+            {[...giftSuggestions]
+              .sort((a, b) => (voteTally[b.id]?.length ?? 0) - (voteTally[a.id]?.length ?? 0))
+              .map((s) => {
+                const voters = voteTally[s.id] || [];
+                const pct = totalVotes ? Math.round((voters.length / totalVotes) * 100) : 0;
+                return (
+                  <div
+                    key={s.id}
+                    className="px-3.5 py-3 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-semibold text-stone-900 dark:text-stone-50">
+                        {s.title}
+                      </div>
+                      <div className="text-sm font-bold tabular-nums text-violet-700 dark:text-violet-300">
+                        {pct}% · {voters.length}
+                      </div>
+                    </div>
+                    <div className="mt-2 h-1.5 rounded-full bg-stone-200 dark:bg-stone-700 overflow-hidden">
+                      <div
+                        className="h-full bg-gradient-to-r from-indigo-600 to-violet-600"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    {voters.length > 0 && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                        {voters.map((vid) => {
+                          const v = persons.find((p) => p.id === vid);
+                          return v ? (
+                            <span
+                              key={vid}
+                              className="inline-flex items-center gap-1 text-xs text-stone-600 dark:text-stone-300"
+                            >
+                              <Avatar person={v} size={18} />
+                              {v.name}
+                            </span>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+        </Dialog>
       )}
     </div>
   );
 }
 
-function Section({ title, hint, children }: { title: string; hint?: string; children: ReactNode }) {
+// ── Section wrapper ───────────────────────────────────────────
+function Section({
+  title,
+  hint,
+  action,
+  children,
+}: {
+  title: string;
+  hint?: string;
+  action?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <div className="px-4 pb-4">
-      <div className="flex items-center justify-between mb-2.5 pl-0.5">
-        <h3 className="m-0 text-[15px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">{title}</h3>
-        {hint && <span className="text-xs text-stone-400 font-medium">{hint}</span>}
+      <div className="flex items-center justify-between mb-2.5 pl-0.5 gap-2">
+        <h3 className="m-0 text-[15px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
+          {title}
+        </h3>
+        <div className="flex items-center gap-2">
+          {hint && <span className="text-xs text-stone-400 font-medium">{hint}</span>}
+          {action}
+        </div>
       </div>
       {children}
     </div>
   );
 }
 
-function BudgetEditor({ gift, totalBudget }: { gift: import("@/lib/types").Gift; totalBudget: number }) {
+// ── Participant bulk buttons ──────────────────────────────────
+function ParticipantBulkButtons({
+  personIds,
+  participantIds,
+  onSet,
+}: {
+  personIds: string[];
+  participantIds: string[];
+  onSet: (ids: string[]) => void;
+}) {
+  const allActive = personIds.length > 0 && personIds.every((id) => participantIds.includes(id));
+  return (
+    <button
+      onClick={() => {
+        if (allActive) onSet([]);
+        else onSet(personIds);
+      }}
+      className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-2 py-1 rounded-md hover:bg-violet-50 dark:hover:bg-violet-950"
+    >
+      {allActive ? "Alle entfernen" : "Alle hinzufügen"}
+    </button>
+  );
+}
+
+// ── Suggestion card ───────────────────────────────────────────
+function SuggestionCard({
+  suggestion: s,
+  author,
+  voters,
+  personsById,
+  pollStatus,
+  myVote,
+  myId,
+  isWinner,
+  isSelected,
+  onToggleSelect,
+  onVote,
+  onDelete,
+}: {
+  suggestion: Suggestion;
+  author?: Person;
+  voters: string[];
+  personsById: Record<string, Person>;
+  pollStatus: Poll["status"] | "none";
+  myVote: boolean;
+  myId: string | null;
+  isWinner: boolean;
+  isSelected: boolean;
+  onToggleSelect: () => void;
+  onVote: () => void;
+  onDelete: () => void;
+}) {
+  return (
+    <div
+      className="px-3.5 py-3.5 rounded-2xl relative bg-white dark:bg-stone-800 border"
+      style={{
+        borderColor: isWinner ? "#7C3AED" : isSelected ? "#A78BFA" : undefined,
+        borderWidth: isWinner || isSelected ? 2 : 1,
+        borderStyle: "solid",
+      }}
+    >
+      {isWinner && (
+        <div
+          className="absolute -top-2.5 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide text-white"
+          style={{
+            background: "linear-gradient(135deg, #4F46E5, #7C3AED)",
+            boxShadow: "0 4px 10px -2px rgba(124,58,237,0.5)",
+          }}
+        >
+          🏆 Gewonnen
+        </div>
+      )}
+      <div className="flex items-start gap-2.5">
+        {/* Selection checkbox */}
+        <button
+          onClick={onToggleSelect}
+          aria-label={isSelected ? "Auswahl aufheben" : "Auswählen"}
+          className="w-6 h-6 rounded-md flex items-center justify-center shrink-0 mt-0.5 text-white"
+          style={{
+            background: isSelected
+              ? "linear-gradient(135deg, #4F46E5, #7C3AED)"
+              : "transparent",
+            border: isSelected ? "none" : "2px solid #D6D3D1",
+          }}
+        >
+          {isSelected && <Icon.check size={14} />}
+        </button>
+
+        <div className="flex-1 min-w-0">
+          <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 leading-tight">
+            {s.title}
+          </div>
+          <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
+            {s.price != null && (
+              <span className="text-violet-700 dark:text-violet-300 font-semibold">
+                {s.price} €
+              </span>
+            )}
+            {s.url && (
+              <a
+                href={s.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="text-stone-500 flex items-center gap-1"
+              >
+                <Icon.link /> Link
+              </a>
+            )}
+            <span className="text-stone-400">von {author?.name ?? "?"}</span>
+          </div>
+        </div>
+
+        {/* Vote-only-while-active */}
+        {pollStatus === "active" && myId && (
+          <button
+            onClick={onVote}
+            className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-white"
+            style={{
+              border: myVote ? "none" : "2px solid #D6D3D1",
+              background: myVote
+                ? "linear-gradient(135deg, #4F46E5, #7C3AED)"
+                : "transparent",
+            }}
+          >
+            {myVote && <Icon.check size={14} />}
+          </button>
+        )}
+
+        <button onClick={onDelete} className="text-stone-300 hover:text-red-500 p-1">
+          <Icon.x size={16} />
+        </button>
+      </div>
+
+      {pollStatus !== "none" && voters.length > 0 && (
+        <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-stone-700 flex items-center gap-1.5 flex-wrap">
+          <div className="flex">
+            {voters.map((vid, i) => (
+              <div key={vid} style={{ marginLeft: i > 0 ? -6 : 0 }}>
+                <Avatar person={personsById[vid]} size={20} ring />
+              </div>
+            ))}
+          </div>
+          <div className="text-xs text-stone-500 dark:text-stone-400 font-medium">
+            {voters.map((v) => personsById[v]?.name).filter(Boolean).join(", ")}{" "}
+            {voters.length === 1 ? "hat" : "haben"} gewählt
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Closed-poll summary (compact) ─────────────────────────────
+function ClosedPollSummary({
+  poll: _poll,
+  tally,
+  totalVotes,
+  winnerId,
+  suggestions,
+  onOpenDetails,
+  onAdoptWinner,
+  onReopen,
+  onClear,
+}: {
+  poll: Poll;
+  tally: Record<string, string[]>;
+  totalVotes: number;
+  winnerId: string | null;
+  suggestions: Suggestion[];
+  onOpenDetails: () => void;
+  onAdoptWinner: () => void;
+  onReopen: () => void;
+  onClear: () => void;
+}) {
+  const winner = suggestions.find((s) => s.id === winnerId);
+  const winnerVotes = winner ? (tally[winner.id]?.length ?? 0) : 0;
+  const winnerPct = totalVotes ? Math.round((winnerVotes / totalVotes) * 100) : 0;
+
+  return (
+    <div className="space-y-2.5">
+      <div className="px-3.5 py-3.5 rounded-xl bg-violet-100 dark:bg-violet-950 flex items-center gap-2.5">
+        <span className="text-2xl">🏆</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-bold text-violet-800 dark:text-violet-300">
+            {winner ? winner.title : "Kein Gewinner"}
+          </div>
+          <div className="text-xs text-violet-700/85 dark:text-violet-400/85">
+            {winnerPct}% · {winnerVotes} von {totalVotes}{" "}
+            {totalVotes === 1 ? "Stimme" : "Stimmen"}
+          </div>
+        </div>
+        <button
+          onClick={onOpenDetails}
+          className="text-xs font-semibold text-violet-700 dark:text-violet-300 px-2.5 py-1.5 rounded-md hover:bg-white/30 dark:hover:bg-white/10"
+        >
+          Details
+        </button>
+      </div>
+      <div className="flex gap-2 flex-wrap">
+        {winner && (
+          <Button size="sm" variant="secondary" onClick={onAdoptWinner}>
+            Gewinner als Auswahl übernehmen
+          </Button>
+        )}
+        <Button size="sm" variant="ghost" onClick={onReopen}>
+          Wieder öffnen
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onClear}>
+          Verwerfen
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ── Budget editor ─────────────────────────────────────────────
+function BudgetEditor({ gift, totalBudget }: { gift: Gift; totalBudget: number }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(gift.budgetPerPerson));
 
@@ -368,41 +668,80 @@ function BudgetEditor({ gift, totalBudget }: { gift: import("@/lib/types").Gift;
         </span>
         <span className="mx-1.5">=</span>
       </div>
-      <div className="text-[22px] font-extrabold tracking-tight text-violet-700 dark:text-violet-400">
+      <div className="text-[22px] font-extrabold tracking-tight text-violet-700 dark:text-violet-300">
         {totalBudget} €
       </div>
     </div>
   );
 }
 
+// ── Suggestion adder with optional link + price ──────────────
 function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string | null }) {
   const [text, setText] = useState("");
+  const [url, setUrl] = useState("");
+  const [price, setPrice] = useState("");
+  const [showExtra, setShowExtra] = useState(false);
 
   function add() {
-    if (!text.trim()) {
-      return;
-    }
+    if (!text.trim()) return;
     if (!myId) {
       toast.error("Wähle erst in den Einstellungen, wer du bist");
       return;
     }
-    addSuggestion({ giftId, title: text.trim(), suggestedBy: myId });
+    addSuggestion({
+      giftId,
+      title: text.trim(),
+      url: url.trim() || undefined,
+      price: price ? +price : undefined,
+      suggestedBy: myId,
+    });
     setText("");
+    setUrl("");
+    setPrice("");
+    setShowExtra(false);
     toast.success("Vorschlag hinzugefügt");
   }
 
   return (
-    <div className="mt-2 p-2.5 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2">
-      <input
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && add()}
-        placeholder="Idee teilen…"
-        className="flex-1 outline-none bg-transparent px-1 py-1.5 text-sm text-stone-900 dark:text-stone-50"
-      />
-      <Button size="sm" onClick={add} disabled={!text.trim()} style={{ minHeight: 32, padding: "6px 12px" }}>
-        Teilen
-      </Button>
+    <div className="mt-2 p-2.5 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-[#F0EBE6] dark:border-[#3A3633]">
+      <div className="flex items-center gap-2">
+        <span className="text-base pl-1">💡</span>
+        <input
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && add()}
+          placeholder="Idee teilen…"
+          className="flex-1 outline-none bg-transparent px-1 py-1.5 text-sm text-stone-900 dark:text-stone-50"
+        />
+        {!showExtra && text && (
+          <button
+            onClick={() => setShowExtra(true)}
+            className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-1.5"
+          >
+            + Details
+          </button>
+        )}
+        <Button size="sm" onClick={add} disabled={!text.trim()} style={{ minHeight: 32, padding: "6px 12px" }}>
+          Teilen
+        </Button>
+      </div>
+      {showExtra && (
+        <div className="flex gap-2 mt-2 pl-7">
+          <Input
+            placeholder="Link (optional)"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="flex-[2] py-2 text-[13px]"
+          />
+          <Input
+            placeholder="€"
+            type="number"
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="flex-1 py-2 text-[13px]"
+          />
+        </div>
+      )}
     </div>
   );
 }

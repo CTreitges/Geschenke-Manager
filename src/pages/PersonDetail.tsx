@@ -6,6 +6,7 @@ import { useStore } from "@/lib/hooks";
 import {
   addGift,
   addWishItem,
+  deleteGift,
   deletePerson,
   deleteWishItem,
   updatePerson,
@@ -223,30 +224,30 @@ function GiftsTab({
   const { settings } = useStore();
   const all = [...stack, ...past];
 
-  function newGift() {
+  const [newGiftOpen, setNewGiftOpen] = useState(false);
+  const [newGiftYear, setNewGiftYear] = useState(birthdayYearForPerson(person));
+
+  function createGift() {
     addGift({
       personId: person.id,
-      year: birthdayYearForPerson(person),
+      year: newGiftYear,
       status: "open",
       budgetPerPerson: settings.defaultBudget,
       manuallyAdded: true,
     });
-    toast.success("Geschenk angelegt");
+    toast.success(`Geschenk ${newGiftYear} angelegt`);
+    setNewGiftOpen(false);
   }
 
-  if (all.length === 0) {
-    return (
-      <EmptyState
-        emoji="🎁"
-        title="Noch kein Geschenk hier"
-        subtitle={`Lege ein neues Geschenk für ${person.name} an.`}
-        action={
-          <Button onClick={newGift}>
-            <Icon.plus /> Neues Geschenk
-          </Button>
-        }
-      />
-    );
+  function removeGift(g: import("@/lib/types").Gift) {
+    if (
+      !confirm(
+        `Geschenk ${g.year} für ${person.name} wirklich löschen?\n\nVorschläge + Abstimmung gehen verloren.`,
+      )
+    )
+      return;
+    deleteGift(g.id);
+    toast.success("Gelöscht");
   }
 
   const byYear: Record<number, typeof all> = {};
@@ -257,51 +258,108 @@ function GiftsTab({
 
   return (
     <div>
-      {years.map((y) => (
-        <div key={y} className="mb-4">
-          <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 mb-2 pl-1">
-            {y}
-          </div>
-          <div className="flex flex-col gap-2">
-            {byYear[y].map((g) => (
-              <button
-                key={g.id}
-                onClick={() => g.status === "open" && nav(`/gift/${g.id}`)}
-                className="px-3.5 py-3 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2.5 text-left"
-              >
+      {all.length === 0 ? (
+        <EmptyState
+          emoji="🎁"
+          title="Noch kein Geschenk hier"
+          subtitle={`Lege ein neues Geschenk für ${person.name} an.`}
+        />
+      ) : (
+        years.map((y) => (
+          <div key={y} className="mb-4">
+            <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 mb-2 pl-1">
+              {y}
+            </div>
+            <div className="flex flex-col gap-2">
+              {byYear[y].map((g) => (
                 <div
-                  className="w-9 h-9 rounded-[10px] flex items-center justify-center"
-                  style={{
-                    background:
-                      g.status === "open"
-                        ? "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)"
-                        : undefined,
-                    color: g.status === "open" ? "#fff" : undefined,
-                  }}
+                  key={g.id}
+                  className="px-3.5 py-3 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2.5"
                 >
-                  {g.status === "open" ? <Icon.gift /> : <span className="text-stone-500"><Icon.gift /></span>}
+                  <button
+                    onClick={() => g.status === "open" && nav(`/gift/${g.id}`)}
+                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
+                  >
+                    <div
+                      className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
+                      style={{
+                        background:
+                          g.status === "open"
+                            ? "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)"
+                            : undefined,
+                        color: g.status === "open" ? "#fff" : undefined,
+                      }}
+                    >
+                      {g.status === "open" ? (
+                        <Icon.gift />
+                      ) : (
+                        <span className="text-stone-500">
+                          <Icon.gift />
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
+                        Geschenk {y}
+                      </div>
+                      <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                        {g.status === "open"
+                          ? `${g.participantIds.length} Personen · ${g.participantIds.length * g.budgetPerPerson} €`
+                          : "erhalten"}
+                      </div>
+                    </div>
+                    <Chip variant={g.status === "open" ? "info" : "success"}>
+                      {g.status === "open" ? "offen" : "erhalten"}
+                    </Chip>
+                  </button>
+                  <button
+                    onClick={() => removeGift(g)}
+                    className="text-stone-300 hover:text-red-500 p-1.5 shrink-0"
+                    aria-label="Geschenk löschen"
+                    title="Geschenk löschen"
+                  >
+                    <Icon.trash />
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
-                    Geschenk {y}
-                  </div>
-                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                    {g.status === "open"
-                      ? `${g.participantIds.length} Personen · ${g.participantIds.length * g.budgetPerPerson} €`
-                      : "erhalten"}
-                  </div>
-                </div>
-                <Chip variant={g.status === "open" ? "info" : "success"}>
-                  {g.status === "open" ? "offen" : "erhalten"}
-                </Chip>
-              </button>
-            ))}
+              ))}
+            </div>
+          </div>
+        ))
+      )}
+
+      {!newGiftOpen ? (
+        <Button
+          variant="secondary"
+          onClick={() => {
+            setNewGiftYear(birthdayYearForPerson(person));
+            setNewGiftOpen(true);
+          }}
+          className="w-full mt-1"
+        >
+          <Icon.plus /> Neues Geschenk anlegen
+        </Button>
+      ) : (
+        <div className="bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] p-3.5 mt-1 space-y-2.5">
+          <Input
+            label="Jahr"
+            type="number"
+            value={newGiftYear}
+            onChange={(e) => setNewGiftYear(parseInt(e.target.value, 10) || newGiftYear)}
+          />
+          <div className="flex gap-2">
+            <Button
+              variant="secondary"
+              onClick={() => setNewGiftOpen(false)}
+              className="flex-1"
+            >
+              Abbrechen
+            </Button>
+            <Button onClick={createGift} className="flex-1">
+              Anlegen
+            </Button>
           </div>
         </div>
-      ))}
-      <Button variant="secondary" onClick={newGift} className="w-full mt-1">
-        <Icon.plus /> Neues Geschenk anlegen
-      </Button>
+      )}
     </div>
   );
 }

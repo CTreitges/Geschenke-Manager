@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
@@ -39,23 +39,32 @@ export default function Home() {
   const nav = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
 
-  // Auto-create gifts when persons enter the 30-day window
+  // Auto-create gifts when persons enter the 30-day window.
+  // In-flight tracking prevents the race where the effect runs twice
+  // before the first addGift() write round-trips through Firestore's
+  // snapshot — which previously caused duplicate stack entries.
+  const inFlight = useRef<Set<string>>(new Set());
   useEffect(() => {
     persons.forEach((p) => {
       if (!isInStackWindow(p)) return;
       const year = birthdayYearForPerson(p);
+      const key = `${p.id}:${year}`;
       const exists = gifts.some(
         (g) => g.personId === p.id && g.year === year && g.status === "open",
       );
-      if (!exists) {
-        addGift({
-          personId: p.id,
-          year,
-          status: "open",
-          budgetPerPerson: settings.defaultBudget,
-          manuallyAdded: false,
-        });
+      if (exists) {
+        inFlight.current.delete(key);
+        return;
       }
+      if (inFlight.current.has(key)) return;
+      inFlight.current.add(key);
+      addGift({
+        personId: p.id,
+        year,
+        status: "open",
+        budgetPerPerson: settings.defaultBudget,
+        manuallyAdded: false,
+      });
     });
   }, [persons, gifts, settings.defaultBudget]);
 

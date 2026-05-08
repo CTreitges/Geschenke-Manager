@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
+import { BirthdayPicker } from "@/components/BirthdayPicker";
 import { useStore } from "@/lib/hooks";
 import {
   addGift,
@@ -331,7 +332,7 @@ function ProfileTab({ person }: { person: Person }) {
       <Card className="p-0 overflow-hidden">
         <div className="p-3.5 flex flex-col gap-3">
           <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
-          <Input label="Geburtstag" type="date" value={bd} onChange={(e) => setBd(e.target.value)} />
+          <BirthdayPicker value={bd} onChange={setBd} />
           <Input label="E-Mail" type="email" placeholder="optional" value={email} onChange={(e) => setEmail(e.target.value)} />
           <Button onClick={save} className="w-full mt-1">Speichern</Button>
         </div>

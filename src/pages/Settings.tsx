@@ -115,6 +115,12 @@ export default function Settings() {
           </Row>
         </Group>
 
+        <Group title="Hilfe">
+          <Row label="So funktioniert's" hint="Step-by-Step Tutorial" icon={<Icon.gift />} onClick={() => nav("/tutorial")}>
+            <Icon.chev className="text-stone-400" />
+          </Row>
+        </Group>
+
         <Group title="Mitteilungen">
           <Row label="Mail-Benachrichtigungen" hint="Erinnerungen vor Geburtstagen" icon={<Icon.mail />}>
             <Chip variant="neutral">bald verfügbar</Chip>

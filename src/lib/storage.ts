@@ -220,14 +220,13 @@ export async function setPollStatus(giftId: ID, status: Poll["status"]) {
 }
 
 export async function castVote(giftId: ID, personId: ID, suggestionId: ID) {
+  // Nested object + merge:true does a deep-merge in Firestore, so this
+  // adds personId to the votes map without nuking other voters' entries.
+  // (Dot-path keys like "votes.<id>" only work with updateDoc, not
+  //  setDoc({merge:true}) — there they get stored as a literal top-level
+  //  field name, which silently corrupts the document.)
   const ref = doc(db, "polls", giftId);
-  await setDoc(
-    ref,
-    {
-      [`votes.${personId}`]: suggestionId,
-    },
-    { merge: true },
-  );
+  await setDoc(ref, { votes: { [personId]: suggestionId } }, { merge: true });
 }
 
 // ─── Settings ───────────────────────────────────────────

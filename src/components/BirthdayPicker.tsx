@@ -12,9 +12,11 @@ function pad(n: number) {
 function parse(value: string): { day: string; month: string } {
   if (!value) return { day: "", month: "" };
   const parts = value.split("-");
-  // Accept "YYYY-MM-DD" (legacy) or "MM-DD"
-  if (parts.length === 3) return { month: parts[1], day: parts[2] };
-  return { month: parts[0] ?? "", day: parts[1] ?? "" };
+  // Accept "YYYY-MM-DD" (legacy) or "MM-DD". Strip leading zeros so the
+  // values match our <option value="1".."12"> set.
+  const strip = (s: string) => String(parseInt(s, 10) || "");
+  if (parts.length === 3) return { month: strip(parts[1]), day: strip(parts[2]) };
+  return { month: strip(parts[0] ?? ""), day: strip(parts[1] ?? "") };
 }
 
 /**

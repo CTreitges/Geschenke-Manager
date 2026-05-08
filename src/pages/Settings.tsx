@@ -4,13 +4,13 @@ import { Avatar, Card, Chip, Icon, Input, PageHeader, Toggle } from "@/component
 import { useStore } from "@/lib/hooks";
 import { updateSettings } from "@/lib/storage";
 import { pickColor } from "@/lib/colors";
-import { getIdentity, sha256, setAuthed, setIdentity } from "@/lib/auth";
+import { sha256, setAuthed, setIdentity, useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 
 export default function Settings() {
   const { persons, settings } = useStore();
   const nav = useNavigate();
-  const [identity, setIdentityState] = useState<string>(getIdentity() ?? "");
+  const identity = useIdentity() ?? "";
   const [budget, setBudget] = useState(settings.defaultBudget);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -20,7 +20,6 @@ export default function Settings() {
   }, [settings.defaultBudget]);
 
   function pickIdentity(id: string) {
-    setIdentityState(id);
     setIdentity(id || null);
     const p = persons.find((x) => x.id === id);
     if (p) toast.success(`Du bist jetzt ${p.name}`);

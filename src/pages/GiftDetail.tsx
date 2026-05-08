@@ -13,7 +13,7 @@ import {
 } from "@/lib/storage";
 import { ageOnNextBirthday, daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import { pickColor } from "@/lib/colors";
-import { getIdentity } from "@/lib/auth";
+import { useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 import type { ReactNode } from "react";
 
@@ -31,7 +31,7 @@ export default function GiftDetail() {
   const poll = polls.find((p) => p.giftId === gift.id);
   const pollStatus = poll?.status ?? "none";
 
-  const myId = getIdentity();
+  const myId = useIdentity();
   const me = persons.find((p) => p.id === myId);
 
   const totalBudget = gift.participantIds.length * gift.budgetPerPerson;

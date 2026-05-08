@@ -1,5 +1,8 @@
+import { useSyncExternalStore } from "react";
+
 const AUTH_KEY = "gm:auth:v1";
 const IDENTITY_KEY = "gm:identity:v1";
+const IDENTITY_EVENT = "gm:identity-change";
 
 export async function sha256(text: string): Promise<string> {
   const buf = new TextEncoder().encode(text);
@@ -25,4 +28,18 @@ export function getIdentity(): string | null {
 export function setIdentity(personId: string | null) {
   if (personId) localStorage.setItem(IDENTITY_KEY, personId);
   else localStorage.removeItem(IDENTITY_KEY);
+  window.dispatchEvent(new Event(IDENTITY_EVENT));
+}
+
+function subscribeIdentity(cb: () => void) {
+  window.addEventListener(IDENTITY_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(IDENTITY_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+export function useIdentity(): string | null {
+  return useSyncExternalStore(subscribeIdentity, getIdentity, () => null);
 }

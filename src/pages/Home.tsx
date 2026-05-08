@@ -19,16 +19,20 @@ import { toast } from "sonner";
 import type { Person } from "@/lib/types";
 
 export default function Home() {
-  const { persons, gifts, settings } = useStore();
+  const store = useStore();
+  const { persons, gifts, settings, giftsHydrated, personsHydrated } = store;
   const nav = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
 
   // Auto-create gifts when persons enter the 30-day window.
-  // In-flight tracking prevents the race where the effect runs twice
-  // before the first addGift() write round-trips through Firestore's
-  // snapshot — which previously caused duplicate stack entries.
+  // Wait for the first snapshots from Firestore before doing anything —
+  // otherwise the effect runs with empty arrays during initial mount
+  // and creates duplicate gifts on every reload.
+  // Plus: in-flight tracking prevents the same effect tick re-firing
+  // before the addGift write round-trips through the snapshot.
   const inFlight = useRef<Set<string>>(new Set());
   useEffect(() => {
+    if (!giftsHydrated || !personsHydrated) return;
     persons.forEach((p) => {
       if (!isInStackWindow(p)) return;
       const year = birthdayYearForPerson(p);
@@ -50,7 +54,7 @@ export default function Home() {
         manuallyAdded: false,
       });
     });
-  }, [persons, gifts, settings.defaultBudget]);
+  }, [persons, gifts, settings.defaultBudget, giftsHydrated, personsHydrated]);
 
   const stack = useMemo(() => sortStack(gifts, persons), [gifts, persons]);
   const hero = useMemo(() => findHero(persons), [persons]);
@@ -131,7 +135,7 @@ export default function Home() {
       <div className="px-5 pt-1.5 pb-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h2 className="m-0 text-[17px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
-            Aktueller Stack
+            Aktuelle Übersicht
           </h2>
           <Chip variant="accent">{stack.length}</Chip>
         </div>
@@ -235,19 +239,22 @@ function StackCard({
           </Chip>
           <Chip variant="accent">{budget} €</Chip>
         </div>
-        <div className="flex gap-2 mt-0.5 text-[10px]">
+        <div className="flex gap-1 mt-1">
           <button
             onClick={onReceive}
-            className="text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 font-semibold"
+            aria-label="Geschenk erhalten"
+            title="Geschenk erhalten"
+            className="w-7 h-7 rounded-full border border-emerald-200 dark:border-emerald-900 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950 flex items-center justify-center"
           >
-            ✓ erhalten
+            <Icon.check size={14} />
           </button>
           <button
             onClick={onRemove}
-            className="text-stone-400 hover:text-red-500 font-semibold"
-            aria-label="Geschenk löschen"
+            aria-label="Geschenk aus Stack löschen"
+            title="Aus Übersicht entfernen"
+            className="w-7 h-7 rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center"
           >
-            ✕ löschen
+            <Icon.trash size={14} />
           </button>
         </div>
       </div>

@@ -17,6 +17,7 @@ import {
   formatBirthday,
 } from "@/lib/birthdays";
 import type { WishlistItem, Person } from "@/lib/types";
+import { getIdentity, setIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 
 type Tab = "wishlist" | "gifts" | "profile";
@@ -321,8 +322,13 @@ function ProfileTab({ person }: { person: Person }) {
   }
 
   function remove() {
-    if (!confirm(`${person.name} wirklich löschen? Alle Geschenke + Wünsche gehen verloren.`)) return;
+    const isSelf = getIdentity() === person.id;
+    const msg = isSelf
+      ? `${person.name} wirklich löschen?\n\nDas ist deine aktuelle Identität — danach bist du wieder „niemand" und kannst dich neu zuordnen.\n\nAlle Geschenke + Wünsche werden mitgelöscht.`
+      : `${person.name} wirklich löschen? Alle Geschenke + Wünsche gehen verloren.`;
+    if (!confirm(msg)) return;
     deletePerson(person.id);
+    if (isSelf) setIdentity(null);
     toast.success("Gelöscht");
     nav("/people");
   }

@@ -135,7 +135,7 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
           {!showExtra && text && (
             <button
               onClick={() => setShowExtra(true)}
-              className="text-xs font-semibold text-amber-700 dark:text-amber-400 px-1"
+              className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-1"
             >
               + Details
             </button>
@@ -146,7 +146,7 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
             className="rounded-[10px] w-9 h-9 flex items-center justify-center text-white"
             style={{
               background: text.trim()
-                ? "linear-gradient(135deg, #F59E0B 0%, #F97316 100%)"
+                ? "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)"
                 : "#D6D3D1",
             }}
           >
@@ -180,7 +180,7 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
                 </div>
                 <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
                   {it.price != null && (
-                    <span className="text-amber-700 dark:text-amber-400 font-semibold">
+                    <span className="text-violet-700 dark:text-violet-400 font-semibold">
                       {it.price} €
                     </span>
                   )}
@@ -274,7 +274,7 @@ function GiftsTab({
                   style={{
                     background:
                       g.status === "open"
-                        ? "linear-gradient(135deg, #FBBF24 0%, #F97316 100%)"
+                        ? "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)"
                         : undefined,
                     color: g.status === "open" ? "#fff" : undefined,
                   }}

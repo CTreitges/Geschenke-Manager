@@ -91,7 +91,7 @@ export default function GiftDetail() {
       {/* Teilnehmer */}
       <Section title="Teilnehmer" hint={`${gift.participantIds.length} dabei`}>
         {!me && (
-          <div className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 rounded-xl px-3 py-2 mb-2.5">
+          <div className="text-xs text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-950 rounded-xl px-3 py-2 mb-2.5">
             Wähle in den Einstellungen, wer du bist, bevor du teilnimmst oder abstimmst.
           </div>
         )}
@@ -142,10 +142,10 @@ export default function GiftDetail() {
                   className="px-3.5 py-3.5 rounded-2xl relative"
                   style={{
                     background: isWinner
-                      ? "var(--gm-winner, #FFFBEB)"
+                      ? "var(--gm-winner, #F5F3FF)"
                       : undefined,
                     border: isWinner
-                      ? "2px solid #F97316"
+                      ? "2px solid #7C3AED"
                       : "1px solid #F0EBE6",
                   }}
                 >
@@ -156,8 +156,8 @@ export default function GiftDetail() {
                     <div
                       className="absolute -top-2.5 right-3 px-2.5 py-0.5 rounded-full text-[11px] font-bold tracking-wide text-white"
                       style={{
-                        background: "linear-gradient(135deg, #F59E0B, #F97316)",
-                        boxShadow: "0 4px 10px -2px rgba(249,115,22,0.5)",
+                        background: "linear-gradient(135deg, #6366F1, #7C3AED)",
+                        boxShadow: "0 4px 10px -2px rgba(124,58,237,0.5)",
                       }}
                     >
                       🏆 Gewonnen
@@ -170,7 +170,7 @@ export default function GiftDetail() {
                       </div>
                       <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
                         {s.price != null && (
-                          <span className="text-amber-700 dark:text-amber-400 font-semibold">
+                          <span className="text-violet-700 dark:text-violet-400 font-semibold">
                             {s.price} €
                           </span>
                         )}
@@ -197,7 +197,7 @@ export default function GiftDetail() {
                         style={{
                           border: myVote ? "none" : "2px solid #D6D3D1",
                           background: myVote
-                            ? "linear-gradient(135deg, #F59E0B, #F97316)"
+                            ? "linear-gradient(135deg, #6366F1, #7C3AED)"
                             : "transparent",
                         }}
                       >
@@ -260,12 +260,12 @@ export default function GiftDetail() {
           <div>
             <div
               className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl mb-2.5"
-              style={{ background: "#FEF3C7" }}
+              style={{ background: "#EDE9FE" }}
             >
               <span className="text-lg">🗳️</span>
               <div className="flex-1">
-                <div className="text-[13px] font-bold text-amber-900">Abstimmung läuft</div>
-                <div className="text-xs text-amber-800/80">
+                <div className="text-[13px] font-bold text-violet-900">Abstimmung läuft</div>
+                <div className="text-xs text-violet-800/80">
                   {Object.keys(poll?.votes ?? {}).length} von {gift.participantIds.length} Stimmen
                 </div>
               </div>
@@ -285,12 +285,12 @@ export default function GiftDetail() {
         {pollStatus === "closed" && (
           <div
             className="px-3.5 py-3.5 rounded-xl flex items-center gap-2.5"
-            style={{ background: "#FEF3C7" }}
+            style={{ background: "#EDE9FE" }}
           >
             <span className="text-2xl">🏆</span>
             <div className="flex-1">
-              <div className="text-[13px] font-bold text-amber-900">Gewinner steht fest</div>
-              <div className="text-xs text-amber-800/85 mt-0.5">
+              <div className="text-[13px] font-bold text-violet-900">Gewinner steht fest</div>
+              <div className="text-xs text-violet-800/85 mt-0.5">
                 {giftSuggestions.find((s) => s.id === winnerId)?.title ?? "—"}
               </div>
             </div>
@@ -351,7 +351,7 @@ function BudgetEditor({ gift, totalBudget }: { gift: import("@/lib/types").Gift;
               }}
               onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
               className="w-12 px-1 py-0.5 rounded-md text-[15px] font-bold bg-transparent text-stone-900 dark:text-stone-50 outline-none"
-              style={{ border: "1px solid #F97316" }}
+              style={{ border: "1px solid #7C3AED" }}
             />
           ) : (
             <span
@@ -360,7 +360,7 @@ function BudgetEditor({ gift, totalBudget }: { gift: import("@/lib/types").Gift;
                 setEditing(true);
               }}
               className="cursor-pointer"
-              style={{ borderBottom: "1px dashed #F97316" }}
+              style={{ borderBottom: "1px dashed #7C3AED" }}
             >
               {gift.budgetPerPerson} €
             </span>
@@ -368,7 +368,7 @@ function BudgetEditor({ gift, totalBudget }: { gift: import("@/lib/types").Gift;
         </span>
         <span className="mx-1.5">=</span>
       </div>
-      <div className="text-[22px] font-extrabold tracking-tight text-amber-700 dark:text-amber-400">
+      <div className="text-[22px] font-extrabold tracking-tight text-violet-700 dark:text-violet-400">
         {totalBudget} €
       </div>
     </div>

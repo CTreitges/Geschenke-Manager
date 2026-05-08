@@ -141,7 +141,7 @@ export default function Settings() {
             <button
               onClick={changePassword}
               disabled={!oldPw || !newPw}
-              className="text-sm font-semibold text-amber-700 dark:text-amber-400 disabled:opacity-50"
+              className="text-sm font-semibold text-violet-700 dark:text-violet-400 disabled:opacity-50"
             >
               Passwort ändern
             </button>

@@ -68,7 +68,7 @@ export default function People() {
                   <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
                     {p.name}
                     {p.id === myId && (
-                      <span className="text-[11px] text-amber-700 dark:text-amber-400 font-semibold ml-1">· du</span>
+                      <span className="text-[11px] text-violet-700 dark:text-violet-400 font-semibold ml-1">· du</span>
                     )}
                   </div>
                   <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-medium">

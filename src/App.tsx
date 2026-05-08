@@ -1,29 +1,51 @@
-import { Routes, Route, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { Layout } from "@/components/Layout";
+import Login from "@/pages/Login";
+import Home from "@/pages/Home";
+import People from "@/pages/People";
+import PersonDetail from "@/pages/PersonDetail";
+import GiftDetail from "@/pages/GiftDetail";
+import Settings from "@/pages/Settings";
+import { isAuthed } from "@/lib/auth";
+import { useStore } from "@/lib/hooks";
 
-function Home() {
-  return (
-    <div className="min-h-screen bg-stone-50 dark:bg-stone-900 text-stone-900 dark:text-stone-100">
-      <main className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-3xl font-bold tracking-tight">🎁 Geschenke-Manager</h1>
-        <p className="mt-2 text-stone-600 dark:text-stone-400">
-          Scaffold läuft. Phase 1 (MVP) folgt — siehe <code>PLAN.md</code>.
-        </p>
-        <div className="mt-8 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 p-6 shadow-sm">
-          <p className="text-sm text-stone-500">
-            Nächste Schritte: Firebase-Config in <code>.env.local</code>, Routes hinzufügen,
-            Komponenten aus Claude Design integrieren.
-          </p>
-        </div>
-      </main>
-    </div>
-  );
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  if (!isAuthed()) {
+    return <Navigate to="/login" replace state={{ from: location }} />;
+  }
+  return <>{children}</>;
 }
 
 export default function App() {
+  const { settings } = useStore();
+
+  useEffect(() => {
+    if (settings.darkMode) document.documentElement.classList.add("dark");
+    else document.documentElement.classList.remove("dark");
+  }, [settings.darkMode]);
+
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="/login" element={<Login />} />
+      <Route
+        path="/*"
+        element={
+          <RequireAuth>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/people" element={<People />} />
+                <Route path="/person/:id" element={<PersonDetail />} />
+                <Route path="/gift/:id" element={<GiftDetail />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Layout>
+          </RequireAuth>
+        }
+      />
     </Routes>
   );
 }

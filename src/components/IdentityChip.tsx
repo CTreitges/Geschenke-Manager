@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
 import { useStore } from "@/lib/hooks";
-import { getIdentity } from "@/lib/auth";
+import { useIdentity } from "@/lib/auth";
 import { Avatar } from "./ui";
 
 export function IdentityChip() {
   const { persons } = useStore();
-  const id = getIdentity();
+  const id = useIdentity();
   const me = persons.find((p) => p.id === id);
   if (!me) {
     return (

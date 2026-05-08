@@ -14,7 +14,7 @@ import {
   sortStack,
 } from "@/lib/birthdays";
 import { addGift, markReceived, reorderGifts } from "@/lib/storage";
-import { getIdentity } from "@/lib/auth";
+import { useIdentity } from "@/lib/auth";
 import {
   DndContext,
   closestCenter,
@@ -76,7 +76,7 @@ export default function Home() {
     reorderGifts(reordered.map((g) => g.id));
   }
 
-  const myId = getIdentity();
+  const myId = useIdentity();
   const me = persons.find((p) => p.id === myId);
   const heroDays = hero ? daysUntilBirthday(hero) : 0;
 

@@ -5,7 +5,7 @@ import { pickColor } from "@/lib/colors";
 export default function Tutorial() {
   return (
     <div>
-      <PageHeader title="So funktioniert's" subtitle="Alles, was du wissen musst — in 9 Schritten" />
+      <PageHeader title="So funktioniert's" subtitle="Alles drin, in 9 kleinen Schritten" />
 
       {/* Hero intro */}
       <div className="px-4 pb-5">
@@ -25,7 +25,7 @@ export default function Tutorial() {
             Eine Trust-basierte App für deine Freunde. Kein Login, kein Account — nur ein
             geteiltes Passwort. Jede Person sieht alles und kann alles bearbeiten.
             Beim ersten Öffnen landest du automatisch hier — danach erreichst du das Tutorial
-            jederzeit über das <strong>?</strong> oben rechts oder die Einstellungen.
+            jederzeit über das <strong>?</strong> oben rechts oder die <em>Einstellungen</em>.
           </p>
         </div>
       </div>
@@ -40,13 +40,15 @@ export default function Tutorial() {
             <>
               <p>
                 Tippe oben rechts auf <strong>„Wer bist du?"</strong> oder geh in die{" "}
-                <Link to="/settings" className="text-violet-700 dark:text-violet-400 font-semibold">
+                <Link to="/settings" className={LINK}>
                   Einstellungen
                 </Link>{" "}
-                → <strong>„Wer bin ich?"</strong> und wähle dich.
+                → <strong>„Wer bin ich?"</strong> und wähle dich aus den Personen aus.
               </p>
               <p>
-                Wichtig für: deine Stimmen, Vorschläge und Wünsche werden danach dir zugeordnet.
+                Wichtig: deine Stimmen, Vorschläge und Wünsche werden danach dir zugeordnet.
+                Wechseln kannst du jederzeit — die Identität ist nur ein Label im Browser
+                (kein echtes Login).
               </p>
             </>
           }
@@ -56,17 +58,23 @@ export default function Tutorial() {
         <Step
           n={2}
           icon="👥"
-          title="Personen anlegen"
+          title="Personen anlegen, bearbeiten, löschen"
           body={
             <>
               <p>
-                <Link to="/people" className="text-violet-700 dark:text-violet-400 font-semibold">
+                <Link to="/people" className={LINK}>
                   Personen
                 </Link>{" "}
-                → orangenes <strong>+</strong> rechts unten. Pro Person reichen <strong>Name + Tag/Monat</strong> —
-                Jahr ist nicht nötig.
+                → violetter <strong>+</strong> rechts unten. Pro Person reichen{" "}
+                <strong>Name + Tag/Monat</strong>. Jahr ist nicht nötig — wir wollen ja nur
+                wissen, wann's wieder soweit ist.
               </p>
-              <p>E-Mail ist optional, brauchst du nur, falls du später Erinnerungen schicken lassen willst.</p>
+              <p>
+                Tipp auf eine Person → <strong>Profil</strong>-Tab → Felder ändern und{" "}
+                <em>Speichern</em>, oder Person komplett löschen (kaskadiert auch ihre
+                Geschenke + Wünsche). Wenn du dich selbst löschst, wird deine Identität
+                automatisch zurückgesetzt.
+              </p>
             </>
           }
           mock={<MockPeopleGrid />}
@@ -79,14 +87,19 @@ export default function Tutorial() {
           body={
             <>
               <p>
-                Auf der Startseite. <strong>30 Tage vor jedem Geburtstag</strong> taucht die Person automatisch
-                hier auf — <strong>nach Geburtstag sortiert</strong>, der nächste oben.
+                Auf der Startseite. <strong>30 Tage vor dem Geburtstag</strong> erscheint
+                jede Person automatisch hier — sortiert nach <strong>nächstem Geburtstag</strong>,
+                der nächste oben. Das Geschenk-Jahr steht klein am Titel.
               </p>
               <p>
-                Pro Karte: Avatar, Name, Geburtstag mit kleinem Jahr, Teilnehmer-Chip, Budget-Chip
-                und ein kleines 🗑 zum Löschen, falls dieses Jahr keins gebraucht wird. Manuell
-                hinzufügen geht über das <strong>+</strong> rechts unten (z.B. um ein vergessenes
-                Vorjahres-Geschenk nachzutragen).
+                Pro Karte: Avatar, Name + Datum + Jahr, Tage-Counter („in&nbsp;13&nbsp;T."),
+                Teilnehmer-Chip, Budget-Chip und ein 🗑 zum Entfernen, falls dieses Jahr
+                kein Geschenk gemacht wird.
+              </p>
+              <p>
+                Manuell hinzufügen geht über das <strong>+</strong> rechts unten — z.B. um
+                ein vergessenes Vorjahres-Geschenk nachzutragen oder ein zweites Geschenk
+                im selben Jahr.
               </p>
             </>
           }
@@ -95,18 +108,23 @@ export default function Tutorial() {
 
         <Step
           n={4}
-          icon="📝"
+          icon="✨"
           title="Wunschliste pflegen"
           body={
             <>
               <p>
-                Eigene Wünsche unter dem <strong>Wunschliste</strong>-Tab — wird nur sichtbar, wenn du
-                deine Identität gesetzt hast. Wünsche von anderen sieht man auf der jeweiligen
-                Person-Detail-Seite.
+                Eigene Wünsche unter dem{" "}
+                <Link to="/wishlist" className={LINK}>
+                  Wunschliste
+                </Link>
+                -Tab — wird nur sichtbar, wenn deine Identität gesetzt ist (sonst Hinweis +
+                Knopf zur Auswahl). Wünsche von anderen siehst du auf der jeweiligen
+                Person-Detail-Seite unter dem Tab <em>Wunschliste</em>.
               </p>
               <p>
-                Pro Wunsch: Titel reicht. Optional Link + Preis — gut, wenn jemand grade konkret
-                stöbert.
+                Pro Wunsch reicht ein <strong>Titel</strong>. Optional: <em>Link</em> +{" "}
+                <em>Preis</em> unter <strong>+ Details</strong> — gut, wenn jemand grade
+                konkret stöbert. Löschen über das 🗑 rechts.
               </p>
             </>
           }
@@ -116,28 +134,34 @@ export default function Tutorial() {
         <Step
           n={5}
           icon="🎁"
-          title="Geschenk vorbereiten"
+          title="Geschenk-Detail im Überblick"
           body={
             <>
               <p>
-                In der Übersicht auf eine Karte tippen — du landest im <strong>Geschenk-Detail</strong>.
+                In der Übersicht auf eine Karte tippen → Geschenk-Detail mit personalisiertem
+                Banner (in der Avatar-Farbe der Person).
               </p>
-              <p>Drei Sektionen:</p>
+              <p>Drei Sektionen, von oben nach unten:</p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
                 <li>
-                  <strong>Teilnehmer</strong> — wer macht mit. Bei vielen klick <em>„Alle hinzufügen"</em>.
+                  <strong>Teilnehmer</strong> — wer macht mit. Chip antippen = ein/aus.
+                  Bei vielen Klick auf <em>„Alle hinzufügen"</em> rechts. Direkt drunter
+                  das Live-Budget (<em>Anzahl × Betrag pro Kopf</em>); das Pro-Kopf-Feld
+                  ist mit gestricheltem Unterstrich klickbar editierbar.
                 </li>
                 <li>
-                  <strong>Vorschläge</strong> — Ideen mit Link/Preis. Über das ✏-Icon kann jeder
-                  später Titel/Link/Preis anpassen, das ✕ löscht.
+                  <strong>Vorschläge</strong> — Ideen sammeln mit Titel, optional Link/Preis.
+                  Pro Karte: <strong>Lila Checkbox links</strong> für die Auswahl,{" "}
+                  <strong>✏</strong> zum Bearbeiten von Titel/Link/Preis,{" "}
+                  <strong>✕</strong> zum Löschen.
                 </li>
                 <li>
-                  <strong>Abstimmung</strong> — wenn ihr nicht einig seid.
+                  <strong>Abstimmung</strong> — siehe Schritt 6.
                 </li>
               </ul>
-              <p className="mt-2">
-                Das <strong>Live-Budget</strong> (<em>Anzahl × Betrag pro Kopf</em>) hilft beim Limit
-                im Auge behalten.
+              <p>
+                Ganz unten: roter <em>Geschenk löschen</em>-Knopf, falls ihr es doch nicht
+                verfolgen wollt.
               </p>
             </>
           }
@@ -147,21 +171,24 @@ export default function Tutorial() {
         <Step
           n={6}
           icon="🗳️"
-          title="Abstimmen"
+          title="Abstimmen — und die eigene Stimme bearbeiten"
           body={
             <>
               <p>
-                <strong>Abstimmung starten</strong> klicken → jeder Teilnehmer sieht einen Stimm-Kreis
-                rechts an jedem Vorschlag. <strong>Eine Stimme pro Person</strong>, sofort sichtbar
-                (transparente Wahl).
+                <strong>„Abstimmung starten"</strong> klicken → jeder Teilnehmer sieht
+                rechts an jedem Vorschlag einen Stimm-Kreis. <strong>Eine Stimme pro
+                Person</strong>, sofort sichtbar (transparente Wahl, keine Geheimwahl).
               </p>
               <p>
-                Stimme ändern? Einfach auf einen anderen Vorschlag klicken — der Banner oben zeigt
-                jederzeit, für was du gerade gestimmt hast.
+                Oben in der Vorschläge-Sektion ein Banner <em>„Du hast gewählt: …"</em> mit
+                Knopf <strong>Zurücknehmen</strong>. Klick auf einen anderen Vorschlag =
+                Stimme ändern. Alles bleibt für alle live sichtbar.
               </p>
               <p>
-                Beim <strong>Beenden</strong> kompakte Übersicht mit Top-Vorschlag + Prozenten;
-                <em> Details</em>-Klick öffnet Modal mit allen Vorschlägen + Bars + Voter-Avataren.
+                <strong>„Abstimmung beenden"</strong> zeigt ein kompaktes Ergebnis mit
+                Top-Vorschlag und Prozenten; <em>Details</em> öffnet ein Modal mit allen
+                Vorschlägen + Bars + Voter-Avataren. Optional auch{" "}
+                <em>„Wieder öffnen"</em> oder <em>„Verwerfen"</em>.
               </p>
             </>
           }
@@ -175,18 +202,21 @@ export default function Tutorial() {
           body={
             <>
               <p>
-                Nach der Abstimmung könnt ihr Vorschläge mit der lila <strong>Checkbox links</strong>{" "}
-                als <em>„wir nehmen das"</em> markieren. <strong>Mehrere gleichzeitig sind erlaubt</strong> —
-                die App rechnet die <strong>theoretische Gesamtsumme</strong> live, listet die ausgewählten
-                Titel mit Preisen und erlaubt einzelnes Entfernen.
+                Unabhängig von der Abstimmung könnt ihr Vorschläge mit der lila Checkbox
+                links als <strong>„wir nehmen das"</strong> markieren — auch{" "}
+                <strong>mehrere</strong>. Die App listet die Auswahl mit Titeln und Preisen,
+                rechnet die <strong>theoretische Gesamtsumme</strong> live und erlaubt
+                einzelnes Entfernen.
               </p>
               <p>
-                Auch nach geschlossener Abstimmung könnt ihr die Auswahl bearbeiten oder die Abstimmung
-                wieder öffnen — das Ergebnis bleibt erhalten.
+                Das funktioniert auch nach geschlossener Abstimmung — Auswahl bearbeiten,
+                Vorschläge ändern, Stimmen-Ergebnis bleibt erhalten und ist über{" "}
+                <em>Details</em> jederzeit nachschlagbar.
               </p>
               <p>
-                Ist alles besorgt: ganz unten <strong>„✓ Geschenk erhalten"</strong> — verschwindet aus der
-                Übersicht, bleibt unter <em>Person → Geschenke</em> in der Historie.
+                Ist alles besorgt: ganz unten <strong>„✓ Geschenk erhalten"</strong> — das
+                Geschenk verschwindet aus der Übersicht und bleibt unter{" "}
+                <em>Person → Geschenke</em> in der Historie.
               </p>
             </>
           }
@@ -195,30 +225,40 @@ export default function Tutorial() {
 
         <Step
           n={8}
-          icon="🗑️"
-          title="Aufräumen"
+          icon="⚙️"
+          title="Einstellungen"
           body={
             <>
-              <p>An jeder Stelle gibt's ein Lösch-Icon:</p>
+              <p>
+                In der{" "}
+                <Link to="/settings" className={LINK}>
+                  Einstellungen
+                </Link>
+                -Seite findest du:
+              </p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
                 <li>
-                  <strong>Übersicht-Karte:</strong> 🗑 rechts.
+                  <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 1)
                 </li>
                 <li>
-                  <strong>Geschenk-Detail:</strong> roter Knopf ganz unten.
+                  <strong>Default-Budget pro Person</strong> — wird bei neuen Geschenken
+                  automatisch übernommen, pro Geschenk individuell überschreibbar
                 </li>
                 <li>
-                  <strong>Vorschlag:</strong> ✕ auf der Karte (✏ = bearbeiten).
+                  <strong>Dark Mode</strong> — Toggle, wirkt sofort
                 </li>
                 <li>
-                  <strong>Wunsch / Person:</strong> 🗑 in der jeweiligen Liste.
+                  <strong>Passwort ändern</strong> — altes + neues angeben
+                </li>
+                <li>
+                  <strong>Hilfe → So funktioniert's</strong> & <strong>Feedback</strong>{" "}
+                  (siehe Schritt 9)
+                </li>
+                <li>
+                  <strong>Abmelden</strong> — meldet diesen Browser ab, das Gruppen-Passwort
+                  bleibt unverändert
                 </li>
               </ul>
-              <p className="mt-2">
-                Löschen ist <em>endgültig</em>, daher gibt's überall einen kurzen Bestätigungs-Dialog.
-                Wenn du dich selbst (deine Identität) löschst, wird der Identitäts-Schlüssel
-                automatisch zurückgesetzt — kein Geist-Account.
-              </p>
             </>
           }
         />
@@ -226,16 +266,21 @@ export default function Tutorial() {
         <Step
           n={9}
           icon="💬"
-          title="Feedback"
+          title="Feedback geben"
           body={
             <>
               <p>
-                Was nervt? Was fehlt? Unter{" "}
-                <Link to="/feedback" className="text-violet-700 dark:text-violet-400 font-semibold">
+                Was nervt? Was fehlt? Was wäre cool? Unter{" "}
+                <Link to="/feedback" className={LINK}>
                   Einstellungen → Feedback
                 </Link>{" "}
-                kannst du Wünsche eintragen. Alle sehen alles, jeder kann editieren oder als
-                erledigt markieren — Trust-Prinzip wie überall.
+                kannst du Wünsche, Ideen, Bugs eintragen. Alle sehen alles, jeder kann
+                editieren oder als <em>erledigt</em> markieren — Trust-Prinzip wie überall.
+              </p>
+              <p>
+                Wenn deine Identität gesetzt ist, wird das Feedback dir zugeordnet (kleiner
+                Avatar). Sonst landet es als <em>anonym</em> in der Liste — auch das ist
+                völlig okay.
               </p>
             </>
           }
@@ -247,21 +292,27 @@ export default function Tutorial() {
             🤝 Trust-Prinzip
           </div>
           <p className="text-[13px] leading-[1.55] text-stone-700 dark:text-stone-300">
-            Es gibt keine echten Accounts. Identität ist nur ein Label, das du selber wählst. Jeder
-            mit dem Gruppen-Passwort kann alles. Das ist <strong>so gewollt</strong> — wir wollen
-            kein Permission-System für Menschen, denen wir Geschenke kaufen.
+            Es gibt keine echten Accounts. Identität ist nur ein Label, das du selber wählst.
+            Jeder mit dem Gruppen-Passwort kann alles. Das ist <strong>so gewollt</strong> —
+            wir wollen kein Permission-System für Menschen, denen wir Geschenke kaufen.
           </p>
         </div>
       </div>
 
       <div className="px-4 pb-24">
-        <Button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} variant="secondary" className="w-full">
+        <Button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          variant="secondary"
+          className="w-full"
+        >
           ↑ Zurück nach oben
         </Button>
       </div>
     </div>
   );
 }
+
+const LINK = "text-violet-700 dark:text-violet-400 font-semibold";
 
 // ── Step block ────────────────────────────────────────────────
 function Step({
@@ -415,6 +466,9 @@ function MockVoteCircle() {
           <span className="text-stone-500 dark:text-stone-400">Du hast gewählt:</span>{" "}
           <span className="font-semibold text-stone-900 dark:text-stone-50">Kopfhörer</span>
         </div>
+        <span className="text-[10px] font-semibold text-violet-700 dark:text-violet-300">
+          Zurücknehmen
+        </span>
       </div>
       <div className="px-3 py-2 rounded-[10px] bg-white dark:bg-stone-800 border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2">
         <div className="flex-1 text-[13px] font-bold text-stone-900 dark:text-stone-50">Kopfhörer</div>

@@ -15,7 +15,7 @@ import {
   limit,
 } from "firebase/firestore";
 import { db } from "./firebase";
-import type { Person, Gift, Suggestion, WishlistItem, Poll, Settings, ID } from "./types";
+import type { Person, Gift, Suggestion, WishlistItem, Poll, Settings, Feedback, ID } from "./types";
 
 interface State {
   persons: Person[];
@@ -23,6 +23,7 @@ interface State {
   suggestions: Suggestion[];
   wishlist: WishlistItem[];
   polls: Poll[];
+  feedback: Feedback[];
   settings: Settings;
   /** settings/global has arrived — used by Login to wait for password hash. */
   loaded: boolean;
@@ -45,6 +46,7 @@ let state: State = {
   suggestions: [],
   wishlist: [],
   polls: [],
+  feedback: [],
   settings: DEFAULT_SETTINGS,
   loaded: false,
   giftsHydrated: false,
@@ -90,6 +92,10 @@ function init() {
       const data = d.data() as Omit<Poll, "giftId">;
       return { giftId: d.id, ...data, votes: data.votes ?? {} };
     });
+    notify();
+  });
+  onSnapshot(collection(db, "feedback"), (snap) => {
+    state.feedback = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, "id">) }));
     notify();
   });
   onSnapshot(doc(db, "settings", "global"), (snap) => {
@@ -284,6 +290,30 @@ export async function castVote(giftId: ID, personId: ID, suggestionId: ID) {
   //  field name, which silently corrupts the document.)
   const ref = doc(db, "polls", giftId);
   await setDoc(ref, { votes: { [personId]: suggestionId } }, { merge: true });
+}
+
+export async function removeVote(giftId: ID, personId: ID) {
+  const existing = state.polls.find((p) => p.giftId === giftId);
+  if (!existing) return;
+  const next: Record<ID, ID> = { ...existing.votes };
+  delete next[personId];
+  // updateDoc replaces the whole map field — that's what we want here,
+  // since we read-modified-wrote a fresh copy. Other fields (status,
+  // timestamps) on the poll doc stay untouched.
+  await updateDoc(doc(db, "polls", giftId), { votes: next });
+}
+
+// ─── Feedback ───────────────────────────────────────────
+export async function addFeedback(f: Omit<Feedback, "id" | "createdAt">) {
+  await addDoc(collection(db, "feedback"), clean({ ...f, createdAt: Date.now() }));
+}
+
+export async function updateFeedback(id: ID, patch: Partial<Feedback>) {
+  await updateDoc(doc(db, "feedback", id), clean(patch as Record<string, unknown>));
+}
+
+export async function deleteFeedback(id: ID) {
+  await deleteDoc(doc(db, "feedback", id));
 }
 
 // ─── Settings ───────────────────────────────────────────

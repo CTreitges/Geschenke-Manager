@@ -8,6 +8,7 @@ import {
   deleteGift,
   deleteSuggestion,
   markReceived,
+  removeVote,
   setAllParticipants,
   setGiftSelections,
   setPollStatus,
@@ -169,6 +170,10 @@ export default function GiftDetail() {
           <MyVoteBanner
             mySuggestionId={poll?.votes[myId]}
             suggestions={giftSuggestions}
+            onClear={() => {
+              removeVote(giftId, myId);
+              toast.success("Stimme zurückgenommen");
+            }}
           />
         )}
 
@@ -451,9 +456,11 @@ function ParticipantBulkButtons({
 function MyVoteBanner({
   mySuggestionId,
   suggestions,
+  onClear,
 }: {
   mySuggestionId: string | undefined;
   suggestions: Suggestion[];
+  onClear: () => void;
 }) {
   const my = mySuggestionId ? suggestions.find((s) => s.id === mySuggestionId) : null;
   return (
@@ -465,13 +472,13 @@ function MyVoteBanner({
       }}
     >
       <span className="text-base">{my ? "✓" : "🗳️"}</span>
-      <div className="flex-1 text-[13px]">
+      <div className="flex-1 text-[13px] min-w-0">
         {my ? (
           <>
             <span className="text-stone-500 dark:text-stone-400">Du hast gewählt:</span>{" "}
             <span className="font-semibold text-stone-900 dark:text-stone-50">{my.title}</span>
             <div className="text-xs text-stone-400 mt-0.5">
-              Auf einen anderen Vorschlag klicken, um die Stimme zu ändern.
+              Auf einen anderen Vorschlag klicken zum Ändern, oder Stimme zurücknehmen.
             </div>
           </>
         ) : (
@@ -480,6 +487,14 @@ function MyVoteBanner({
           </span>
         )}
       </div>
+      {my && (
+        <button
+          onClick={onClear}
+          className="text-xs font-semibold text-violet-700 dark:text-violet-300 px-2 py-1 rounded-md hover:bg-violet-50 dark:hover:bg-violet-950 shrink-0"
+        >
+          Zurücknehmen
+        </button>
+      )}
     </div>
   );
 }

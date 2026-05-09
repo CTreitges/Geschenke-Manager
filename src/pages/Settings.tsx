@@ -119,6 +119,9 @@ export default function Settings() {
           <Row label="So funktioniert's" hint="Step-by-Step Tutorial" icon={<Icon.gift />} onClick={() => nav("/tutorial")}>
             <Icon.chev className="text-stone-400" />
           </Row>
+          <Row label="Feedback" hint="Wünsche, Ideen, Bugs" icon={<Icon.mail />} onClick={() => nav("/feedback")}>
+            <Icon.chev className="text-stone-400" />
+          </Row>
         </Group>
 
         <Group title="Mitteilungen">

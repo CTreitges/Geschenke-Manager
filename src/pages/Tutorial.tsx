@@ -5,7 +5,7 @@ import { pickColor } from "@/lib/colors";
 export default function Tutorial() {
   return (
     <div>
-      <PageHeader title="So funktioniert's" subtitle="Alles, was du wissen musst — in 8 Schritten" />
+      <PageHeader title="So funktioniert's" subtitle="Alles, was du wissen musst — in 9 Schritten" />
 
       {/* Hero intro */}
       <div className="px-4 pb-5">
@@ -23,8 +23,9 @@ export default function Tutorial() {
           </h1>
           <p className="text-[14px] leading-[1.5] opacity-95">
             Eine Trust-basierte App für deine Freunde. Kein Login, kein Account — nur ein
-            geteiltes Passwort. Jede Person sieht alles und kann alles bearbeiten. Klingt
-            riskant? Ist's nicht — wir kennen uns ja.
+            geteiltes Passwort. Jede Person sieht alles und kann alles bearbeiten.
+            Beim ersten Öffnen landest du automatisch hier — danach erreichst du das Tutorial
+            jederzeit über das <strong>?</strong> oben rechts oder die Einstellungen.
           </p>
         </div>
       </div>
@@ -38,7 +39,7 @@ export default function Tutorial() {
           body={
             <>
               <p>
-                Tippe oben rechts auf das <strong>„Wer bist du?"</strong>-Pille oder geh in die{" "}
+                Tippe oben rechts auf <strong>„Wer bist du?"</strong> oder geh in die{" "}
                 <Link to="/settings" className="text-violet-700 dark:text-violet-400 font-semibold">
                   Einstellungen
                 </Link>{" "}
@@ -74,16 +75,18 @@ export default function Tutorial() {
         <Step
           n={3}
           icon="📚"
-          title="Der Stack"
+          title="Die Übersicht"
           body={
             <>
               <p>
-                Auf der Hauptseite. <strong>30 Tage vor jedem Geburtstag</strong> taucht die Person automatisch
-                hier auf und wird so lange angezeigt, bis ihr <strong>„✓ erhalten"</strong> drückt.
+                Auf der Startseite. <strong>30 Tage vor jedem Geburtstag</strong> taucht die Person automatisch
+                hier auf — <strong>nach Geburtstag sortiert</strong>, der nächste oben.
               </p>
               <p>
-                Sortierung: nächster Geburtstag zuerst. Manuell hinzufügen geht über das <strong>+</strong>{" "}
-                rechts unten (z.B. um ein vergessenes Geschenk vom Vorjahr nachzutragen).
+                Pro Karte: Avatar, Name, Geburtstag mit kleinem Jahr, Teilnehmer-Chip, Budget-Chip
+                und ein kleines 🗑 zum Löschen, falls dieses Jahr keins gebraucht wird. Manuell
+                hinzufügen geht über das <strong>+</strong> rechts unten (z.B. um ein vergessenes
+                Vorjahres-Geschenk nachzutragen).
               </p>
             </>
           }
@@ -97,12 +100,13 @@ export default function Tutorial() {
           body={
             <>
               <p>
-                Eigene Wünsche unter dem <strong>Wunschliste</strong>-Tab. Wünsche von anderen sieht man auf
-                der jeweiligen Person-Detail-Seite.
+                Eigene Wünsche unter dem <strong>Wunschliste</strong>-Tab — wird nur sichtbar, wenn du
+                deine Identität gesetzt hast. Wünsche von anderen sieht man auf der jeweiligen
+                Person-Detail-Seite.
               </p>
               <p>
-                Pro Wunsch: <strong>Titel</strong> reicht. Optional <em>Link</em> + <em>Preis</em> — gut, wenn
-                jemand grad konkret stöbert.
+                Pro Wunsch: Titel reicht. Optional Link + Preis — gut, wenn jemand grade konkret
+                stöbert.
               </p>
             </>
           }
@@ -115,17 +119,24 @@ export default function Tutorial() {
           title="Geschenk vorbereiten"
           body={
             <>
-              <p>Im Stack auf eine Karte klicken — du landest im <strong>Geschenk-Detail</strong>.</p>
               <p>
-                Drei Sektionen:
+                In der Übersicht auf eine Karte tippen — du landest im <strong>Geschenk-Detail</strong>.
               </p>
+              <p>Drei Sektionen:</p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
-                <li><strong>Teilnehmer</strong> — wer macht mit. Bei vielen klick „Alle hinzufügen".</li>
-                <li><strong>Vorschläge</strong> — Ideen sammeln, mit Link/Preis. Mit ✏ später anpassen.</li>
-                <li><strong>Abstimmung</strong> — wenn ihr nicht einig seid.</li>
+                <li>
+                  <strong>Teilnehmer</strong> — wer macht mit. Bei vielen klick <em>„Alle hinzufügen"</em>.
+                </li>
+                <li>
+                  <strong>Vorschläge</strong> — Ideen mit Link/Preis. Über das ✏-Icon kann jeder
+                  später Titel/Link/Preis anpassen, das ✕ löscht.
+                </li>
+                <li>
+                  <strong>Abstimmung</strong> — wenn ihr nicht einig seid.
+                </li>
               </ul>
               <p className="mt-2">
-                Das <strong>Live-Budget</strong> oben rechts (<em>Anzahl × Betrag pro Kopf</em>) hilft beim Limit
+                Das <strong>Live-Budget</strong> (<em>Anzahl × Betrag pro Kopf</em>) hilft beim Limit
                 im Auge behalten.
               </p>
             </>
@@ -141,16 +152,16 @@ export default function Tutorial() {
             <>
               <p>
                 <strong>Abstimmung starten</strong> klicken → jeder Teilnehmer sieht einen Stimm-Kreis
-                rechts an jedem Vorschlag. <strong>Eine Stimme pro Person</strong>. Stimmen sind sofort
-                sichtbar (transparente Wahl).
+                rechts an jedem Vorschlag. <strong>Eine Stimme pro Person</strong>, sofort sichtbar
+                (transparente Wahl).
               </p>
               <p>
-                Stimme ändern? Einfach auf einen anderen Vorschlag klicken — der Banner oben zeigt jederzeit,
-                für was du gerade gestimmt hast.
+                Stimme ändern? Einfach auf einen anderen Vorschlag klicken — der Banner oben zeigt
+                jederzeit, für was du gerade gestimmt hast.
               </p>
               <p>
-                Beim <strong>Beenden</strong> kompakte Übersicht, Klick auf <em>Details</em> öffnet das
-                vollständige Ergebnis mit Prozent-Bars.
+                Beim <strong>Beenden</strong> kompakte Übersicht mit Top-Vorschlag + Prozenten;
+                <em> Details</em>-Klick öffnet Modal mit allen Vorschlägen + Bars + Voter-Avataren.
               </p>
             </>
           }
@@ -164,13 +175,18 @@ export default function Tutorial() {
           body={
             <>
               <p>
-                Nach der Abstimmung könnt ihr Vorschläge auch ohne Stimme-zu-Stimme einfach{" "}
-                <strong>als „wir nehmen das" markieren</strong>: lila Checkbox links am Vorschlag. Mehrere
-                gleichzeitig sind erlaubt — die App rechnet die <strong>theoretische Gesamtsumme</strong> live.
+                Nach der Abstimmung könnt ihr Vorschläge mit der lila <strong>Checkbox links</strong>{" "}
+                als <em>„wir nehmen das"</em> markieren. <strong>Mehrere gleichzeitig sind erlaubt</strong> —
+                die App rechnet die <strong>theoretische Gesamtsumme</strong> live, listet die ausgewählten
+                Titel mit Preisen und erlaubt einzelnes Entfernen.
               </p>
               <p>
-                Ist alles besorgt: ganz unten <strong>„✓ Geschenk erhalten"</strong> — verschwindet aus dem
-                Stack, bleibt unter <em>Person → Geschenke</em> in der Historie.
+                Auch nach geschlossener Abstimmung könnt ihr die Auswahl bearbeiten oder die Abstimmung
+                wieder öffnen — das Ergebnis bleibt erhalten.
+              </p>
+              <p>
+                Ist alles besorgt: ganz unten <strong>„✓ Geschenk erhalten"</strong> — verschwindet aus der
+                Übersicht, bleibt unter <em>Person → Geschenke</em> in der Historie.
               </p>
             </>
           }
@@ -185,13 +201,41 @@ export default function Tutorial() {
             <>
               <p>An jeder Stelle gibt's ein Lösch-Icon:</p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
-                <li><strong>Stack-Karte:</strong> „✕ löschen" rechts.</li>
-                <li><strong>Geschenk-Detail:</strong> roter Knopf ganz unten.</li>
-                <li><strong>Vorschlag:</strong> ✕-Icon auf der Karte.</li>
-                <li><strong>Wunsch / Person:</strong> 🗑 in der jeweiligen Liste.</li>
+                <li>
+                  <strong>Übersicht-Karte:</strong> 🗑 rechts.
+                </li>
+                <li>
+                  <strong>Geschenk-Detail:</strong> roter Knopf ganz unten.
+                </li>
+                <li>
+                  <strong>Vorschlag:</strong> ✕ auf der Karte (✏ = bearbeiten).
+                </li>
+                <li>
+                  <strong>Wunsch / Person:</strong> 🗑 in der jeweiligen Liste.
+                </li>
               </ul>
               <p className="mt-2">
                 Löschen ist <em>endgültig</em>, daher gibt's überall einen kurzen Bestätigungs-Dialog.
+                Wenn du dich selbst (deine Identität) löschst, wird der Identitäts-Schlüssel
+                automatisch zurückgesetzt — kein Geist-Account.
+              </p>
+            </>
+          }
+        />
+
+        <Step
+          n={9}
+          icon="💬"
+          title="Feedback"
+          body={
+            <>
+              <p>
+                Was nervt? Was fehlt? Unter{" "}
+                <Link to="/feedback" className="text-violet-700 dark:text-violet-400 font-semibold">
+                  Einstellungen → Feedback
+                </Link>{" "}
+                kannst du Wünsche eintragen. Alle sehen alles, jeder kann editieren oder als
+                erledigt markieren — Trust-Prinzip wie überall.
               </p>
             </>
           }
@@ -265,15 +309,19 @@ function Step({
 // ── Mocks (CSS-rendered, no real screenshots) ─────────────────
 const ANNA = { id: "demo-anna", name: "Anna", birthday: "06-15", color: pickColor("Anna"), createdAt: 0 };
 const BEN = { id: "demo-ben", name: "Ben", birthday: "07-02", color: pickColor("Ben"), createdAt: 0 };
-const CHRIS = { id: "demo-chris", name: "Chris", birthday: "06-20", color: pickColor("Chris"), createdAt: 0 };
 
 function MockTopBar() {
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">🎁 Geschenke</div>
-      <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-1 pr-3 py-1 inline-flex items-center gap-2">
-        <Avatar person={ANNA} size={22} />
-        <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Ich: Anna</span>
+      <div className="flex items-center gap-1.5">
+        <div className="w-6 h-6 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 flex items-center justify-center text-[11px] font-bold">
+          ?
+        </div>
+        <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-1 pr-3 py-1 inline-flex items-center gap-2">
+          <Avatar person={ANNA} size={22} />
+          <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Ich: Anna</span>
+        </div>
       </div>
     </div>
   );
@@ -302,14 +350,18 @@ function MockStackCard() {
       <Avatar person={BEN} size={32} />
       <div className="flex-1 min-w-0">
         <div className="text-[13px] font-bold text-stone-900 dark:text-stone-50">
-          Ben <span className="text-stone-400 font-medium">· 2. Jul</span>
+          Ben <span className="text-stone-400 font-medium">· 2. Jul</span>{" "}
+          <span className="text-[9px] font-semibold text-stone-400 tracking-wide">2026</span>
         </div>
         <div className="text-[11px] text-stone-500">in 12 T. · seit 5 T. im Stack</div>
       </div>
-      <div className="flex flex-col gap-0.5 items-end">
+      <div className="flex flex-col items-end gap-1">
         <div className="flex gap-1">
           <Chip variant="neutral" className="text-[10px]">3 👥</Chip>
           <Chip variant="accent" className="text-[10px]">30 €</Chip>
+        </div>
+        <div className="w-5 h-5 rounded-full border border-stone-200 dark:border-stone-700 text-stone-400 flex items-center justify-center text-[10px]">
+          🗑
         </div>
       </div>
     </div>
@@ -397,6 +449,3 @@ function MockSelected() {
     </div>
   );
 }
-
-// keep CHRIS import-warning silent
-void CHRIS;

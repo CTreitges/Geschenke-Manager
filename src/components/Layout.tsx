@@ -11,6 +11,7 @@ export function Layout({ children }: { children: ReactNode }) {
     { to: "/people", label: "Personen", Icon: Icon.users },
     { to: "/wishlist", label: "Wunschliste", Icon: Icon.gift },
     { to: "/settings", label: "Einstellungen", Icon: Icon.cog },
+    { to: "/feedback", label: "Feedback", Icon: Icon.mail },
   ];
   return (
     <div

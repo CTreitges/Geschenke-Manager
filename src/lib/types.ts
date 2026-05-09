@@ -56,6 +56,14 @@ export interface Poll {
   votes: Record<ID, ID>;
 }
 
+export interface Feedback {
+  id: ID;
+  text: string;
+  by?: ID;        // identity that submitted it
+  createdAt: number;
+  resolved?: boolean;
+}
+
 export interface Settings {
   defaultBudget: number;
   passwordHash: string; // SHA-256

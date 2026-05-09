@@ -9,6 +9,7 @@ import GiftDetail from "@/pages/GiftDetail";
 import Settings from "@/pages/Settings";
 import MyWishlist from "@/pages/MyWishlist";
 import Tutorial from "@/pages/Tutorial";
+import Feedback from "@/pages/Feedback";
 import { isAuthed } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
 
@@ -62,6 +63,7 @@ export default function App() {
                 <Route path="/gift/:id" element={<GiftDetail />} />
                 <Route path="/wishlist" element={<MyWishlist />} />
                 <Route path="/tutorial" element={<Tutorial />} />
+                <Route path="/feedback" element={<Feedback />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>

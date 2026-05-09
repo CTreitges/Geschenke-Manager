@@ -13,7 +13,7 @@ import {
   isInStackWindow,
   sortStack,
 } from "@/lib/birthdays";
-import { addGift, deleteGift, ensureAutoGift } from "@/lib/storage";
+import { addGift, deduplicateOpenGifts, deleteGift, ensureAutoGift } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 import type { Person } from "@/lib/types";
@@ -30,7 +30,6 @@ export default function Home() {
   // check an atomic Firestore-side getDoc() instead of relying on the
   // local-snapshot cache, which previously produced duplicates on
   // every reload due to the cache-vs-server snapshot race.
-  // Hydration gate is still useful so we only iterate once persons are loaded.
   useEffect(() => {
     if (!personsHydrated) return;
     persons.forEach((p) => {
@@ -39,7 +38,16 @@ export default function Home() {
       ensureAutoGift(p.id, year, settings.defaultBudget);
     });
   }, [persons, settings.defaultBudget, personsHydrated]);
-  void giftsHydrated; // gate-only signal, kept for future use
+
+  // Defense-in-depth: clean up duplicates once per app mount. Catches
+  // entries created by older cached bundles still running the legacy
+  // random-id path on other devices.
+  useEffect(() => {
+    if (!giftsHydrated || !personsHydrated) return;
+    deduplicateOpenGifts().then((n) => {
+      if (n > 0) console.log(`[gm] cleaned up ${n} duplicate gift(s)`);
+    });
+  }, [giftsHydrated, personsHydrated]);
 
   const stack = useMemo(() => sortStack(gifts, persons), [gifts, persons]);
   const hero = useMemo(() => findHero(persons), [persons]);

@@ -143,6 +143,51 @@ export async function deletePerson(id: ID) {
   await batch.commit();
 }
 
+/**
+ * Deduplicate open gifts: if multiple `open` gifts exist for the same
+ * (personId, year), keep the one with the richest data (most
+ * participants, then most selections, then earliest enteredStackAt) and
+ * delete the rest. Runs once when called (e.g. once per app mount).
+ *
+ * This is a defense-in-depth against old cached bundles on other
+ * devices that still use the random-id auto-create path. The real fix
+ * lives in `ensureAutoGift`; this just cleans up after stragglers.
+ */
+let dedupRunning = false;
+export async function deduplicateOpenGifts(): Promise<number> {
+  if (dedupRunning) return 0;
+  dedupRunning = true;
+  try {
+    const groups = new Map<string, Gift[]>();
+    state.gifts
+      .filter((g) => g.status === "open")
+      .forEach((g) => {
+        const key = `${g.personId}:${g.year}`;
+        const arr = groups.get(key);
+        if (arr) arr.push(g);
+        else groups.set(key, [g]);
+      });
+    const toDelete: string[] = [];
+    for (const arr of groups.values()) {
+      if (arr.length < 2) continue;
+      arr.sort((a, b) => {
+        const da = a.participantIds.length + (a.selectedSuggestionIds?.length ?? 0) * 0.5;
+        const db = b.participantIds.length + (b.selectedSuggestionIds?.length ?? 0) * 0.5;
+        if (db !== da) return db - da;
+        return a.enteredStackAt - b.enteredStackAt;
+      });
+      toDelete.push(...arr.slice(1).map((g) => g.id));
+    }
+    if (toDelete.length === 0) return 0;
+    const batch = writeBatch(db);
+    toDelete.forEach((id) => batch.delete(doc(db, "gifts", id)));
+    await batch.commit();
+    return toDelete.length;
+  } finally {
+    dedupRunning = false;
+  }
+}
+
 // ─── Gifts ──────────────────────────────────────────────
 export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">) {
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);

@@ -37,7 +37,7 @@ interface State {
 const DEFAULT_SETTINGS: Settings = {
   defaultBudget: 10,
   passwordHash: "",
-  darkMode: false,
+  darkMode: true,
 };
 
 let state: State = {

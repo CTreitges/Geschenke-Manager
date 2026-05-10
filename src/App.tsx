@@ -12,6 +12,7 @@ import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
 import { isAuthed } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
+import { updateSettings } from "@/lib/storage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -39,13 +40,26 @@ function FirstRunTutorial() {
   return null;
 }
 
+const DARK_DEFAULT_FLAG = "gm:dark-default-v1";
+
 export default function App() {
-  const { settings } = useStore();
+  const { settings, loaded } = useStore();
 
   useEffect(() => {
     if (settings.darkMode) document.documentElement.classList.add("dark");
     else document.documentElement.classList.remove("dark");
   }, [settings.darkMode]);
+
+  // One-time rollout: dark mode is now the default. If this browser still
+  // sees the old `darkMode: false` (because it was the previous default and
+  // got persisted at some point), flip it once. Users who actively want
+  // light mode can toggle it back in Settings — we won't re-flip after that.
+  useEffect(() => {
+    if (!loaded) return;
+    if (localStorage.getItem(DARK_DEFAULT_FLAG) === "done") return;
+    localStorage.setItem(DARK_DEFAULT_FLAG, "done");
+    if (!settings.darkMode) updateSettings({ darkMode: true });
+  }, [loaded, settings.darkMode]);
 
   return (
     <Routes>

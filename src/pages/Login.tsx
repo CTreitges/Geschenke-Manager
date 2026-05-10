@@ -1,20 +1,17 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { sha256, setAuthed } from "@/lib/auth";
-import { useStore } from "@/lib/hooks";
-import { updateSettings } from "@/lib/storage";
+import { sha256, setAuthed, setGroupId } from "@/lib/auth";
+import { fetchGroupHash } from "@/lib/storage";
 import { toast } from "sonner";
 
 export default function Login() {
-  const { settings, loaded } = useStore();
+  const [groupIdInput, setGroupIdInput] = useState("");
   const [pw, setPw] = useState("");
   const [show, setShow] = useState(false);
   const [shake, setShake] = useState(false);
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
-
-  const firstTime = loaded && !settings.passwordHash;
 
   useEffect(() => {
     document.title = "Geschenke-Manager — Login";
@@ -22,26 +19,28 @@ export default function Login() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!pw || !loaded) return;
+    const id = groupIdInput.trim();
+    if (!id || !pw) return;
     setBusy(true);
     try {
-      const hash = await sha256(pw);
-      if (firstTime) {
-        await updateSettings({ passwordHash: hash, darkMode: true });
-        setAuthed(true);
-        toast.success("Passwort gesetzt — willkommen!");
-        nav("/");
+      const stored = await fetchGroupHash(id);
+      if (!stored) {
+        setShake(true);
+        setTimeout(() => setShake(false), 400);
+        toast.error("Gruppe nicht gefunden");
         return;
       }
-      if (hash === settings.passwordHash) {
-        setAuthed(true);
-        toast.success("Reingekommen 🎉");
-        nav("/");
-      } else {
+      const hash = await sha256(pw);
+      if (hash !== stored) {
         setShake(true);
         setTimeout(() => setShake(false), 400);
         toast.error("Falsches Passwort");
+        return;
       }
+      setGroupId(id);
+      setAuthed(true);
+      toast.success("Reingekommen 🎉");
+      nav("/");
     } finally {
       setBusy(false);
     }
@@ -70,13 +69,7 @@ export default function Login() {
           Geschenke-Manager
         </h1>
         <p className="mt-1.5 text-sm leading-[1.5] text-stone-500 dark:text-stone-400">
-          {!loaded ? (
-            "Verbinde mit Firebase…"
-          ) : firstTime ? (
-            <>Wähle ein Passwort für deine Gruppe.<br />Es wird gehasht gespeichert.</>
-          ) : (
-            <>Wer bekommt als Nächstes was?<br />Gemeinsam, ohne Chaos.</>
-          )}
+          Wer bekommt als Nächstes was?<br />Gemeinsam, ohne Chaos.
         </p>
       </div>
 
@@ -86,15 +79,30 @@ export default function Login() {
       >
         <div className="relative">
           <div className="absolute left-3 top-3.5 text-stone-400 pointer-events-none">
+            <Icon.users />
+          </div>
+          <Input
+            type="text"
+            placeholder="Gruppen-ID"
+            value={groupIdInput}
+            onChange={(e) => setGroupIdInput(e.target.value)}
+            className="pl-11"
+            autoFocus
+            autoComplete="username"
+            spellCheck={false}
+          />
+        </div>
+        <div className="relative">
+          <div className="absolute left-3 top-3.5 text-stone-400 pointer-events-none">
             <Icon.lock />
           </div>
           <Input
             type={show ? "text" : "password"}
-            placeholder={firstTime ? "Neues Gruppen-Passwort" : "Gruppen-Passwort"}
+            placeholder="Passwort"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
             className="pl-11 pr-20"
-            autoFocus
+            autoComplete="current-password"
           />
           <button
             type="button"
@@ -104,15 +112,24 @@ export default function Login() {
             {show ? "Verbergen" : "Zeigen"}
           </button>
         </div>
-        <Button type="submit" size="lg" disabled={busy || !loaded || !pw}>
-          {!loaded ? "Lädt…" : firstTime ? "Passwort setzen" : "Reinkommen"}
+        <Button type="submit" size="lg" disabled={busy || !groupIdInput.trim() || !pw}>
+          {busy ? "Prüfe…" : "Reinkommen"}
           <Icon.chev />
         </Button>
       </form>
 
+      <div className="text-center mt-5">
+        <Link
+          to="/login/new"
+          className="text-sm font-semibold text-violet-700 dark:text-violet-300"
+        >
+          + Neue Gruppe erstellen
+        </Link>
+      </div>
+
       <p className="text-center text-xs mt-6 leading-[1.5] text-stone-400 dark:text-stone-500">
         Vertrauensbasis, kein Account.<br />
-        Das Passwort liegt im Familien-Chat 💛
+        Gruppen-ID und Passwort liegen im Familien-Chat 💛
       </p>
     </div>
   );

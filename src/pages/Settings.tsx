@@ -2,15 +2,16 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Card, Chip, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
-import { updateSettings } from "@/lib/storage";
+import { setActiveGroup, updateSettings } from "@/lib/storage";
 import { pickColor } from "@/lib/colors";
-import { sha256, setAuthed, setIdentity, useIdentity } from "@/lib/auth";
+import { sha256, setAuthed, setIdentity, useGroupId, useIdentity } from "@/lib/auth";
 import { toast } from "sonner";
 
 export default function Settings() {
   const { persons, settings } = useStore();
   const nav = useNavigate();
   const identity = useIdentity() ?? "";
+  const groupId = useGroupId();
   const [budget, setBudget] = useState(settings.defaultBudget);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
@@ -47,6 +48,7 @@ export default function Settings() {
   }
 
   function logout() {
+    setActiveGroup(null);
     setAuthed(false);
     nav("/login");
   }
@@ -56,6 +58,14 @@ export default function Settings() {
       <PageHeader title="Einstellungen" />
 
       <div className="px-4 pb-24">
+        <Group title="Gruppe">
+          <Row label="Aktive Gruppe" hint="Teile ID + Passwort mit deinen Freunden" icon={<Icon.users />}>
+            <span className="text-sm font-bold text-stone-900 dark:text-stone-50 tabular-nums">
+              {groupId ?? "—"}
+            </span>
+          </Row>
+        </Group>
+
         <Group title="Wer bin ich?">
           <div className="p-3.5">
             <p className="text-xs text-stone-500 dark:text-stone-400 mb-2 leading-snug">

@@ -25,7 +25,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v1";
+const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v2";
 
 /**
  * Auto-open the tutorial on first visit per browser. Marks itself as

@@ -1,9 +1,10 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
-import { deleteGroup, setActiveGroup, updateSettings } from "@/lib/storage";
+import { deleteGroup, setActiveGroup, toggleParticipant, updateSettings } from "@/lib/storage";
 import { pickColor } from "@/lib/colors";
+import { daysUntilBirthday } from "@/lib/birthdays";
 import {
   getKnownGroups,
   removeKnownGroup,
@@ -17,13 +18,27 @@ import {
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { persons, settings } = useStore();
+  const { persons, gifts, settings } = useStore();
   const nav = useNavigate();
   const identity = useIdentity() ?? "";
   const groupId = useGroupId();
+  const me = persons.find((p) => p.id === identity);
   const [budget, setBudget] = useState(settings.defaultBudget);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
+
+  const myParticipations = useMemo(() => {
+    if (!me) return [];
+    return gifts
+      .filter((g) => g.status === "open" && g.personId !== me.id)
+      .map((g) => ({ gift: g, person: persons.find((p) => p.id === g.personId) }))
+      .filter((x): x is { gift: typeof gifts[number]; person: typeof persons[number] } => !!x.person)
+      .sort((a, b) => {
+        const da = daysUntilBirthday(a.person) ?? 9999;
+        const db = daysUntilBirthday(b.person) ?? 9999;
+        return da - db;
+      });
+  }, [gifts, persons, me]);
 
   useEffect(() => {
     setBudget(settings.defaultBudget);
@@ -158,6 +173,49 @@ export default function Settings() {
               })}
             </div>
           </div>
+        </Group>
+
+        <Group title={me ? `Wo macht ${me.name} mit?` : "Meine Teilnahmen"}>
+          {!me ? (
+            <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
+              Wähle oben „Wer bin ich?" — danach kannst du hier pro Geschenk
+              an- und abhaken, ob du mitmachst.
+            </div>
+          ) : myParticipations.length === 0 ? (
+            <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
+              Aktuell keine offenen Geschenke. Sobald 30 Tage vor einem
+              Geburtstag eines im Stack landet, taucht es hier auf.
+            </div>
+          ) : (
+            myParticipations.map(({ gift: g, person: p }, i) => {
+              const joined = g.participantIds.includes(me.id);
+              const days = daysUntilBirthday(p);
+              return (
+                <div
+                  key={g.id}
+                  className={`px-3.5 py-3 flex items-center gap-3 ${
+                    i > 0 ? "border-t border-[#F5F1ED] dark:border-stone-700" : ""
+                  }`}
+                >
+                  <Avatar person={p} size={32} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
+                      {p.name}
+                    </div>
+                    <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                      Geschenk {g.year}
+                      {days != null && days >= 0 ? ` · in ${days} T.` : ""}
+                      {` · ${g.participantIds.length} dabei`}
+                    </div>
+                  </div>
+                  <Toggle
+                    on={joined}
+                    onChange={() => toggleParticipant(g.id, me.id)}
+                  />
+                </div>
+              );
+            })
+          )}
         </Group>
 
         <Group title="Geschenke">

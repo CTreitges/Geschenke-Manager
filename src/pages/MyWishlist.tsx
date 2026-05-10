@@ -1,9 +1,10 @@
 import { Link, useNavigate } from "react-router-dom";
-import { useEffect } from "react";
 import { useStore } from "@/lib/hooks";
 import { useIdentity } from "@/lib/auth";
+import { setIdentity } from "@/lib/auth";
 import { Avatar, Button, Card, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
 import { addWishItem, deleteWishItem } from "@/lib/storage";
+import { formatRelativeDate } from "@/lib/dates";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -13,34 +14,60 @@ export default function MyWishlist() {
   const me = persons.find((p) => p.id === id);
   const nav = useNavigate();
 
-  // Reactively redirect if identity gets cleared after we entered the page
-  useEffect(() => {
-    // no-op, just re-render on identity change (hook does that)
-  }, [id]);
-
   if (!me) {
     return (
       <>
         <PageHeader title="Meine Wunschliste" />
-        <div className="px-4">
-          <Card>
-            <EmptyState
-              emoji="👋"
-              title="Wer bist du?"
-              subtitle="Wähle dich erst in den Einstellungen aus, dann zeige ich deine Wunschliste."
-              action={
-                <Button onClick={() => nav("/settings")}>
-                  Zu den Einstellungen
-                </Button>
-              }
-            />
+        <div className="px-4 pb-24">
+          <Card className="p-4">
+            <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 mb-1">
+              Wer bist du?
+            </div>
+            <div className="text-[13px] text-stone-500 dark:text-stone-400 mb-3 leading-snug">
+              Wähle dich aus, dann kannst du deine Wünsche pflegen — alle anderen sehen sie automatisch.
+            </div>
+            {persons.length === 0 ? (
+              <EmptyState
+                emoji="👥"
+                title="Noch keine Personen"
+                subtitle="Lege erst eine Person an."
+                action={
+                  <Button onClick={() => nav("/people")}>
+                    Zu Personen
+                  </Button>
+                }
+              />
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {persons.map((p) => (
+                  <button
+                    key={p.id}
+                    onClick={() => {
+                      setIdentity(p.id);
+                      toast.success(`Hallo ${p.name}!`);
+                    }}
+                    className="inline-flex items-center gap-2 pl-1 pr-3 py-1.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-violet-400 dark:hover:border-violet-500 active:scale-[0.98] transition-[transform,border-color]"
+                  >
+                    <Avatar person={p} size={26} />
+                    <span className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">
+                      {p.name}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="text-[11px] text-stone-400 mt-3">
+              Du kannst die Identität jederzeit in den Einstellungen wechseln.
+            </div>
           </Card>
         </div>
       </>
     );
   }
 
-  const items = wishlist.filter((w) => w.personId === me.id);
+  const items = [...wishlist.filter((w) => w.personId === me.id)].sort(
+    (a, b) => b.createdAt - a.createdAt,
+  );
 
   return (
     <>
@@ -101,6 +128,9 @@ export default function MyWishlist() {
                         <Icon.link /> Link
                       </a>
                     )}
+                    <span className="text-stone-400">
+                      {formatRelativeDate(it.createdAt) || "—"}
+                    </span>
                   </div>
                 </div>
                 <button

@@ -109,7 +109,7 @@ export default function Tutorial() {
         <Step
           n={4}
           icon="✨"
-          title="Wunschliste pflegen"
+          title="Wunschliste pflegen — jederzeit"
           body={
             <>
               <p>
@@ -117,14 +117,18 @@ export default function Tutorial() {
                 <Link to="/wishlist" className={LINK}>
                   Wunschliste
                 </Link>
-                -Tab — wird nur sichtbar, wenn deine Identität gesetzt ist (sonst Hinweis +
-                Knopf zur Auswahl). Wünsche von anderen siehst du auf der jeweiligen
-                Person-Detail-Seite unter dem Tab <em>Wunschliste</em>.
+                -Tab. <strong>Identität noch nicht gesetzt?</strong> Kein Problem — direkt
+                dort tippst du dich mit einem Klick aus der Personenliste rein, ohne Umweg
+                über die Einstellungen. Wünsche von anderen findest du auf der jeweiligen
+                Person-Detail-Seite unter dem Tab <em>Wunschliste</em> — und auch dort kann
+                jeder ohne Identitäts-Pflicht reinschreiben.
               </p>
               <p>
                 Pro Wunsch reicht ein <strong>Titel</strong>. Optional: <em>Link</em> +{" "}
-                <em>Preis</em> unter <strong>+ Details</strong> — gut, wenn jemand grade
-                konkret stöbert. Löschen über das 🗑 rechts.
+                <em>Preis</em> unter <strong>+ Details</strong>. Jeder Wunsch zeigt
+                automatisch, <strong>wann er hinzugefügt wurde</strong> („gerade eben",
+                „vor 2 Std.", „gestern" oder das Datum). Neueste Wünsche stehen oben,
+                löschen über das 🗑 rechts.
               </p>
             </>
           }
@@ -141,13 +145,20 @@ export default function Tutorial() {
                 In der Übersicht auf eine Karte tippen → Geschenk-Detail mit personalisiertem
                 Banner (in der Avatar-Farbe der Person).
               </p>
-              <p>Drei Sektionen, von oben nach unten:</p>
+              <p>Vier Sektionen, von oben nach unten:</p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
                 <li>
                   <strong>Teilnehmer</strong> — wer macht mit. Chip antippen = ein/aus.
                   Bei vielen Klick auf <em>„Alle hinzufügen"</em> rechts. Direkt drunter
                   das Live-Budget (<em>Anzahl × Betrag pro Kopf</em>); das Pro-Kopf-Feld
                   ist mit gestricheltem Unterstrich klickbar editierbar.
+                </li>
+                <li>
+                  <strong>Wunschliste von [Person]</strong> — alle Wünsche der beschenkten
+                  Person mit Preis, Link und Zeitstempel. Tipp auf{" "}
+                  <strong>„Übernehmen"</strong> → der Wunsch landet als Vorschlag im Pool,
+                  bekommt ein kleines <em>🎁&nbsp;Wunschzettel</em>-Label und zeigt
+                  danach <em>„übernommen"</em>, damit ihr nichts doppelt reinpackt.
                 </li>
                 <li>
                   <strong>Vorschläge</strong> — Ideen sammeln mit Titel, optional Link/Preis.
@@ -165,7 +176,7 @@ export default function Tutorial() {
               </p>
             </>
           }
-          mock={<MockBudget />}
+          mock={<MockWishlistAdopt />}
         />
 
         <Step
@@ -423,30 +434,70 @@ function MockWishItem() {
   return (
     <div className="px-3 py-2.5 bg-white dark:bg-stone-800 rounded-[14px] border border-[#F0EBE6] dark:border-[#3A3633]">
       <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">Gute Kopfhörer</div>
-      <div className="flex gap-2.5 mt-1 items-center text-[11px]">
+      <div className="flex gap-2.5 mt-1 items-center text-[11px] flex-wrap">
         <span className="text-violet-700 dark:text-violet-300 font-semibold">120 €</span>
         <span className="text-stone-400 inline-flex items-center gap-0.5">
           <Icon.link size={11} /> Link
         </span>
+        <span className="text-stone-400">vor 2 Tagen</span>
       </div>
     </div>
   );
 }
 
-function MockBudget() {
+function MockWishlistAdopt() {
   return (
-    <div className="px-3 py-2.5 rounded-[12px] bg-stone-50 dark:bg-stone-800/60 border border-[#F0EBE6] dark:border-[#3A3633] flex items-center justify-between">
-      <div className="text-[12px]">
-        <span className="text-[14px] font-bold text-stone-900 dark:text-stone-50">3 ×</span>{" "}
-        <span
-          className="font-semibold text-stone-900 dark:text-stone-50"
-          style={{ borderBottom: "1px dashed #7C3AED" }}
-        >
-          10 €
-        </span>{" "}
-        <span className="mx-0.5">=</span>
+    <div className="space-y-1.5">
+      <div className="text-[10px] font-bold tracking-wide text-stone-400 uppercase pl-0.5">
+        Wunschliste von Anna
       </div>
-      <div className="text-[18px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums">30 €</div>
+      <div
+        className="px-3 py-2 rounded-[12px] flex items-start gap-2"
+        style={{
+          background: "rgba(245, 158, 11, 0.06)",
+          border: "1px solid rgba(245, 158, 11, 0.25)",
+        }}
+      >
+        <span className="text-base leading-none mt-0.5">🎁</span>
+        <div className="flex-1 min-w-0">
+          <div className="text-[12px] font-semibold text-stone-900 dark:text-stone-50">
+            Gute Kopfhörer
+          </div>
+          <div className="flex gap-2 mt-0.5 text-[10px] items-center flex-wrap">
+            <span className="text-violet-700 dark:text-violet-300 font-semibold">120 €</span>
+            <span className="text-stone-400">vor 2 Tagen</span>
+          </div>
+        </div>
+        <div
+          className="px-2 py-1 rounded-md text-[10px] font-semibold text-white shrink-0"
+          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
+        >
+          Übernehmen
+        </div>
+      </div>
+      <div className="text-[10px] font-bold tracking-wide text-stone-400 uppercase pt-1 pl-0.5">
+        Vorschläge
+      </div>
+      <div className="px-3 py-2 rounded-[12px] bg-white dark:bg-stone-800 border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2">
+        <div
+          className="w-4 h-4 rounded-[4px] flex items-center justify-center text-white"
+          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
+        >
+          <Icon.check size={10} />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[12px] font-bold text-stone-900 dark:text-stone-50">
+            Gute Kopfhörer
+          </div>
+          <div className="flex gap-1.5 text-[10px] items-center flex-wrap">
+            <span className="text-violet-700 dark:text-violet-300 font-semibold">120 €</span>
+            <span className="text-stone-400">von Ben</span>
+            <span className="text-amber-700 dark:text-amber-400 font-semibold">
+              🎁 Wunschzettel
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

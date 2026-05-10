@@ -34,6 +34,8 @@ export interface Suggestion {
   price?: number;
   suggestedBy: ID;
   createdAt: number;
+  /** Set if this suggestion was adopted from a wishlist item — links back to it. */
+  fromWishItemId?: ID;
 }
 
 export interface WishlistItem {

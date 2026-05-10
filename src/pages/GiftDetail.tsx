@@ -19,12 +19,13 @@ import {
 import { ageOnNextBirthday, daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import { pickColor } from "@/lib/colors";
 import { useIdentity } from "@/lib/auth";
+import { formatRelativeDate } from "@/lib/dates";
 import { toast } from "sonner";
-import type { Gift, Suggestion, Poll, Person } from "@/lib/types";
+import type { Gift, Suggestion, Poll, Person, WishlistItem } from "@/lib/types";
 
 export default function GiftDetail() {
   const { id } = useParams<{ id: string }>();
-  const { gifts, persons, suggestions, polls } = useStore();
+  const { gifts, persons, suggestions, polls, wishlist } = useStore();
   const nav = useNavigate();
   const myId = useIdentity();
   const [pollDetailsOpen, setPollDetailsOpen] = useState(false);
@@ -36,6 +37,13 @@ export default function GiftDetail() {
 
   const giftId = gift.id;
   const giftSuggestions = suggestions.filter((s) => s.giftId === giftId);
+  const personWishes = useMemo(
+    () =>
+      [...wishlist.filter((w) => w.personId === gift.personId)].sort(
+        (a, b) => b.createdAt - a.createdAt,
+      ),
+    [wishlist, gift.personId],
+  );
   const poll = polls.find((p) => p.giftId === gift.id);
   const pollStatus = poll?.status ?? "none";
   const me = persons.find((p) => p.id === myId);
@@ -161,6 +169,40 @@ export default function GiftDetail() {
             })}
         </div>
         <BudgetEditor gift={gift} totalBudget={totalBudget} />
+      </Section>
+
+      {/* ── Wunschliste der Person ────────────────────────────── */}
+      <Section
+        title={`Wunschliste von ${person.name}`}
+        hint={personWishes.length > 0 ? `${personWishes.length}` : undefined}
+      >
+        {personWishes.length === 0 ? (
+          <div className="text-[13px] text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-800/50 rounded-xl px-3.5 py-3 border border-[#F0EBE6] dark:border-[#3A3633]">
+            Noch keine Wünsche von {person.name}. Wenn {person.name} sich was wünscht, taucht es hier
+            auf — und ihr könnt es mit einem Tipp in die Vorschläge übernehmen.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {personWishes.map((w) => (
+              <WishlistRow
+                key={w.id}
+                wish={w}
+                taken={giftSuggestions.some((s) => s.fromWishItemId === w.id)}
+                onAdopt={() => {
+                  addSuggestion({
+                    giftId,
+                    title: w.title,
+                    url: w.url,
+                    price: w.price,
+                    suggestedBy: myId ?? gift.personId,
+                    fromWishItemId: w.id,
+                  });
+                  toast.success("In Vorschläge übernommen");
+                }}
+              />
+            ))}
+          </div>
+        )}
       </Section>
 
       {/* ── Vorschläge mit Auswahl ────────────────────────────── */}
@@ -713,6 +755,11 @@ function SuggestionCard({
                   </a>
                 )}
                 <span className="text-stone-400">von {author?.name ?? "?"}</span>
+                {s.fromWishItemId && (
+                  <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 dark:text-amber-400 font-semibold">
+                    🎁 Wunschzettel
+                  </span>
+                )}
               </div>
             </>
           )}
@@ -879,6 +926,71 @@ function BudgetEditor({ gift, totalBudget }: { gift: Gift; totalBudget: number }
       <div className="text-[22px] font-extrabold tracking-tight text-violet-700 dark:text-violet-300">
         {totalBudget} €
       </div>
+    </div>
+  );
+}
+
+// ── Wishlist row (with adopt button) ─────────────────────────
+function WishlistRow({
+  wish,
+  taken,
+  onAdopt,
+}: {
+  wish: WishlistItem;
+  taken: boolean;
+  onAdopt: () => void;
+}) {
+  return (
+    <div
+      className="px-3.5 py-3 rounded-2xl flex items-start gap-2.5"
+      style={{
+        background: taken
+          ? "rgba(16, 185, 129, 0.06)"
+          : "rgba(245, 158, 11, 0.06)",
+        border: taken
+          ? "1px solid rgba(16, 185, 129, 0.25)"
+          : "1px solid rgba(245, 158, 11, 0.25)",
+      }}
+    >
+      <span className="text-lg pt-0.5">🎁</span>
+      <div className="flex-1 min-w-0">
+        <div className="text-[14.5px] font-semibold text-stone-900 dark:text-stone-50 leading-snug">
+          {wish.title}
+        </div>
+        <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
+          {wish.price != null && (
+            <span className="text-violet-700 dark:text-violet-300 font-semibold">
+              {wish.price} €
+            </span>
+          )}
+          {wish.url && (
+            <a
+              href={wish.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-stone-500 dark:text-stone-400 no-underline flex items-center gap-1"
+            >
+              <Icon.link /> Link
+            </a>
+          )}
+          <span className="text-stone-400">
+            {formatRelativeDate(wish.createdAt) || "—"}
+          </span>
+        </div>
+      </div>
+      {taken ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400 px-2 py-1 rounded-md bg-emerald-100/50 dark:bg-emerald-950/40 shrink-0 mt-0.5">
+          <Icon.check size={12} /> übernommen
+        </span>
+      ) : (
+        <button
+          onClick={onAdopt}
+          className="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-white shrink-0 mt-0.5 active:scale-[0.98] transition-transform"
+          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
+        >
+          Übernehmen
+        </button>
+      )}
     </div>
   );
 }

@@ -362,6 +362,12 @@ export default function Tutorial() {
                   <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 2)
                 </li>
                 <li>
+                  <strong>Wo mache ich mit?</strong> — Liste aller offenen Geschenke
+                  anderer Personen mit einem Toggle pro Eintrag. Anhaken = mitmachen,
+                  abhaken = raus. Spart das Hin- und Herklicken durch die Stack-Karten,
+                  wenn du dich für mehrere Geschenke auf einmal entscheiden willst.
+                </li>
+                <li>
                   <strong>Default-Budget pro Person</strong> — wird bei neuen Geschenken
                   automatisch übernommen, pro Geschenk individuell überschreibbar
                 </li>

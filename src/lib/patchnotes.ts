@@ -11,6 +11,14 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.1.0",
+    date: "2026-05-11",
+    highlights: [
+      "Neuer Bereich in den Einstellungen: pro offenem Geschenk an-/abhaken, ob du mitmachst",
+      "Patch Notes + Version/Datum oben im Tutorial sichtbar",
+    ],
+  },
+  {
     version: "v1.0.0",
     date: "2026-05-11",
     highlights: [

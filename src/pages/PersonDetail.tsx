@@ -19,6 +19,7 @@ import {
 } from "@/lib/birthdays";
 import type { WishlistItem, Person } from "@/lib/types";
 import { getIdentity, setIdentity } from "@/lib/auth";
+import { formatRelativeDate } from "@/lib/dates";
 import { toast } from "sonner";
 
 type Tab = "wishlist" | "gifts" | "profile";
@@ -170,7 +171,7 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
         />
       ) : (
         <div className="flex flex-col gap-2">
-          {items.map((it) => (
+          {[...items].sort((a, b) => b.createdAt - a.createdAt).map((it) => (
             <div
               key={it.id}
               className="px-3.5 py-3.5 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-start gap-2.5"
@@ -195,6 +196,9 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
                       <Icon.link /> Link
                     </a>
                   )}
+                  <span className="text-stone-400">
+                    {formatRelativeDate(it.createdAt) || "—"}
+                  </span>
                 </div>
               </div>
               <button

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { addKnownGroup, sha256, setAuthed, setGroupId } from "@/lib/auth";
+import { addKnownGroup, isAuthed, sha256, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
 import { createGroup, groupExists } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -14,6 +14,8 @@ export default function CreateGroup() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
+  const knownGroups = useKnownGroups();
+  const showSaved = isAuthed() && knownGroups.length > 0;
 
   useEffect(() => {
     document.title = "Geschenke-Manager — Neue Gruppe";
@@ -75,6 +77,37 @@ export default function CreateGroup() {
           Beides teilst du danach mit deinen Freunden.
         </p>
       </div>
+
+      {showSaved && (
+        <div className="mb-5">
+          <div className="text-[10px] font-bold tracking-[0.05em] uppercase text-stone-400 mb-1.5 pl-1">
+            Zurück zu deinen Gruppen
+          </div>
+          <div className="rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 overflow-hidden">
+            {knownGroups.map((g, i) => (
+              <button
+                key={g}
+                onClick={() => {
+                  setGroupId(g);
+                  nav("/");
+                }}
+                className={`w-full px-3.5 py-2.5 flex items-center gap-2 hover:bg-stone-50 dark:hover:bg-stone-700/40 ${
+                  i > 0 ? "border-t border-stone-100 dark:border-stone-700" : ""
+                }`}
+              >
+                <Icon.users size={14} className="text-stone-400" />
+                <span className="flex-1 text-left text-sm font-semibold text-stone-900 dark:text-stone-50">
+                  {g}
+                </span>
+                <Icon.chev size={14} className="text-stone-400" />
+              </button>
+            ))}
+          </div>
+          <div className="text-[10px] font-bold tracking-[0.05em] uppercase text-stone-400 mt-4 mb-1.5 pl-1">
+            Oder eine neue Gruppe anlegen
+          </div>
+        </div>
+      )}
 
       {/* TODO: paywall / voucher gate hook goes here — gate the form below
           on a successful payment or voucher redemption. For now: open. */}

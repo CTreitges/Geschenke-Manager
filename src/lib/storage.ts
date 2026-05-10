@@ -9,6 +9,7 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
+  getDoc,
   getDocs,
   query,
   where,
@@ -25,13 +26,15 @@ interface State {
   polls: Poll[];
   feedback: Feedback[];
   settings: Settings;
-  /** settings/global has arrived — used by Login to wait for password hash. */
+  /** Group doc has arrived — used by Login to wait for password hash. */
   loaded: boolean;
   /** First gifts snapshot has been received — used by Home to avoid
    *  auto-creating duplicate stack entries before initial data arrives. */
   giftsHydrated: boolean;
   /** First persons snapshot has been received. */
   personsHydrated: boolean;
+  /** Currently active group id (null when not in any group). */
+  activeGroupId: string | null;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -40,7 +43,7 @@ const DEFAULT_SETTINGS: Settings = {
   darkMode: true,
 };
 
-let state: State = {
+const emptyState = (): State => ({
   persons: [],
   gifts: [],
   suggestions: [],
@@ -51,62 +54,116 @@ let state: State = {
   loaded: false,
   giftsHydrated: false,
   personsHydrated: false,
-};
+  activeGroupId: null,
+});
+
+let state: State = emptyState();
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
-let initialized = false;
 
 function notify() {
   state = { ...state }; // new ref so React picks up
   listeners.forEach((l) => l());
 }
 
-function init() {
-  if (initialized) return;
-  initialized = true;
+// ─── Path helpers ───────────────────────────────────────
+function gcol(name: string) {
+  if (!state.activeGroupId) throw new Error("No active group");
+  return collection(db, "groups", state.activeGroupId, name);
+}
 
-  onSnapshot(collection(db, "persons"), (snap) => {
-    state.persons = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Person, "id">) }));
-    state.personsHydrated = true;
-    notify();
+function gdoc(name: string, id: string) {
+  if (!state.activeGroupId) throw new Error("No active group");
+  return doc(db, "groups", state.activeGroupId, name, id);
+}
+
+function groupRootDoc() {
+  if (!state.activeGroupId) throw new Error("No active group");
+  return doc(db, "groups", state.activeGroupId);
+}
+
+// ─── Group lifecycle ────────────────────────────────────
+let unsubscribers: Array<() => void> = [];
+
+/**
+ * Switch the active group. Tears down all existing Firestore listeners,
+ * resets all in-memory collections, and (if `groupId` is non-null) starts
+ * fresh listeners against `groups/{groupId}/...`.
+ */
+export function setActiveGroup(groupId: string | null) {
+  // Teardown
+  unsubscribers.forEach((u) => {
+    try {
+      u();
+    } catch {
+      /* ignore */
+    }
   });
-  onSnapshot(collection(db, "gifts"), (snap) => {
-    state.gifts = snap.docs.map((d) => {
-      const data = d.data() as Omit<Gift, "id">;
-      return { id: d.id, ...data, participantIds: data.participantIds ?? [] };
-    });
-    state.giftsHydrated = true;
-    notify();
-  });
-  onSnapshot(collection(db, "suggestions"), (snap) => {
-    state.suggestions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Suggestion, "id">) }));
-    notify();
-  });
-  onSnapshot(collection(db, "wishlist"), (snap) => {
-    state.wishlist = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WishlistItem, "id">) }));
-    notify();
-  });
-  onSnapshot(collection(db, "polls"), (snap) => {
-    state.polls = snap.docs.map((d) => {
-      const data = d.data() as Omit<Poll, "giftId">;
-      return { giftId: d.id, ...data, votes: data.votes ?? {} };
-    });
-    notify();
-  });
-  onSnapshot(collection(db, "feedback"), (snap) => {
-    state.feedback = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, "id">) }));
-    notify();
-  });
-  onSnapshot(doc(db, "settings", "global"), (snap) => {
-    state.settings = { ...DEFAULT_SETTINGS, ...(snap.data() as Partial<Settings> | undefined) };
-    state.loaded = true;
-    notify();
-  });
+  unsubscribers = [];
+
+  // Reset state
+  state = { ...emptyState(), activeGroupId: groupId };
+  notify();
+
+  if (!groupId) return;
+
+  // Subscribe — Firestore subscriptions for the new group
+  unsubscribers.push(
+    onSnapshot(collection(db, "groups", groupId, "persons"), (snap) => {
+      state.persons = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Person, "id">) }));
+      state.personsHydrated = true;
+      notify();
+    }),
+  );
+  unsubscribers.push(
+    onSnapshot(collection(db, "groups", groupId, "gifts"), (snap) => {
+      state.gifts = snap.docs.map((d) => {
+        const data = d.data() as Omit<Gift, "id">;
+        return { id: d.id, ...data, participantIds: data.participantIds ?? [] };
+      });
+      state.giftsHydrated = true;
+      notify();
+    }),
+  );
+  unsubscribers.push(
+    onSnapshot(collection(db, "groups", groupId, "suggestions"), (snap) => {
+      state.suggestions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Suggestion, "id">) }));
+      notify();
+    }),
+  );
+  unsubscribers.push(
+    onSnapshot(collection(db, "groups", groupId, "wishlist"), (snap) => {
+      state.wishlist = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WishlistItem, "id">) }));
+      notify();
+    }),
+  );
+  unsubscribers.push(
+    onSnapshot(collection(db, "groups", groupId, "polls"), (snap) => {
+      state.polls = snap.docs.map((d) => {
+        const data = d.data() as Omit<Poll, "giftId">;
+        return { giftId: d.id, ...data, votes: data.votes ?? {} };
+      });
+      notify();
+    }),
+  );
+  unsubscribers.push(
+    onSnapshot(collection(db, "groups", groupId, "feedback"), (snap) => {
+      state.feedback = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, "id">) }));
+      notify();
+    }),
+  );
+  // Group root doc holds the Settings slice (passwordHash, defaultBudget, darkMode).
+  unsubscribers.push(
+    onSnapshot(doc(db, "groups", groupId), (snap) => {
+      state.settings = { ...DEFAULT_SETTINGS, ...(snap.data() as Partial<Settings> | undefined) };
+      state.loaded = true;
+      notify();
+    }),
+  );
 }
 
 export function subscribe(l: Listener): () => void {
-  init();
   listeners.add(l);
   return () => {
     listeners.delete(l);
@@ -126,20 +183,47 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
   return out;
 }
 
+// ─── Group registry (top-level /groups collection) ──────
+export async function groupExists(groupId: ID): Promise<boolean> {
+  const snap = await getDoc(doc(db, "groups", groupId));
+  return snap.exists();
+}
+
+export async function fetchGroupHash(groupId: ID): Promise<string | null> {
+  const snap = await getDoc(doc(db, "groups", groupId));
+  if (!snap.exists()) return null;
+  const data = snap.data() as Partial<Settings>;
+  return data.passwordHash ?? null;
+}
+
+export async function createGroup(
+  groupId: ID,
+  passwordHash: string,
+  defaultBudget = 10,
+): Promise<void> {
+  await setDoc(doc(db, "groups", groupId), {
+    passwordHash,
+    defaultBudget,
+    darkMode: true,
+    createdAt: Date.now(),
+  });
+}
+
 // ─── Persons ────────────────────────────────────────────
 export async function addPerson(p: Omit<Person, "id" | "createdAt">) {
-  await addDoc(collection(db, "persons"), clean({ ...p, createdAt: Date.now() }));
+  await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));
 }
 
 export async function updatePerson(id: ID, patch: Partial<Person>) {
-  await updateDoc(doc(db, "persons", id), clean(patch as Record<string, unknown>));
+  await updateDoc(gdoc("persons", id), clean(patch as Record<string, unknown>));
 }
 
 export async function deletePerson(id: ID) {
+  if (!state.activeGroupId) throw new Error("No active group");
   const batch = writeBatch(db);
-  batch.delete(doc(db, "persons", id));
-  state.gifts.filter((g) => g.personId === id).forEach((g) => batch.delete(doc(db, "gifts", g.id)));
-  state.wishlist.filter((w) => w.personId === id).forEach((w) => batch.delete(doc(db, "wishlist", w.id)));
+  batch.delete(gdoc("persons", id));
+  state.gifts.filter((g) => g.personId === id).forEach((g) => batch.delete(gdoc("gifts", g.id)));
+  state.wishlist.filter((w) => w.personId === id).forEach((w) => batch.delete(gdoc("wishlist", w.id)));
   await batch.commit();
 }
 
@@ -147,11 +231,7 @@ export async function deletePerson(id: ID) {
  * Deduplicate open gifts: if multiple `open` gifts exist for the same
  * (personId, year), keep the one with the richest data (most
  * participants, then most selections, then earliest enteredStackAt) and
- * delete the rest. Runs once when called (e.g. once per app mount).
- *
- * This is a defense-in-depth against old cached bundles on other
- * devices that still use the random-id auto-create path. The real fix
- * lives in `ensureAutoGift`; this just cleans up after stragglers.
+ * delete the rest.
  */
 let dedupRunning = false;
 export async function deduplicateOpenGifts(): Promise<number> {
@@ -180,7 +260,7 @@ export async function deduplicateOpenGifts(): Promise<number> {
     }
     if (toDelete.length === 0) return 0;
     const batch = writeBatch(db);
-    toDelete.forEach((id) => batch.delete(doc(db, "gifts", id)));
+    toDelete.forEach((id) => batch.delete(gdoc("gifts", id)));
     await batch.commit();
     return toDelete.length;
   } finally {
@@ -192,7 +272,7 @@ export async function deduplicateOpenGifts(): Promise<number> {
 export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">) {
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
   await addDoc(
-    collection(db, "gifts"),
+    gcol("gifts"),
     clean({
       ...g,
       enteredStackAt: Date.now(),
@@ -203,15 +283,9 @@ export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrde
 }
 
 /**
- * Auto-create a gift for (personId, year) IF none exists yet.
- *
- * Strategy: query the gifts collection by (personId, year, status=open)
- * BEFORE creating. The query goes against Firestore directly (not the
- * local snapshot cache) so it is race-safe across reloads, including
- * the case where the local cache is empty during initial load.
- *
- * Uses a deterministic doc id "{personId}_{year}" for the new write so
- * concurrent calls from two devices/tabs collapse to the same document.
+ * Auto-create a gift for (personId, year) IF none exists yet. See the
+ * legacy commit for rationale; the race-safe Firestore query stays the
+ * same, just scoped under the active group.
  */
 export async function ensureAutoGift(
   personId: ID,
@@ -219,7 +293,7 @@ export async function ensureAutoGift(
   budgetPerPerson: number,
 ): Promise<void> {
   const q = query(
-    collection(db, "gifts"),
+    gcol("gifts"),
     where("personId", "==", personId),
     where("year", "==", year),
     where("status", "==", "open"),
@@ -228,7 +302,7 @@ export async function ensureAutoGift(
   const found = await getDocs(q);
   if (!found.empty) return;
 
-  const ref = doc(db, "gifts", `${personId}_${year}`);
+  const ref = gdoc("gifts", `${personId}_${year}`);
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
   await setDoc(
     ref,
@@ -246,13 +320,13 @@ export async function ensureAutoGift(
 }
 
 export async function updateGift(id: ID, patch: Partial<Gift>) {
-  await updateDoc(doc(db, "gifts", id), clean(patch as Record<string, unknown>));
+  await updateDoc(gdoc("gifts", id), clean(patch as Record<string, unknown>));
 }
 
 export async function reorderGifts(orderedIds: ID[]) {
   const batch = writeBatch(db);
   orderedIds.forEach((id, i) => {
-    batch.update(doc(db, "gifts", id), { stackOrder: i + 1 });
+    batch.update(gdoc("gifts", id), { stackOrder: i + 1 });
   });
   await batch.commit();
 }
@@ -261,7 +335,7 @@ export async function toggleParticipant(giftId: ID, personId: ID) {
   const gift = state.gifts.find((g) => g.id === giftId);
   if (!gift) return;
   const has = gift.participantIds.includes(personId);
-  await updateDoc(doc(db, "gifts", giftId), {
+  await updateDoc(gdoc("gifts", giftId), {
     participantIds: has ? arrayRemove(personId) : arrayUnion(personId),
   });
 }
@@ -271,48 +345,48 @@ export async function markReceived(giftId: ID) {
 }
 
 export async function setGiftSelections(giftId: ID, ids: ID[]) {
-  await updateDoc(doc(db, "gifts", giftId), { selectedSuggestionIds: ids });
+  await updateDoc(gdoc("gifts", giftId), { selectedSuggestionIds: ids });
 }
 
 export async function setAllParticipants(giftId: ID, personIds: ID[]) {
-  await updateDoc(doc(db, "gifts", giftId), { participantIds: personIds });
+  await updateDoc(gdoc("gifts", giftId), { participantIds: personIds });
 }
 
 export async function deleteGift(giftId: ID) {
   const batch = writeBatch(db);
-  batch.delete(doc(db, "gifts", giftId));
+  batch.delete(gdoc("gifts", giftId));
   state.suggestions
     .filter((s) => s.giftId === giftId)
-    .forEach((s) => batch.delete(doc(db, "suggestions", s.id)));
-  batch.delete(doc(db, "polls", giftId));
+    .forEach((s) => batch.delete(gdoc("suggestions", s.id)));
+  batch.delete(gdoc("polls", giftId));
   await batch.commit();
 }
 
 // ─── Suggestions ────────────────────────────────────────
 export async function addSuggestion(s: Omit<Suggestion, "id" | "createdAt">) {
-  await addDoc(collection(db, "suggestions"), clean({ ...s, createdAt: Date.now() }));
+  await addDoc(gcol("suggestions"), clean({ ...s, createdAt: Date.now() }));
 }
 
 export async function deleteSuggestion(id: ID) {
-  await deleteDoc(doc(db, "suggestions", id));
+  await deleteDoc(gdoc("suggestions", id));
 }
 
 export async function updateSuggestion(id: ID, patch: Partial<Suggestion>) {
-  await updateDoc(doc(db, "suggestions", id), clean(patch as Record<string, unknown>));
+  await updateDoc(gdoc("suggestions", id), clean(patch as Record<string, unknown>));
 }
 
 // ─── Wishlist ───────────────────────────────────────────
 export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt">) {
-  await addDoc(collection(db, "wishlist"), clean({ ...w, createdAt: Date.now() }));
+  await addDoc(gcol("wishlist"), clean({ ...w, createdAt: Date.now() }));
 }
 
 export async function deleteWishItem(id: ID) {
-  await deleteDoc(doc(db, "wishlist", id));
+  await deleteDoc(gdoc("wishlist", id));
 }
 
 // ─── Polls ──────────────────────────────────────────────
 export async function setPollStatus(giftId: ID, status: Poll["status"]) {
-  const ref = doc(db, "polls", giftId);
+  const ref = gdoc("polls", giftId);
   const now = Date.now();
   const existing = state.polls.find((p) => p.giftId === giftId);
   await setDoc(
@@ -328,12 +402,7 @@ export async function setPollStatus(giftId: ID, status: Poll["status"]) {
 }
 
 export async function castVote(giftId: ID, personId: ID, suggestionId: ID) {
-  // Nested object + merge:true does a deep-merge in Firestore, so this
-  // adds personId to the votes map without nuking other voters' entries.
-  // (Dot-path keys like "votes.<id>" only work with updateDoc, not
-  //  setDoc({merge:true}) — there they get stored as a literal top-level
-  //  field name, which silently corrupts the document.)
-  const ref = doc(db, "polls", giftId);
+  const ref = gdoc("polls", giftId);
   await setDoc(ref, { votes: { [personId]: suggestionId } }, { merge: true });
 }
 
@@ -342,26 +411,23 @@ export async function removeVote(giftId: ID, personId: ID) {
   if (!existing) return;
   const next: Record<ID, ID> = { ...existing.votes };
   delete next[personId];
-  // updateDoc replaces the whole map field — that's what we want here,
-  // since we read-modified-wrote a fresh copy. Other fields (status,
-  // timestamps) on the poll doc stay untouched.
-  await updateDoc(doc(db, "polls", giftId), { votes: next });
+  await updateDoc(gdoc("polls", giftId), { votes: next });
 }
 
 // ─── Feedback ───────────────────────────────────────────
 export async function addFeedback(f: Omit<Feedback, "id" | "createdAt">) {
-  await addDoc(collection(db, "feedback"), clean({ ...f, createdAt: Date.now() }));
+  await addDoc(gcol("feedback"), clean({ ...f, createdAt: Date.now() }));
 }
 
 export async function updateFeedback(id: ID, patch: Partial<Feedback>) {
-  await updateDoc(doc(db, "feedback", id), clean(patch as Record<string, unknown>));
+  await updateDoc(gdoc("feedback", id), clean(patch as Record<string, unknown>));
 }
 
 export async function deleteFeedback(id: ID) {
-  await deleteDoc(doc(db, "feedback", id));
+  await deleteDoc(gdoc("feedback", id));
 }
 
-// ─── Settings ───────────────────────────────────────────
+// ─── Settings (= group root doc) ────────────────────────
 export async function updateSettings(patch: Partial<Settings>) {
-  await setDoc(doc(db, "settings", "global"), clean(patch as Record<string, unknown>), { merge: true });
+  await setDoc(groupRootDoc(), clean(patch as Record<string, unknown>), { merge: true });
 }

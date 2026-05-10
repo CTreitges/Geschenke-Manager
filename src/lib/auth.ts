@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
 
 const AUTH_KEY = "gm:auth:v1";
-const IDENTITY_KEY = "gm:identity:v1";
+const GROUP_KEY = "gm:group:v1";
+const GROUP_EVENT = "gm:group-change";
 const IDENTITY_EVENT = "gm:identity-change";
 
 export async function sha256(text: string): Promise<string> {
@@ -12,30 +13,71 @@ export async function sha256(text: string): Promise<string> {
     .join("");
 }
 
+// ── Auth ──────────────────────────────────────────────────────
 export function isAuthed(): boolean {
   return localStorage.getItem(AUTH_KEY) === "yes";
 }
 
 export function setAuthed(yes: boolean) {
-  if (yes) localStorage.setItem(AUTH_KEY, "yes");
-  else localStorage.removeItem(AUTH_KEY);
+  if (yes) {
+    localStorage.setItem(AUTH_KEY, "yes");
+  } else {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(GROUP_KEY);
+    window.dispatchEvent(new Event(GROUP_EVENT));
+  }
+}
+
+// ── Group ─────────────────────────────────────────────────────
+export function getGroupId(): string | null {
+  return localStorage.getItem(GROUP_KEY);
+}
+
+export function setGroupId(id: string | null) {
+  if (id) localStorage.setItem(GROUP_KEY, id);
+  else localStorage.removeItem(GROUP_KEY);
+  window.dispatchEvent(new Event(GROUP_EVENT));
+}
+
+function subscribeGroup(cb: () => void) {
+  window.addEventListener(GROUP_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(GROUP_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+export function useGroupId(): string | null {
+  return useSyncExternalStore(subscribeGroup, getGroupId, () => null);
+}
+
+// ── Identity (scoped per group) ───────────────────────────────
+function identityKey(): string | null {
+  const g = getGroupId();
+  return g ? `gm:identity:v1:${g}` : null;
 }
 
 export function getIdentity(): string | null {
-  return localStorage.getItem(IDENTITY_KEY);
+  const k = identityKey();
+  return k ? localStorage.getItem(k) : null;
 }
 
 export function setIdentity(personId: string | null) {
-  if (personId) localStorage.setItem(IDENTITY_KEY, personId);
-  else localStorage.removeItem(IDENTITY_KEY);
+  const k = identityKey();
+  if (!k) return;
+  if (personId) localStorage.setItem(k, personId);
+  else localStorage.removeItem(k);
   window.dispatchEvent(new Event(IDENTITY_EVENT));
 }
 
 function subscribeIdentity(cb: () => void) {
   window.addEventListener(IDENTITY_EVENT, cb);
+  window.addEventListener(GROUP_EVENT, cb);
   window.addEventListener("storage", cb);
   return () => {
     window.removeEventListener(IDENTITY_EVENT, cb);
+    window.removeEventListener(GROUP_EVENT, cb);
     window.removeEventListener("storage", cb);
   };
 }

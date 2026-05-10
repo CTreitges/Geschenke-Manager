@@ -11,6 +11,15 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.3.0",
+    date: "2026-05-11",
+    highlights: [
+      "Optional: Mit Google anmelden — Login-Screen + Einstellungen → Konto",
+      "Wer Google nutzt, ist auf allen Geräten mit demselben Google-Konto automatisch in seinen Gruppen drin",
+      "Anonyme Nutzung bleibt voll möglich — der Google-Login ist nur ein Add-on",
+    ],
+  },
+  {
     version: "v1.2.0",
     date: "2026-05-11",
     highlights: [

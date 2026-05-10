@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import { changePasswordCF, deleteGroupCF, setActiveGroup, toggleParticipant, updateSettings } from "@/lib/storage";
+import { signInWithGoogle, useFirebaseUser } from "@/lib/firebase";
 import { pickColor } from "@/lib/colors";
 import { daysUntilBirthday } from "@/lib/birthdays";
 import {
@@ -22,9 +23,11 @@ export default function Settings() {
   const identity = useIdentity() ?? "";
   const groupId = useGroupId();
   const me = persons.find((p) => p.id === identity);
+  const fbUser = useFirebaseUser();
   const [budget, setBudget] = useState(settings.defaultBudget);
   const [oldPw, setOldPw] = useState("");
   const [newPw, setNewPw] = useState("");
+  const [linkingGoogle, setLinkingGoogle] = useState(false);
 
   const myParticipations = useMemo(() => {
     if (!me) return [];
@@ -84,6 +87,36 @@ export default function Settings() {
   const [deletePw, setDeletePw] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
 
+  async function linkGoogle() {
+    setLinkingGoogle(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.linked) {
+        toast.success("Mit Google verknüpft 🎉");
+      } else if (result.switched) {
+        toast.message("Anderes Google-Konto übernommen", {
+          description: "Tritt der Gruppe einmal mit Passwort bei — dann ist auch dieses Konto Mitglied.",
+        });
+        setAuthed(false);
+        nav("/login");
+      } else {
+        toast.success("Mit Google angemeldet");
+      }
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? "";
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
+        // silent
+      } else if (code === "auth/operation-not-allowed") {
+        toast.error("Google-Login ist im Firebase-Projekt noch nicht aktiviert");
+      } else {
+        console.error(err);
+        toast.error("Verknüpfung fehlgeschlagen");
+      }
+    } finally {
+      setLinkingGoogle(false);
+    }
+  }
+
   async function confirmDeleteGroup() {
     if (!groupId) return;
     if (!deletePw) {
@@ -126,6 +159,32 @@ export default function Settings() {
       <PageHeader title="Einstellungen" />
 
       <div className="px-4 pb-24">
+        <Group title="Konto">
+          <Row
+            label={
+              fbUser?.isAnonymous === false
+                ? `Google · ${fbUser.email ?? "verknüpft"}`
+                : "Anonym (Gerät-gebunden)"
+            }
+            hint={
+              fbUser?.isAnonymous === false
+                ? "Du bist mit Google angemeldet — alle Geräte mit diesem Google-Konto teilen Mitgliedschaft."
+                : "Verknüpfe mit Google, um auf weiteren Geräten ohne Neu-Beitritt rein zu kommen."
+            }
+            icon={<Icon.lock />}
+          >
+            {fbUser?.isAnonymous !== false && (
+              <button
+                onClick={linkGoogle}
+                disabled={linkingGoogle}
+                className="text-xs font-semibold text-violet-700 dark:text-violet-300 px-2.5 py-1.5 rounded-md hover:bg-violet-50 dark:hover:bg-violet-950 disabled:opacity-50"
+              >
+                {linkingGoogle ? "Verknüpfe…" : "Mit Google verknüpfen"}
+              </button>
+            )}
+          </Row>
+        </Group>
+
         <Group title="Gruppe">
           <Row label="Aktive Gruppe" hint="Teile ID + Passwort mit deinen Freunden" icon={<Icon.users />}>
             <span className="text-sm font-bold text-stone-900 dark:text-stone-50 tabular-nums">

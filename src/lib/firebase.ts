@@ -1,7 +1,16 @@
 import { initializeApp } from "firebase/app";
-import { getAuth, onAuthStateChanged, signInAnonymously } from "firebase/auth";
+import {
+  GoogleAuthProvider,
+  getAuth,
+  linkWithPopup,
+  onAuthStateChanged,
+  signInAnonymously,
+  signInWithPopup,
+  type User,
+} from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
 import { getFunctions } from "firebase/functions";
+import { useEffect, useState } from "react";
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -56,3 +65,64 @@ export const authReady: Promise<string> = new Promise((resolve, reject) => {
     },
   );
 });
+
+// ─── Google sign-in (optional upgrade) ─────────────────
+const googleProvider = new GoogleAuthProvider();
+
+export interface GoogleSignInResult {
+  /** True if we upgraded an anonymous account to a permanent Google one
+   *  while preserving the same Firebase UID. Member-Docs stay valid. */
+  linked: boolean;
+  /** True if we switched from one Firebase UID to another (e.g. previous
+   *  Google account already existed). Member-Docs of the previous UID are
+   *  no longer reachable — caller should re-join groups. */
+  switched: boolean;
+  /** Email reported by Google (best-effort). */
+  email: string | null;
+}
+
+export async function signInWithGoogle(): Promise<GoogleSignInResult> {
+  const before = auth.currentUser;
+
+  if (before?.isAnonymous) {
+    try {
+      const result = await linkWithPopup(before, googleProvider);
+      return {
+        linked: true,
+        switched: false,
+        email: result.user.email ?? null,
+      };
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? "";
+      // These two codes mean: the Google identity already belongs to
+      // another Firebase user — we can't link, we can only sign in as
+      // that user (losing the anonymous one).
+      if (
+        code !== "auth/credential-already-in-use" &&
+        code !== "auth/email-already-in-use"
+      ) {
+        throw err;
+      }
+      // Fall through to plain sign-in.
+    }
+  }
+
+  const result = await signInWithPopup(auth, googleProvider);
+  const switched = !!before && before.uid !== result.user.uid;
+  return {
+    linked: false,
+    switched,
+    email: result.user.email ?? null,
+  };
+}
+
+/** React hook over Firebase auth state. Returns the currently signed-in
+ *  user, or null until anonymous auth resolves. Re-renders on every auth
+ *  state transition (anonymous → google, sign-out, …). */
+export function useFirebaseUser(): User | null {
+  const [user, setUser] = useState<User | null>(() => auth.currentUser);
+  useEffect(() => {
+    return onAuthStateChanged(auth, (u) => setUser(u));
+  }, []);
+  return user;
+}

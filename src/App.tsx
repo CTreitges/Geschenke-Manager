@@ -11,10 +11,10 @@ import Settings from "@/pages/Settings";
 import MyWishlist from "@/pages/MyWishlist";
 import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
-import { isAuthed, useGroupId } from "@/lib/auth";
+import { addKnownGroup, getGroupId, getKnownGroups, isAuthed, useGroupId } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
 import { setActiveGroup, updateSettings } from "@/lib/storage";
-import { autoMigrateLegacyIfNeeded } from "@/lib/migrate";
+import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -50,15 +50,27 @@ export default function App() {
   const { settings, loaded } = useStore();
   const [bootDone, setBootDone] = useState(false);
 
-  // Boot once: run the one-shot legacy → group "Jeg" auto-migration, then
-  // mark the app as ready. Errors do not block the UI (the user will hit
-  // a "group not found" if migration silently failed and they try Jeg).
+  // Boot once: legacy → group "Jeg" auto-migration, then pull any
+  // group-scoped feedback back to the global /feedback collection, then
+  // mark the app as ready.
   useEffect(() => {
-    autoMigrateLegacyIfNeeded()
-      .catch(() => {
+    (async () => {
+      try {
+        await autoMigrateLegacyIfNeeded();
+      } catch {
         /* ignore — user can still create a fresh group manually */
-      })
-      .finally(() => setBootDone(true));
+      }
+      // Make sure the currently-active group is in the known-list, even
+      // if it predates the multi-group switcher.
+      const current = getGroupId();
+      if (current) addKnownGroup(current);
+      try {
+        await consolidateFeedbackOnce(getKnownGroups());
+      } catch {
+        /* ignore */
+      }
+      setBootDone(true);
+    })();
   }, []);
 
   // Wire active Firestore subscriptions to whatever group is currently

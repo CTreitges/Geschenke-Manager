@@ -2,7 +2,9 @@ import { useSyncExternalStore } from "react";
 
 const AUTH_KEY = "gm:auth:v1";
 const GROUP_KEY = "gm:group:v1";
+const KNOWN_GROUPS_KEY = "gm:groups:v1";
 const GROUP_EVENT = "gm:group-change";
+const KNOWN_GROUPS_EVENT = "gm:groups-change";
 const IDENTITY_EVENT = "gm:identity-change";
 
 export async function sha256(text: string): Promise<string> {
@@ -24,8 +26,73 @@ export function setAuthed(yes: boolean) {
   } else {
     localStorage.removeItem(AUTH_KEY);
     localStorage.removeItem(GROUP_KEY);
+    localStorage.removeItem(KNOWN_GROUPS_KEY);
     window.dispatchEvent(new Event(GROUP_EVENT));
+    window.dispatchEvent(new Event(KNOWN_GROUPS_EVENT));
   }
+}
+
+// ── Known groups (multi-group switcher) ──────────────────────
+export function getKnownGroups(): string[] {
+  try {
+    const raw = localStorage.getItem(KNOWN_GROUPS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeKnownGroups(ids: string[]) {
+  localStorage.setItem(KNOWN_GROUPS_KEY, JSON.stringify(ids));
+  window.dispatchEvent(new Event(KNOWN_GROUPS_EVENT));
+}
+
+export function addKnownGroup(id: string) {
+  const ids = getKnownGroups();
+  if (ids.includes(id)) return;
+  writeKnownGroups([...ids, id]);
+}
+
+export function removeKnownGroup(id: string) {
+  const ids = getKnownGroups();
+  const next = ids.filter((x) => x !== id);
+  if (next.length === ids.length) return;
+  writeKnownGroups(next);
+}
+
+const KNOWN_GROUPS_SENTINEL: string[] = [];
+let knownGroupsCache: string[] = KNOWN_GROUPS_SENTINEL;
+let knownGroupsCacheRaw: string | null | undefined = undefined;
+
+function getKnownGroupsStable(): string[] {
+  // useSyncExternalStore requires getSnapshot to return the SAME reference
+  // between renders when nothing changed. localStorage.getItem returns a
+  // fresh string each call; we cache by raw value to keep the parsed array
+  // referentially stable until a real change happens.
+  const raw = localStorage.getItem(KNOWN_GROUPS_KEY);
+  if (raw === knownGroupsCacheRaw) return knownGroupsCache;
+  knownGroupsCacheRaw = raw;
+  knownGroupsCache = getKnownGroups();
+  return knownGroupsCache;
+}
+
+function subscribeKnownGroups(cb: () => void) {
+  window.addEventListener(KNOWN_GROUPS_EVENT, cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    window.removeEventListener(KNOWN_GROUPS_EVENT, cb);
+    window.removeEventListener("storage", cb);
+  };
+}
+
+export function useKnownGroups(): string[] {
+  return useSyncExternalStore(
+    subscribeKnownGroups,
+    getKnownGroupsStable,
+    () => KNOWN_GROUPS_SENTINEL,
+  );
 }
 
 // ── Group ─────────────────────────────────────────────────────

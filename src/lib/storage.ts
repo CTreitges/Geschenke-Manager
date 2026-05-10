@@ -83,6 +83,19 @@ function groupRootDoc() {
   return doc(db, "groups", state.activeGroupId);
 }
 
+// ─── Global (cross-group) feedback subscription ─────────
+// Feedback intentionally lives at the Firestore root so it spans all
+// groups — every browser, regardless of which group they're currently in,
+// sees the same feedback inbox.
+let feedbackUnsub: (() => void) | null = null;
+function ensureFeedbackSubscription() {
+  if (feedbackUnsub) return;
+  feedbackUnsub = onSnapshot(collection(db, "feedback"), (snap) => {
+    state.feedback = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, "id">) }));
+    notify();
+  });
+}
+
 // ─── Group lifecycle ────────────────────────────────────
 let unsubscribers: Array<() => void> = [];
 
@@ -92,7 +105,7 @@ let unsubscribers: Array<() => void> = [];
  * fresh listeners against `groups/{groupId}/...`.
  */
 export function setActiveGroup(groupId: string | null) {
-  // Teardown
+  // Teardown group-scoped listeners
   unsubscribers.forEach((u) => {
     try {
       u();
@@ -102,9 +115,15 @@ export function setActiveGroup(groupId: string | null) {
   });
   unsubscribers = [];
 
-  // Reset state
-  state = { ...emptyState(), activeGroupId: groupId };
+  // Reset state, but PRESERVE cross-group feedback if its subscription is
+  // already running — we don't want the inbox to flicker to empty on every
+  // group switch.
+  const preservedFeedback = feedbackUnsub ? state.feedback : [];
+  state = { ...emptyState(), activeGroupId: groupId, feedback: preservedFeedback };
   notify();
+
+  // Feedback is cross-group; subscribe once and keep it alive forever.
+  ensureFeedbackSubscription();
 
   if (!groupId) return;
 
@@ -144,12 +163,6 @@ export function setActiveGroup(groupId: string | null) {
         const data = d.data() as Omit<Poll, "giftId">;
         return { giftId: d.id, ...data, votes: data.votes ?? {} };
       });
-      notify();
-    }),
-  );
-  unsubscribers.push(
-    onSnapshot(collection(db, "groups", groupId, "feedback"), (snap) => {
-      state.feedback = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, "id">) }));
       notify();
     }),
   );
@@ -414,17 +427,17 @@ export async function removeVote(giftId: ID, personId: ID) {
   await updateDoc(gdoc("polls", giftId), { votes: next });
 }
 
-// ─── Feedback ───────────────────────────────────────────
+// ─── Feedback (cross-group, top-level) ──────────────────
 export async function addFeedback(f: Omit<Feedback, "id" | "createdAt">) {
-  await addDoc(gcol("feedback"), clean({ ...f, createdAt: Date.now() }));
+  await addDoc(collection(db, "feedback"), clean({ ...f, createdAt: Date.now() }));
 }
 
 export async function updateFeedback(id: ID, patch: Partial<Feedback>) {
-  await updateDoc(gdoc("feedback", id), clean(patch as Record<string, unknown>));
+  await updateDoc(doc(db, "feedback", id), clean(patch as Record<string, unknown>));
 }
 
 export async function deleteFeedback(id: ID) {
-  await deleteDoc(gdoc("feedback", id));
+  await deleteDoc(doc(db, "feedback", id));
 }
 
 // ─── Settings (= group root doc) ────────────────────────

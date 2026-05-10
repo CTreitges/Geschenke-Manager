@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { sha256, setAuthed, setGroupId } from "@/lib/auth";
+import { addKnownGroup, sha256, setAuthed, setGroupId } from "@/lib/auth";
 import { createGroup, groupExists } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -35,6 +35,7 @@ export default function CreateGroup() {
       }
       const hash = await sha256(pw);
       await createGroup(id, hash);
+      addKnownGroup(id);
       setGroupId(id);
       setAuthed(true);
       toast.success(`Gruppe „${id}" erstellt 🎉`);

@@ -119,7 +119,7 @@ export function GroupSwitcher() {
             <button
               onClick={() => {
                 setOpen(false);
-                nav("/login/new");
+                nav("/login");
               }}
               className="w-full px-3 py-2.5 flex items-center gap-2 text-sm font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40"
             >

@@ -11,6 +11,15 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.1.1",
+    date: "2026-05-11",
+    highlights: [
+      "Gruppe-hinzufügen leitet jetzt zum Login statt direkt zum Erstellen",
+      "Login + Erstellen-Seite zeigen oben deine gespeicherten Gruppen — ein Klick zurück, ohne Umweg",
+      "Patch Notes paginiert: initial 3 Versionen, älteres lädt sich nach",
+    ],
+  },
+  {
     version: "v1.1.0",
     date: "2026-05-11",
     highlights: [

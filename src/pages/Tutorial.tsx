@@ -256,7 +256,8 @@ export default function Tutorial() {
                   automatisch übernommen, pro Geschenk individuell überschreibbar
                 </li>
                 <li>
-                  <strong>Dark Mode</strong> — Toggle, wirkt sofort
+                  <strong>Dark Mode</strong> — ist <em>Standard</em>; Toggle hier umschalten,
+                  wirkt sofort
                 </li>
                 <li>
                   <strong>Passwort ändern</strong> — altes + neues angeben

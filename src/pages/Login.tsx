@@ -27,7 +27,7 @@ export default function Login() {
     try {
       const hash = await sha256(pw);
       if (firstTime) {
-        await updateSettings({ passwordHash: hash });
+        await updateSettings({ passwordHash: hash, darkMode: true });
         setAuthed(true);
         toast.success("Passwort gesetzt — willkommen!");
         nav("/");

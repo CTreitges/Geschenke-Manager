@@ -222,6 +222,36 @@ export async function createGroup(
   });
 }
 
+/**
+ * Permanently delete a group and ALL of its subcollections. Feedback is
+ * intentionally NOT touched — it lives at the top level and is shared.
+ *
+ * Chunked into ≤450-op batches to stay safely under Firestore's 500-op
+ * commit limit for groups with lots of docs.
+ */
+const GROUP_SUBCOLLECTIONS = ["persons", "gifts", "suggestions", "wishlist", "polls"];
+const BATCH_CAP = 450;
+
+export async function deleteGroup(groupId: ID): Promise<void> {
+  for (const name of GROUP_SUBCOLLECTIONS) {
+    const snap = await getDocs(collection(db, "groups", groupId, name));
+    if (snap.empty) continue;
+    let batch = writeBatch(db);
+    let n = 0;
+    for (const d of snap.docs) {
+      batch.delete(d.ref);
+      n++;
+      if (n >= BATCH_CAP) {
+        await batch.commit();
+        batch = writeBatch(db);
+        n = 0;
+      }
+    }
+    if (n > 0) await batch.commit();
+  }
+  await deleteDoc(doc(db, "groups", groupId));
+}
+
 // ─── Persons ────────────────────────────────────────────
 export async function addPerson(p: Omit<Person, "id" | "createdAt">) {
   await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));

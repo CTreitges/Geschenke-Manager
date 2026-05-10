@@ -1,10 +1,19 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Card, Chip, Icon, Input, PageHeader, Toggle } from "@/components/ui";
+import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
-import { setActiveGroup, updateSettings } from "@/lib/storage";
+import { deleteGroup, setActiveGroup, updateSettings } from "@/lib/storage";
 import { pickColor } from "@/lib/colors";
-import { sha256, setAuthed, setIdentity, useGroupId, useIdentity } from "@/lib/auth";
+import {
+  getKnownGroups,
+  removeKnownGroup,
+  sha256,
+  setAuthed,
+  setGroupId,
+  setIdentity,
+  useGroupId,
+  useIdentity,
+} from "@/lib/auth";
 import { toast } from "sonner";
 
 export default function Settings() {
@@ -53,6 +62,44 @@ export default function Settings() {
     nav("/login");
   }
 
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletePw, setDeletePw] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+
+  async function confirmDeleteGroup() {
+    if (!groupId) return;
+    if (!deletePw) {
+      toast.error("Passwort eingeben");
+      return;
+    }
+    setDeleteBusy(true);
+    try {
+      const hash = await sha256(deletePw);
+      if (hash !== settings.passwordHash) {
+        toast.error("Falsches Passwort");
+        return;
+      }
+      await deleteGroup(groupId);
+      removeKnownGroup(groupId);
+      toast.success(`Gruppe „${groupId}" gelöscht`);
+      const remaining = getKnownGroups();
+      setDeleteOpen(false);
+      setDeletePw("");
+      if (remaining.length > 0) {
+        setGroupId(remaining[0]);
+      } else {
+        setActiveGroup(null);
+        setAuthed(false);
+        nav("/login");
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Löschen fehlgeschlagen");
+    } finally {
+      setDeleteBusy(false);
+    }
+  }
+
   return (
     <>
       <PageHeader title="Einstellungen" />
@@ -63,6 +110,18 @@ export default function Settings() {
             <span className="text-sm font-bold text-stone-900 dark:text-stone-50 tabular-nums">
               {groupId ?? "—"}
             </span>
+          </Row>
+          <Row
+            label="Gruppe löschen"
+            hint="Personen, Geschenke + Abstimmungen unwiderruflich entfernen"
+            icon={<Icon.trash />}
+            danger
+            onClick={() => {
+              setDeletePw("");
+              setDeleteOpen(true);
+            }}
+          >
+            <Icon.chev className="text-stone-400" />
           </Row>
         </Group>
 
@@ -172,6 +231,59 @@ export default function Settings() {
           Geschenke-Manager · v0.4 · trust-based
         </div>
       </div>
+
+      <Dialog
+        open={deleteOpen}
+        onClose={() => {
+          if (!deleteBusy) {
+            setDeleteOpen(false);
+            setDeletePw("");
+          }
+        }}
+        title={`Gruppe „${groupId}" löschen?`}
+        footer={
+          <div className="flex gap-2 pt-1 pb-2">
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setDeleteOpen(false);
+                setDeletePw("");
+              }}
+              disabled={deleteBusy}
+              className="flex-1"
+            >
+              Abbrechen
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmDeleteGroup}
+              disabled={deleteBusy || !deletePw}
+              className="flex-1"
+            >
+              {deleteBusy ? "Lösche…" : "Endgültig löschen"}
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-3 pb-2">
+          <div className="text-[13px] leading-[1.55] text-stone-700 dark:text-stone-200">
+            Das löscht <strong>alle Personen, Geschenke, Vorschläge,
+            Wunschlisten und Abstimmungen</strong> dieser Gruppe vom Server.
+            Andere Mitglieder verlieren ebenfalls den Zugriff. Diese Aktion ist
+            <strong> nicht umkehrbar</strong>.
+          </div>
+          <div className="text-[12px] text-stone-500 dark:text-stone-400">
+            Feedback bleibt erhalten — es ist gruppenübergreifend.
+          </div>
+          <Input
+            type="password"
+            placeholder="Gruppen-Passwort zur Bestätigung"
+            value={deletePw}
+            onChange={(e) => setDeletePw(e.target.value)}
+            autoFocus
+          />
+        </div>
+      </Dialog>
     </>
   );
 }

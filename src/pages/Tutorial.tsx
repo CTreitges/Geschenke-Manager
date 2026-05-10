@@ -5,7 +5,7 @@ import { pickColor } from "@/lib/colors";
 export default function Tutorial() {
   return (
     <div>
-      <PageHeader title="So funktioniert's" subtitle="Alles drin, in 9 kleinen Schritten" />
+      <PageHeader title="So funktioniert's" subtitle="Alles drin, in 10 kleinen Schritten" />
 
       {/* Hero intro */}
       <div className="px-4 pb-5">
@@ -22,10 +22,12 @@ export default function Tutorial() {
             Geschenke ohne Chaos.
           </h1>
           <p className="text-[14px] leading-[1.5] opacity-95">
-            Eine Trust-basierte App für deine Freunde. Kein Login, kein Account — nur ein
-            geteiltes Passwort. Jede Person sieht alles und kann alles bearbeiten.
-            Beim ersten Öffnen landest du automatisch hier — danach erreichst du das Tutorial
-            jederzeit über das <strong>?</strong> oben rechts oder die <em>Einstellungen</em>.
+            Eine Trust-basierte App für deinen Freundeskreis. Jede Gruppe hat
+            eine eigene ID + Passwort — du kannst zwischen mehreren Gruppen
+            wechseln, eigene neu anlegen oder beitreten. Beim ersten Öffnen
+            landest du automatisch hier — das Tutorial erreichst du jederzeit
+            wieder über das <strong>?</strong> oben rechts oder die{" "}
+            <em>Einstellungen</em>.
           </p>
         </div>
       </div>
@@ -34,6 +36,45 @@ export default function Tutorial() {
       <div className="px-4 space-y-4 pb-6">
         <Step
           n={1}
+          icon="👥"
+          title="Gruppen — eine oder mehrere"
+          body={
+            <>
+              <p>
+                Beim Login gibst du <strong>Gruppen-ID + Passwort</strong> ein.
+                Über <em>„+ Neue Gruppe erstellen"</em> legst du eine eigene
+                Gruppe an (ID frei wählbar, 3–30 Zeichen, plus eigenes
+                Passwort).
+              </p>
+              <p>
+                Oben rechts in der App ist ein <strong>Gruppen-Pill</strong>{" "}
+                mit der aktiven ID. Tipp drauf → Dropdown mit all deinen
+                gespeicherten Gruppen. Aktiv ist hervorgehoben, ein Klick
+                wechselt sofort (ohne erneute Passwort-Eingabe — der Trust
+                wurde beim ersten Login gesetzt).
+              </p>
+              <p>
+                Im Dropdown rechts hinter jedem Namen ein <strong>🗑</strong>{" "}
+                zum <em>Entfernen aus deiner Liste</em> (Daten bleiben auf
+                dem Server). Unten <em>„+ Gruppe hinzufügen"</em> bringt dich
+                wieder zur Erstellen-/Beitreten-Seite.
+              </p>
+              <p>
+                Eine ganze Gruppe <strong>komplett vom Server löschen</strong>{" "}
+                geht in den{" "}
+                <Link to="/settings" className={LINK}>
+                  Einstellungen
+                </Link>{" "}
+                unter <em>Gruppe → „Gruppe löschen"</em> — wird mit Passwort
+                bestätigt (siehe Schritt 9).
+              </p>
+            </>
+          }
+          mock={<MockGroupSwitcherDropdown />}
+        />
+
+        <Step
+          n={2}
           icon="👋"
           title="Sag, wer du bist"
           body={
@@ -48,7 +89,8 @@ export default function Tutorial() {
               <p>
                 Wichtig: deine Stimmen, Vorschläge und Wünsche werden danach dir zugeordnet.
                 Wechseln kannst du jederzeit — die Identität ist nur ein Label im Browser
-                (kein echtes Login).
+                (kein echtes Login). Sie ist <strong>pro Gruppe</strong> getrennt:
+                wechselst du die Gruppe, ist die Identität dort separat.
               </p>
             </>
           }
@@ -56,7 +98,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={2}
+          n={3}
           icon="👥"
           title="Personen anlegen, bearbeiten, löschen"
           body={
@@ -81,7 +123,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={3}
+          n={4}
           icon="📚"
           title="Die Übersicht"
           body={
@@ -107,7 +149,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={4}
+          n={5}
           icon="✨"
           title="Wunschliste pflegen — jederzeit"
           body={
@@ -136,7 +178,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={5}
+          n={6}
           icon="🎁"
           title="Geschenk-Detail im Überblick"
           body={
@@ -167,7 +209,7 @@ export default function Tutorial() {
                   <strong>✕</strong> zum Löschen.
                 </li>
                 <li>
-                  <strong>Abstimmung</strong> — siehe Schritt 6.
+                  <strong>Abstimmung</strong> — siehe Schritt 7.
                 </li>
               </ul>
               <p>
@@ -180,7 +222,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={6}
+          n={7}
           icon="🗳️"
           title="Abstimmen — und die eigene Stimme bearbeiten"
           body={
@@ -207,7 +249,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={7}
+          n={8}
           icon="✅"
           title="Auswahl + Kauf"
           body={
@@ -235,7 +277,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={8}
+          n={9}
           icon="⚙️"
           title="Einstellungen"
           body={
@@ -249,7 +291,14 @@ export default function Tutorial() {
               </p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
                 <li>
-                  <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 1)
+                  <strong>Gruppe</strong> — aktive Gruppen-ID + <em>„Gruppe löschen"</em>
+                  (rot). Letzteres entfernt Personen, Geschenke, Vorschläge, Wunschlisten
+                  und Abstimmungen <strong>unwiderruflich</strong> vom Server. Bestätigung
+                  per Passwort-Eingabe; danach Wechsel zur nächsten gespeicherten Gruppe
+                  (oder zurück zum Login).
+                </li>
+                <li>
+                  <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 2)
                 </li>
                 <li>
                   <strong>Default-Budget pro Person</strong> — wird bei neuen Geschenken
@@ -260,15 +309,16 @@ export default function Tutorial() {
                   wirkt sofort
                 </li>
                 <li>
-                  <strong>Passwort ändern</strong> — altes + neues angeben
+                  <strong>Passwort ändern</strong> — altes + neues angeben (gilt für die
+                  aktive Gruppe)
                 </li>
                 <li>
                   <strong>Hilfe → So funktioniert's</strong> & <strong>Feedback</strong>{" "}
-                  (siehe Schritt 9)
+                  (siehe Schritt 10)
                 </li>
                 <li>
-                  <strong>Abmelden</strong> — meldet diesen Browser ab, das Gruppen-Passwort
-                  bleibt unverändert
+                  <strong>Abmelden</strong> — meldet diesen Browser ab und leert die
+                  Gruppen-Liste auf diesem Gerät
                 </li>
               </ul>
             </>
@@ -276,7 +326,7 @@ export default function Tutorial() {
         />
 
         <Step
-          n={9}
+          n={10}
           icon="💬"
           title="Feedback geben"
           body={
@@ -286,8 +336,10 @@ export default function Tutorial() {
                 <Link to="/feedback" className={LINK}>
                   Einstellungen → Feedback
                 </Link>{" "}
-                kannst du Wünsche, Ideen, Bugs eintragen. Alle sehen alles, jeder kann
-                editieren oder als <em>erledigt</em> markieren — Trust-Prinzip wie überall.
+                kannst du Wünsche, Ideen, Bugs eintragen. Feedback ist{" "}
+                <strong>gruppenübergreifend</strong> — egal in welcher Gruppe du gerade
+                bist, alle sehen dieselbe Inbox. Jeder kann editieren oder als{" "}
+                <em>erledigt</em> markieren — Trust-Prinzip wie überall.
               </p>
               <p>
                 Wenn deine Identität gesetzt ist, wird das Feedback dir zugeordnet (kleiner
@@ -377,13 +429,51 @@ function MockTopBar() {
   return (
     <div className="flex items-center justify-between gap-2">
       <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">🎁 Geschenke</div>
-      <div className="flex items-center gap-1.5">
+      <div className="flex items-center gap-1">
+        <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-2 pr-1.5 py-1 inline-flex items-center gap-1">
+          <Icon.users size={11} />
+          <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Jeg</span>
+          <Icon.chev size={10} className="rotate-90 text-stone-400" />
+        </div>
         <div className="w-6 h-6 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 flex items-center justify-center text-[11px] font-bold">
           ?
         </div>
-        <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-1 pr-3 py-1 inline-flex items-center gap-2">
-          <Avatar person={ANNA} size={22} />
-          <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Ich: Anna</span>
+        <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-1 pr-2 py-1 inline-flex items-center gap-1">
+          <Avatar person={ANNA} size={20} />
+          <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Anna</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MockGroupSwitcherDropdown() {
+  const rowBase =
+    "px-2.5 py-1.5 flex items-center gap-1.5 text-[11px]";
+  return (
+    <div className="flex gap-2">
+      <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-2 pr-1.5 py-1 inline-flex items-center gap-1 self-start">
+        <Icon.users size={11} />
+        <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Jeg</span>
+        <Icon.chev size={10} className="rotate-90 text-stone-400" />
+      </div>
+      <div className="flex-1 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 shadow-md overflow-hidden">
+        <div className="px-2.5 pt-1.5 pb-1 text-[9px] font-bold tracking-[0.05em] uppercase text-stone-400">
+          Deine Gruppen
+        </div>
+        <div className={`${rowBase} bg-violet-50 dark:bg-violet-950/40`}>
+          <Icon.check size={11} className="text-violet-700 dark:text-violet-300" />
+          <span className="flex-1 font-bold text-stone-900 dark:text-stone-50">Jeg</span>
+          <Icon.trash size={11} className="text-stone-300" />
+        </div>
+        <div className={rowBase}>
+          <span className="w-2.5" />
+          <span className="flex-1 text-stone-700 dark:text-stone-200">familie-müller</span>
+          <Icon.trash size={11} className="text-stone-300" />
+        </div>
+        <div className="border-t border-stone-100 dark:border-stone-700" />
+        <div className="px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-violet-700 dark:text-violet-300">
+          <Icon.plus size={11} /> Gruppe hinzufügen
         </div>
       </div>
     </div>

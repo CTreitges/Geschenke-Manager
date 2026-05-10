@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { addKnownGroup, isAuthed, sha256, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
-import { createGroup, groupExists } from "@/lib/storage";
+import { addKnownGroup, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
+import { createGroupCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
 
 const GROUP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{2,29}$/;
@@ -31,20 +31,28 @@ export default function CreateGroup() {
     const id = groupIdInput.trim();
     setBusy(true);
     try {
-      if (await groupExists(id)) {
-        toast.error("Diese Gruppen-ID ist schon vergeben");
+      try {
+        await createGroupCF(id, pw);
+      } catch (err) {
+        const code = (err as { code?: string })?.code ?? "";
+        if (code === "functions/already-exists") {
+          toast.error("Diese Gruppen-ID ist schon vergeben");
+        } else if (code === "functions/invalid-argument") {
+          toast.error("Ungültige Gruppen-ID oder Passwort");
+        } else if (code === "functions/unauthenticated") {
+          toast.error("Anonyme Anmeldung läuft noch — gleich nochmal");
+        } else {
+          console.error(err);
+          toast.error("Erstellen fehlgeschlagen");
+        }
         return;
       }
-      const hash = await sha256(pw);
-      await createGroup(id, hash);
       addKnownGroup(id);
       setGroupId(id);
       setAuthed(true);
+      setActiveGroup(id);
       toast.success(`Gruppe „${id}" erstellt 🎉`);
       nav("/");
-    } catch (err) {
-      console.error(err);
-      toast.error("Erstellen fehlgeschlagen");
     } finally {
       setBusy(false);
     }

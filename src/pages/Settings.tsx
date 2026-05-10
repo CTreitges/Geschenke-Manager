@@ -2,13 +2,12 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
-import { deleteGroup, setActiveGroup, toggleParticipant, updateSettings } from "@/lib/storage";
+import { changePasswordCF, deleteGroupCF, setActiveGroup, toggleParticipant, updateSettings } from "@/lib/storage";
 import { pickColor } from "@/lib/colors";
 import { daysUntilBirthday } from "@/lib/birthdays";
 import {
   getKnownGroups,
   removeKnownGroup,
-  sha256,
   setAuthed,
   setGroupId,
   setIdentity,
@@ -58,17 +57,21 @@ export default function Settings() {
   }
 
   async function changePassword() {
-    if (!oldPw || !newPw) return;
-    const oldHash = await sha256(oldPw);
-    if (oldHash !== settings.passwordHash) {
-      toast.error("Aktuelles Passwort falsch");
-      return;
+    if (!oldPw || !newPw || !groupId) return;
+    try {
+      await changePasswordCF(groupId, oldPw, newPw);
+      setOldPw("");
+      setNewPw("");
+      toast.success("Passwort geändert");
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? "";
+      if (code === "functions/permission-denied") {
+        toast.error("Aktuelles Passwort falsch");
+      } else {
+        console.error(err);
+        toast.error("Passwort ändern fehlgeschlagen");
+      }
     }
-    const newHash = await sha256(newPw);
-    await updateSettings({ passwordHash: newHash });
-    setOldPw("");
-    setNewPw("");
-    toast.success("Passwort geändert");
   }
 
   function logout() {
@@ -89,12 +92,18 @@ export default function Settings() {
     }
     setDeleteBusy(true);
     try {
-      const hash = await sha256(deletePw);
-      if (hash !== settings.passwordHash) {
-        toast.error("Falsches Passwort");
+      try {
+        await deleteGroupCF(groupId, deletePw);
+      } catch (err) {
+        const code = (err as { code?: string })?.code ?? "";
+        if (code === "functions/permission-denied") {
+          toast.error("Falsches Passwort");
+        } else {
+          console.error(err);
+          toast.error("Löschen fehlgeschlagen");
+        }
         return;
       }
-      await deleteGroup(groupId);
       removeKnownGroup(groupId);
       toast.success(`Gruppe „${groupId}" gelöscht`);
       const remaining = getKnownGroups();
@@ -107,9 +116,6 @@ export default function Settings() {
         setAuthed(false);
         nav("/login");
       }
-    } catch (err) {
-      console.error(err);
-      toast.error("Löschen fehlgeschlagen");
     } finally {
       setDeleteBusy(false);
     }

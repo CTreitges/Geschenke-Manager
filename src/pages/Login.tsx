@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { addKnownGroup, isAuthed, sha256, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
-import { fetchGroupHash } from "@/lib/storage";
+import { addKnownGroup, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
+import { joinGroupCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -25,23 +25,31 @@ export default function Login() {
     if (!id || !pw) return;
     setBusy(true);
     try {
-      const stored = await fetchGroupHash(id);
-      if (!stored) {
+      try {
+        await joinGroupCF(id, pw);
+      } catch (err) {
+        const code = (err as { code?: string })?.code ?? "";
         setShake(true);
         setTimeout(() => setShake(false), 400);
-        toast.error("Gruppe nicht gefunden");
-        return;
-      }
-      const hash = await sha256(pw);
-      if (hash !== stored) {
-        setShake(true);
-        setTimeout(() => setShake(false), 400);
-        toast.error("Falsches Passwort");
+        if (code === "functions/not-found") {
+          toast.error("Gruppe nicht gefunden");
+        } else if (code === "functions/permission-denied") {
+          toast.error("Falsches Passwort");
+        } else if (code === "functions/unauthenticated") {
+          toast.error("Anonyme Anmeldung läuft noch — gleich nochmal");
+        } else {
+          console.error(err);
+          toast.error("Login fehlgeschlagen");
+        }
         return;
       }
       addKnownGroup(id);
       setGroupId(id);
       setAuthed(true);
+      // Force a fresh subscription cycle in case we were stuck on a
+      // permission-denied (e.g. v1→v2 auth bump where the cached groupId
+      // points to a group we weren't a member of yet).
+      setActiveGroup(id);
       toast.success("Reingekommen 🎉");
       nav("/");
     } finally {

@@ -1,6 +1,9 @@
 import { useSyncExternalStore } from "react";
 
-const AUTH_KEY = "gm:auth:v1";
+// Bumped from v1 → v2 on the security-tier-1 rollout: forces every browser
+// to log in once via the new Cloud Function so they end up properly
+// registered as members in their groups.
+const AUTH_KEY = "gm:auth:v2";
 const GROUP_KEY = "gm:group:v1";
 const KNOWN_GROUPS_KEY = "gm:groups:v1";
 const GROUP_EVENT = "gm:group-change";

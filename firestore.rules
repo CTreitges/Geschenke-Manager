@@ -1,16 +1,76 @@
 rules_version = '2';
 
-// Trust-basierte Webapp ohne klassisches Auth.
-// Alle Schreiboperationen sind durch das geteilte Passwort im Frontend "geschützt"
-// (kein produktiver Schutz — das ist eine bewusste Entscheidung, siehe README).
+// Multi-group Trust app, post-Tier-1 hardening:
 //
-// Diese Rules erlauben Lesen + Schreiben für alle. Wer den API-Key kennt
-// (steht im Bundle), kann theoretisch direkt zugreifen. Für den Freundeskreis-
-// Use-Case akzeptabel; bei Bedarf später auf App Check umstellen.
+// - All client access requires Firebase Anonymous Auth (request.auth != null).
+// - Group data is only readable/writable by users whose anonymous UID is
+//   registered as a member at /groups/{groupId}/members/{uid}.
+// - The password hash + salt live at /groups/{groupId}/_meta/auth and are
+//   strictly off-limits for clients — only Cloud Functions (which run with
+//   admin privileges) can read/write them.
+// - Group membership is established exclusively via the Cloud Functions
+//   `createGroup` and `joinGroup` (they validate the password server-side).
+//   A user can self-`delete` their own membership doc to "leave" a group.
+// - The top-level /groups collection cannot be listed by clients (no
+//   enumeration of group ids). Individual `get` only succeeds if you are
+//   a member.
+// - /feedback is intentionally cross-group: any authenticated user can read
+//   and write. Trust principle applies as before.
+// - All legacy top-level collections (persons, gifts, …, settings) are
+//   denied — they are read-only safety-net backups that the app no longer
+//   touches.
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    match /{document=**} {
-      allow read, write: if true;
+
+    function isMember(groupId) {
+      return request.auth != null &&
+        exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
     }
+
+    // Cross-group feedback inbox.
+    match /feedback/{id} {
+      allow read, create, update, delete: if request.auth != null;
+    }
+
+    // Group root.
+    match /groups/{groupId} {
+      // Public-ish fields (defaultBudget, darkMode, createdAt) readable by
+      // members. Writes go through Cloud Functions.
+      allow get: if isMember(groupId);
+      allow list: if false;
+      allow write: if false;
+
+      // Password hash + salt. Hard no.
+      match /_meta/{doc} {
+        allow read, write: if false;
+      }
+
+      // Membership records.
+      match /members/{uid} {
+        // Members of the group can see who else is in (useful for future
+        // UI). Reading one's own membership is also allowed before being
+        // a full member (sanity-check during boot).
+        allow get: if request.auth != null && request.auth.uid == uid;
+        allow list: if isMember(groupId);
+        allow create, update: if false; // only via createGroup / joinGroup
+        allow delete: if request.auth != null && request.auth.uid == uid;
+      }
+
+      // Group data — only members.
+      match /persons/{doc}      { allow read, write: if isMember(groupId); }
+      match /gifts/{doc}        { allow read, write: if isMember(groupId); }
+      match /suggestions/{doc}  { allow read, write: if isMember(groupId); }
+      match /wishlist/{doc}     { allow read, write: if isMember(groupId); }
+      match /polls/{doc}        { allow read, write: if isMember(groupId); }
+    }
+
+    // Legacy top-level collections from the pre-multi-group era — locked.
+    match /persons/{doc}      { allow read, write: if false; }
+    match /gifts/{doc}        { allow read, write: if false; }
+    match /suggestions/{doc}  { allow read, write: if false; }
+    match /wishlist/{doc}     { allow read, write: if false; }
+    match /polls/{doc}        { allow read, write: if false; }
+    match /settings/{doc}     { allow read, write: if false; }
   }
 }

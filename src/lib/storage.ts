@@ -9,14 +9,23 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
-  getDoc,
   getDocs,
   query,
   where,
   limit,
 } from "firebase/firestore";
-import { db } from "./firebase";
-import type { Person, Gift, Suggestion, WishlistItem, Poll, Settings, Feedback, ID } from "./types";
+import { httpsCallable } from "firebase/functions";
+import { auth, authReady, db, functions } from "./firebase";
+import type {
+  Feedback,
+  Gift,
+  ID,
+  Person,
+  Poll,
+  Settings,
+  Suggestion,
+  WishlistItem,
+} from "./types";
 
 interface State {
   persons: Person[];
@@ -26,15 +35,16 @@ interface State {
   polls: Poll[];
   feedback: Feedback[];
   settings: Settings;
-  /** Group doc has arrived — used by Login to wait for password hash. */
+  /** Group doc has arrived. */
   loaded: boolean;
-  /** First gifts snapshot has been received — used by Home to avoid
-   *  auto-creating duplicate stack entries before initial data arrives. */
+  /** First gifts snapshot has been received. */
   giftsHydrated: boolean;
   /** First persons snapshot has been received. */
   personsHydrated: boolean;
   /** Currently active group id (null when not in any group). */
   activeGroupId: string | null;
+  /** Set when group reads come back permission-denied (e.g. lost membership). */
+  permissionError: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -55,6 +65,7 @@ const emptyState = (): State => ({
   giftsHydrated: false,
   personsHydrated: false,
   activeGroupId: null,
+  permissionError: false,
 });
 
 let state: State = emptyState();
@@ -83,29 +94,37 @@ function groupRootDoc() {
   return doc(db, "groups", state.activeGroupId);
 }
 
-// ─── Global (cross-group) feedback subscription ─────────
-// Feedback intentionally lives at the Firestore root so it spans all
-// groups — every browser, regardless of which group they're currently in,
-// sees the same feedback inbox.
+// ─── Cross-group feedback subscription ──────────────────
 let feedbackUnsub: (() => void) | null = null;
 function ensureFeedbackSubscription() {
   if (feedbackUnsub) return;
-  feedbackUnsub = onSnapshot(collection(db, "feedback"), (snap) => {
-    state.feedback = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Feedback, "id">) }));
-    notify();
-  });
+  authReady
+    .then(() => {
+      if (feedbackUnsub) return;
+      feedbackUnsub = onSnapshot(
+        collection(db, "feedback"),
+        (snap) => {
+          state.feedback = snap.docs.map((d) => ({
+            id: d.id,
+            ...(d.data() as Omit<Feedback, "id">),
+          }));
+          notify();
+        },
+        (err) => {
+          console.warn("feedback subscription error:", err);
+        },
+      );
+    })
+    .catch(() => {
+      /* anon auth failure — surface via permissionError, see setActiveGroup */
+    });
 }
 
 // ─── Group lifecycle ────────────────────────────────────
 let unsubscribers: Array<() => void> = [];
 
-/**
- * Switch the active group. Tears down all existing Firestore listeners,
- * resets all in-memory collections, and (if `groupId` is non-null) starts
- * fresh listeners against `groups/{groupId}/...`.
- */
 export function setActiveGroup(groupId: string | null) {
-  // Teardown group-scoped listeners
+  // Teardown
   unsubscribers.forEach((u) => {
     try {
       u();
@@ -115,65 +134,131 @@ export function setActiveGroup(groupId: string | null) {
   });
   unsubscribers = [];
 
-  // Reset state, but PRESERVE cross-group feedback if its subscription is
-  // already running — we don't want the inbox to flicker to empty on every
-  // group switch.
+  // Reset, preserve cross-group feedback (already running).
   const preservedFeedback = feedbackUnsub ? state.feedback : [];
-  state = { ...emptyState(), activeGroupId: groupId, feedback: preservedFeedback };
+  state = {
+    ...emptyState(),
+    activeGroupId: groupId,
+    feedback: preservedFeedback,
+  };
   notify();
 
-  // Feedback is cross-group; subscribe once and keep it alive forever.
   ensureFeedbackSubscription();
-
   if (!groupId) return;
 
-  // Subscribe — Firestore subscriptions for the new group
-  unsubscribers.push(
-    onSnapshot(collection(db, "groups", groupId, "persons"), (snap) => {
-      state.persons = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Person, "id">) }));
-      state.personsHydrated = true;
+  // Defer subscriptions until anonymous auth is resolved — Firestore rules
+  // require request.auth != null for group reads.
+  authReady
+    .then(() => {
+      // Sanity: someone may have switched groups while we were waiting.
+      if (state.activeGroupId !== groupId) return;
+
+      const onErr = (label: string) => (err: unknown) => {
+        const code =
+          (err as { code?: string })?.code ??
+          (err as { name?: string })?.name ??
+          "unknown";
+        console.warn(`${label} subscription error:`, code, err);
+        if (code === "permission-denied") {
+          state.permissionError = true;
+          notify();
+        }
+      };
+
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "groups", groupId, "persons"),
+          (snap) => {
+            state.persons = snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<Person, "id">),
+            }));
+            state.personsHydrated = true;
+            notify();
+          },
+          onErr("persons"),
+        ),
+      );
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "groups", groupId, "gifts"),
+          (snap) => {
+            state.gifts = snap.docs.map((d) => {
+              const data = d.data() as Omit<Gift, "id">;
+              return {
+                id: d.id,
+                ...data,
+                participantIds: data.participantIds ?? [],
+              };
+            });
+            state.giftsHydrated = true;
+            notify();
+          },
+          onErr("gifts"),
+        ),
+      );
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "groups", groupId, "suggestions"),
+          (snap) => {
+            state.suggestions = snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<Suggestion, "id">),
+            }));
+            notify();
+          },
+          onErr("suggestions"),
+        ),
+      );
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "groups", groupId, "wishlist"),
+          (snap) => {
+            state.wishlist = snap.docs.map((d) => ({
+              id: d.id,
+              ...(d.data() as Omit<WishlistItem, "id">),
+            }));
+            notify();
+          },
+          onErr("wishlist"),
+        ),
+      );
+      unsubscribers.push(
+        onSnapshot(
+          collection(db, "groups", groupId, "polls"),
+          (snap) => {
+            state.polls = snap.docs.map((d) => {
+              const data = d.data() as Omit<Poll, "giftId">;
+              return { giftId: d.id, ...data, votes: data.votes ?? {} };
+            });
+            notify();
+          },
+          onErr("polls"),
+        ),
+      );
+      // Group root doc holds defaultBudget, darkMode, createdAt. The
+      // password hash + salt live under /_meta/auth and are not readable
+      // by clients (rules enforce this).
+      unsubscribers.push(
+        onSnapshot(
+          doc(db, "groups", groupId),
+          (snap) => {
+            state.settings = {
+              ...DEFAULT_SETTINGS,
+              ...(snap.data() as Partial<Settings> | undefined),
+            };
+            state.loaded = true;
+            notify();
+          },
+          onErr("group-root"),
+        ),
+      );
+    })
+    .catch((err) => {
+      console.error("auth failed in setActiveGroup:", err);
+      state.permissionError = true;
       notify();
-    }),
-  );
-  unsubscribers.push(
-    onSnapshot(collection(db, "groups", groupId, "gifts"), (snap) => {
-      state.gifts = snap.docs.map((d) => {
-        const data = d.data() as Omit<Gift, "id">;
-        return { id: d.id, ...data, participantIds: data.participantIds ?? [] };
-      });
-      state.giftsHydrated = true;
-      notify();
-    }),
-  );
-  unsubscribers.push(
-    onSnapshot(collection(db, "groups", groupId, "suggestions"), (snap) => {
-      state.suggestions = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Suggestion, "id">) }));
-      notify();
-    }),
-  );
-  unsubscribers.push(
-    onSnapshot(collection(db, "groups", groupId, "wishlist"), (snap) => {
-      state.wishlist = snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<WishlistItem, "id">) }));
-      notify();
-    }),
-  );
-  unsubscribers.push(
-    onSnapshot(collection(db, "groups", groupId, "polls"), (snap) => {
-      state.polls = snap.docs.map((d) => {
-        const data = d.data() as Omit<Poll, "giftId">;
-        return { giftId: d.id, ...data, votes: data.votes ?? {} };
-      });
-      notify();
-    }),
-  );
-  // Group root doc holds the Settings slice (passwordHash, defaultBudget, darkMode).
-  unsubscribers.push(
-    onSnapshot(doc(db, "groups", groupId), (snap) => {
-      state.settings = { ...DEFAULT_SETTINGS, ...(snap.data() as Partial<Settings> | undefined) };
-      state.loaded = true;
-      notify();
-    }),
-  );
+    });
 }
 
 export function subscribe(l: Listener): () => void {
@@ -196,60 +281,71 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
   return out;
 }
 
-// ─── Group registry (top-level /groups collection) ──────
-export async function groupExists(groupId: ID): Promise<boolean> {
-  const snap = await getDoc(doc(db, "groups", groupId));
-  return snap.exists();
+// ─── Cloud Function callables ───────────────────────────
+type CallableResult = { ok: boolean };
+type JoinPayload = { groupId: ID; password: string };
+type CreatePayload = { groupId: ID; password: string };
+type ChangePwPayload = {
+  groupId: ID;
+  oldPassword: string;
+  newPassword: string;
+};
+type DeletePayload = { groupId: ID; password: string };
+
+const joinGroupCallable = httpsCallable<JoinPayload, CallableResult>(
+  functions,
+  "joinGroup",
+);
+const createGroupCallable = httpsCallable<CreatePayload, CallableResult>(
+  functions,
+  "createGroup",
+);
+const changePasswordCallable = httpsCallable<ChangePwPayload, CallableResult>(
+  functions,
+  "changePassword",
+);
+const deleteGroupCallable = httpsCallable<DeletePayload, CallableResult>(
+  functions,
+  "deleteGroup",
+);
+
+export async function joinGroupCF(groupId: ID, password: string): Promise<void> {
+  await authReady;
+  await joinGroupCallable({ groupId, password });
 }
 
-export async function fetchGroupHash(groupId: ID): Promise<string | null> {
-  const snap = await getDoc(doc(db, "groups", groupId));
-  if (!snap.exists()) return null;
-  const data = snap.data() as Partial<Settings>;
-  return data.passwordHash ?? null;
-}
-
-export async function createGroup(
+export async function createGroupCF(
   groupId: ID,
-  passwordHash: string,
-  defaultBudget = 10,
+  password: string,
 ): Promise<void> {
-  await setDoc(doc(db, "groups", groupId), {
-    passwordHash,
-    defaultBudget,
-    darkMode: true,
-    createdAt: Date.now(),
-  });
+  await authReady;
+  await createGroupCallable({ groupId, password });
 }
 
-/**
- * Permanently delete a group and ALL of its subcollections. Feedback is
- * intentionally NOT touched — it lives at the top level and is shared.
- *
- * Chunked into ≤450-op batches to stay safely under Firestore's 500-op
- * commit limit for groups with lots of docs.
- */
-const GROUP_SUBCOLLECTIONS = ["persons", "gifts", "suggestions", "wishlist", "polls"];
-const BATCH_CAP = 450;
+export async function changePasswordCF(
+  groupId: ID,
+  oldPassword: string,
+  newPassword: string,
+): Promise<void> {
+  await authReady;
+  await changePasswordCallable({ groupId, oldPassword, newPassword });
+}
 
-export async function deleteGroup(groupId: ID): Promise<void> {
-  for (const name of GROUP_SUBCOLLECTIONS) {
-    const snap = await getDocs(collection(db, "groups", groupId, name));
-    if (snap.empty) continue;
-    let batch = writeBatch(db);
-    let n = 0;
-    for (const d of snap.docs) {
-      batch.delete(d.ref);
-      n++;
-      if (n >= BATCH_CAP) {
-        await batch.commit();
-        batch = writeBatch(db);
-        n = 0;
-      }
-    }
-    if (n > 0) await batch.commit();
-  }
-  await deleteDoc(doc(db, "groups", groupId));
+export async function deleteGroupCF(
+  groupId: ID,
+  password: string,
+): Promise<void> {
+  await authReady;
+  await deleteGroupCallable({ groupId, password });
+}
+
+// ─── Membership ─────────────────────────────────────────
+/** Leaves a group by deleting the caller's own member doc (rules allow
+ *  self-delete). Does NOT touch the group's data — other members can
+ *  continue to use it. */
+export async function leaveGroup(groupId: ID): Promise<void> {
+  const uid = await authReady;
+  await deleteDoc(doc(db, "groups", groupId, "members", uid));
 }
 
 // ─── Persons ────────────────────────────────────────────
@@ -265,16 +361,17 @@ export async function deletePerson(id: ID) {
   if (!state.activeGroupId) throw new Error("No active group");
   const batch = writeBatch(db);
   batch.delete(gdoc("persons", id));
-  state.gifts.filter((g) => g.personId === id).forEach((g) => batch.delete(gdoc("gifts", g.id)));
-  state.wishlist.filter((w) => w.personId === id).forEach((w) => batch.delete(gdoc("wishlist", w.id)));
+  state.gifts
+    .filter((g) => g.personId === id)
+    .forEach((g) => batch.delete(gdoc("gifts", g.id)));
+  state.wishlist
+    .filter((w) => w.personId === id)
+    .forEach((w) => batch.delete(gdoc("wishlist", w.id)));
   await batch.commit();
 }
 
 /**
- * Deduplicate open gifts: if multiple `open` gifts exist for the same
- * (personId, year), keep the one with the richest data (most
- * participants, then most selections, then earliest enteredStackAt) and
- * delete the rest.
+ * Deduplicate open gifts: same (personId, year) → keep richest, drop rest.
  */
 let dedupRunning = false;
 export async function deduplicateOpenGifts(): Promise<number> {
@@ -294,8 +391,10 @@ export async function deduplicateOpenGifts(): Promise<number> {
     for (const arr of groups.values()) {
       if (arr.length < 2) continue;
       arr.sort((a, b) => {
-        const da = a.participantIds.length + (a.selectedSuggestionIds?.length ?? 0) * 0.5;
-        const db = b.participantIds.length + (b.selectedSuggestionIds?.length ?? 0) * 0.5;
+        const da =
+          a.participantIds.length + (a.selectedSuggestionIds?.length ?? 0) * 0.5;
+        const db =
+          b.participantIds.length + (b.selectedSuggestionIds?.length ?? 0) * 0.5;
         if (db !== da) return db - da;
         return a.enteredStackAt - b.enteredStackAt;
       });
@@ -312,7 +411,9 @@ export async function deduplicateOpenGifts(): Promise<number> {
 }
 
 // ─── Gifts ──────────────────────────────────────────────
-export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">) {
+export async function addGift(
+  g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">,
+) {
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
   await addDoc(
     gcol("gifts"),
@@ -325,11 +426,6 @@ export async function addGift(g: Omit<Gift, "id" | "enteredStackAt" | "stackOrde
   );
 }
 
-/**
- * Auto-create a gift for (personId, year) IF none exists yet. See the
- * legacy commit for rationale; the race-safe Firestore query stays the
- * same, just scoped under the active group.
- */
 export async function ensureAutoGift(
   personId: ID,
   year: number,
@@ -472,5 +568,16 @@ export async function deleteFeedback(id: ID) {
 
 // ─── Settings (= group root doc) ────────────────────────
 export async function updateSettings(patch: Partial<Settings>) {
-  await setDoc(groupRootDoc(), clean(patch as Record<string, unknown>), { merge: true });
+  // Strip passwordHash if anyone tries to write it from the client — the
+  // hash lives in /_meta/auth and is only writable by Cloud Functions.
+  const { passwordHash: _strip, ...safe } = patch;
+  void _strip;
+  await setDoc(
+    groupRootDoc(),
+    clean(safe as Record<string, unknown>),
+    { merge: true },
+  );
 }
+
+// Re-export `auth` for callers that want the current user (e.g. for logout).
+export { auth };

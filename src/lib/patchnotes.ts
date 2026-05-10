@@ -11,6 +11,16 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.2.0",
+    date: "2026-05-11",
+    highlights: [
+      "Sicherheit: Daten anderer Gruppen sind ohne Passwort jetzt wirklich unzugänglich",
+      "Anonyme Firebase-Anmeldung beim ersten Besuch — keine Eingabe nötig",
+      "Passwörter werden serverseitig mit Salt + PBKDF2 geprüft, der Hash ist nicht mehr aus dem Browser lesbar",
+      "Bestehender Login (Browser) muss einmalig nochmal Passwort eingeben",
+    ],
+  },
+  {
     version: "v1.1.1",
     date: "2026-05-11",
     highlights: [

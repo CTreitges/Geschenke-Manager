@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { Avatar, Button, Chip, Icon, PageHeader } from "@/components/ui";
 import { pickColor } from "@/lib/colors";
@@ -8,7 +9,14 @@ import {
   formatPatchDate,
 } from "@/lib/patchnotes";
 
+const PATCH_PAGE = 3;
+
 export default function Tutorial() {
+  const [visibleNotes, setVisibleNotes] = useState(PATCH_PAGE);
+  const shownNotes = PATCH_NOTES.slice(0, visibleNotes);
+  const remaining = Math.max(0, PATCH_NOTES.length - shownNotes.length);
+  const nextChunk = Math.min(PATCH_PAGE, remaining);
+
   return (
     <div>
       <PageHeader
@@ -36,7 +44,7 @@ export default function Tutorial() {
             <div className="text-2xl shrink-0">✨</div>
           </div>
           <div className="divide-y divide-stone-100 dark:divide-stone-700">
-            {PATCH_NOTES.map((note, i) => (
+            {shownNotes.map((note, i) => (
               <div key={note.version} className="px-4 py-3">
                 <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
                   <div
@@ -65,6 +73,15 @@ export default function Tutorial() {
               </div>
             ))}
           </div>
+          {remaining > 0 && (
+            <button
+              onClick={() => setVisibleNotes((v) => v + PATCH_PAGE)}
+              className="w-full px-4 py-3 text-[13px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 border-t border-stone-100 dark:border-stone-700 flex items-center justify-center gap-1.5"
+            >
+              {nextChunk} {nextChunk === 1 ? "ältere Version" : "ältere Versionen"} laden
+              <Icon.chev size={12} className="rotate-90" />
+            </button>
+          )}
         </div>
       </div>
 

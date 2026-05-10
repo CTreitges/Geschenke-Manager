@@ -1,6 +1,7 @@
 import { Link, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { IdentityChip } from "./IdentityChip";
+import { GroupSwitcher } from "./GroupSwitcher";
 import { Icon } from "./ui";
 import { cn } from "@/lib/cn";
 
@@ -23,7 +24,8 @@ export function Layout({ children }: { children: ReactNode }) {
           <Link to="/" className="text-base font-semibold tracking-tight">
             🎁 Geschenke
           </Link>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <GroupSwitcher />
             <Link
               to="/tutorial"
               aria-label="Tutorial"

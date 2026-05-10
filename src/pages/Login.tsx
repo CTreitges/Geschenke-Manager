@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { sha256, setAuthed, setGroupId } from "@/lib/auth";
+import { addKnownGroup, sha256, setAuthed, setGroupId } from "@/lib/auth";
 import { fetchGroupHash } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -37,6 +37,7 @@ export default function Login() {
         toast.error("Falsches Passwort");
         return;
       }
+      addKnownGroup(id);
       setGroupId(id);
       setAuthed(true);
       toast.success("Reingekommen 🎉");

@@ -8,16 +8,17 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { createGroup, groupExists } from "./storage";
-import { sha256 } from "./auth";
+import { addKnownGroup, isAuthed, setGroupId, sha256 } from "./auth";
 
-/** Collections that lived at the Firestore root before multi-group landed. */
+/** Collections that lived at the Firestore root before multi-group landed.
+ *  Feedback is intentionally NOT in this list — it stays cross-group at
+ *  /feedback (top-level). */
 const LEGACY_COLLECTIONS = [
   "persons",
   "gifts",
   "suggestions",
   "wishlist",
   "polls",
-  "feedback",
 ] as const;
 
 export interface MigrationResult {
@@ -107,6 +108,45 @@ export async function autoMigrateLegacyIfNeeded(): Promise<MigrationResult | nul
   const passwordHash = await sha256(AUTO_MIGRATION_PASSWORD);
   await createGroup(AUTO_MIGRATION_GROUP, passwordHash);
   const result = await migrateLegacyToGroup(AUTO_MIGRATION_GROUP);
+  addKnownGroup(AUTO_MIGRATION_GROUP);
+  // If the user was already authed in the pre-multi-group app, drop them
+  // straight into the migrated group instead of forcing a fresh login.
+  if (isAuthed() && !localStorage.getItem("gm:group:v1")) {
+    setGroupId(AUTO_MIGRATION_GROUP);
+  }
   localStorage.setItem(AUTO_MIGRATION_FLAG, "done");
   return result;
+}
+
+const FEEDBACK_CONSOLIDATION_FLAG = "gm:feedback-global-v1";
+
+/**
+ * One-time consolidation: feedback used to live under each group's
+ * subcollection during the multi-group rollout — pull all those docs back
+ * to the top-level `/feedback` collection so it's shared across groups.
+ *
+ * Preserves doc ids (idempotent — re-runs would just re-set the same docs).
+ * Source subcollections are NOT deleted (safety net).
+ */
+export async function consolidateFeedbackOnce(groupIds: string[]): Promise<number> {
+  if (typeof window === "undefined") return 0;
+  if (localStorage.getItem(FEEDBACK_CONSOLIDATION_FLAG) === "done") return 0;
+
+  let moved = 0;
+  for (const gid of groupIds) {
+    try {
+      const snap = await getDocs(collection(db, "groups", gid, "feedback"));
+      if (snap.empty) continue;
+      const batch = writeBatch(db);
+      snap.docs.forEach((d) => {
+        batch.set(doc(db, "feedback", d.id), d.data());
+      });
+      await batch.commit();
+      moved += snap.size;
+    } catch {
+      // Per-group failures shouldn't block other groups.
+    }
+  }
+  localStorage.setItem(FEEDBACK_CONSOLIDATION_FLAG, "done");
+  return moved;
 }

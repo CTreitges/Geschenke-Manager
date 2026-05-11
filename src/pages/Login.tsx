@@ -3,7 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
 import { addKnownGroup, getGroupId, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
-import { joinGroupCF, setActiveGroup } from "@/lib/storage";
+import { joinGroupCF, listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
 
 export default function Login() {
@@ -64,27 +64,33 @@ export default function Login() {
     setBusy(true);
     try {
       const result = await signInWithGoogle();
+      // Sync the server-side membership list into local known-groups, so
+      // a fresh device picks up gruppen the user already belongs to.
+      let serverGroups: string[] = [];
+      try {
+        serverGroups = await listMyGroupsCF();
+        serverGroups.forEach((g) => addKnownGroup(g));
+      } catch (e) {
+        console.warn("listMyGroups failed:", e);
+      }
       if (result.linked) {
         toast.success("Mit Google verknüpft 🎉");
-        // Member-Docs der aktuellen UID gelten weiter — drop user straight
-        // into their group instead of forcing the password form.
-        const target = getGroupId() ?? knownGroups[0] ?? null;
-        if (target) {
-          setGroupId(target);
-          setAuthed(true);
-          setActiveGroup(target);
-          nav("/");
-          return;
-        }
       } else if (result.switched) {
-        toast.message("Mit Google angemeldet — Gruppen-Passwort nochmal eingeben", {
-          description: "Dein Google-Konto war schon mit Firebase verknüpft. Tritt der Gruppe einmal mit Passwort bei, damit dieses Konto Mitglied wird.",
-        });
-        // Old anonymous member docs unreachable — force re-join.
-        setAuthed(false);
+        toast.success("Mit Google angemeldet 🎉");
       } else {
         toast.success("Mit Google angemeldet");
       }
+      // Drop the user directly into their first available group.
+      const target =
+        getGroupId() ?? serverGroups[0] ?? knownGroups[0] ?? null;
+      if (target) {
+        setGroupId(target);
+        setAuthed(true);
+        setActiveGroup(target);
+        nav("/");
+        return;
+      }
+      // No groups yet → user falls back to the password form / create flow.
     } catch (err) {
       const code = (err as { code?: string })?.code ?? "";
       if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {

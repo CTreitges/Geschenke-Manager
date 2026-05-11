@@ -11,6 +11,14 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.3.2",
+    date: "2026-05-11",
+    highlights: [
+      "Auf neuen Geräten zeigt Google-Login automatisch deine bestehenden Gruppen — kein Passwort nötig",
+      "Voraussetzung: einmal nach dem Update mit Passwort beitreten, damit dein Account als Member registriert wird (geschieht automatisch beim nächsten Login)",
+    ],
+  },
+  {
     version: "v1.3.1",
     date: "2026-05-11",
     highlights: [

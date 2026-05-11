@@ -157,6 +157,7 @@ export const createGroup = onCall({ region: REGION }, async (request) => {
   });
   batch.set(db.doc(`groups/${groupId}/members/${uid}`), {
     joinedAt: Date.now(),
+    uid,
   });
   await batch.commit();
 
@@ -179,9 +180,26 @@ export const joinGroup = onCall({ region: REGION }, async (request) => {
 
   await db
     .doc(`groups/${groupId}/members/${uid}`)
-    .set({ joinedAt: Date.now() }, { merge: true });
+    .set({ joinedAt: Date.now(), uid }, { merge: true });
 
   return { ok: true };
+});
+
+// ─── listMyGroups ───────────────────────────────────────
+// Returns every groupId the caller is a member of. Uses a collectionGroup
+// query over members docs where the `uid` field equals the caller's uid.
+// Requires a single-field collection-group index on members.uid (defined
+// in firestore.indexes.json).
+export const listMyGroups = onCall({ region: REGION }, async (request) => {
+  const uid = requireAuth(request.auth);
+  const snap = await db
+    .collectionGroup("members")
+    .where("uid", "==", uid)
+    .get();
+  const groupIds = snap.docs
+    .map((d) => d.ref.parent.parent?.id)
+    .filter((x): x is string => !!x);
+  return { groupIds };
 });
 
 // ─── changePassword ─────────────────────────────────────

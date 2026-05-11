@@ -146,6 +146,14 @@ export default function Tutorial() {
                 unter <em>Gruppe → „Gruppe löschen"</em> — wird mit Passwort
                 bestätigt (siehe Schritt 9).
               </p>
+              <p>
+                <strong>Auf weiteren Geräten?</strong> Entweder Gruppen-ID +
+                Passwort nochmal eintippen — oder einmal{" "}
+                <strong>„Mit Google anmelden"</strong> auf dem Login-Screen,
+                dann tauchen deine Gruppen automatisch auf jedem Gerät mit
+                demselben Google-Konto auf, ohne erneute Passwort-Eingabe.
+                Anonyme Nutzung bleibt aber voll möglich.
+              </p>
             </>
           }
           mock={<MockGroupSwitcherDropdown />}
@@ -369,6 +377,14 @@ export default function Tutorial() {
               </p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
                 <li>
+                  <strong>Konto</strong> — zeigt, ob du gerade <em>anonym</em>{" "}
+                  (Gerät-gebunden) bist oder <em>mit Google</em> verknüpft
+                  (E-Mail wird angezeigt). Verknüpfen geht hier mit einem Klick;
+                  Abmelden ebenso. Mit Google synchronisiert sich deine
+                  Mitgliedschaft automatisch auf jedes Gerät mit demselben
+                  Konto.
+                </li>
+                <li>
                   <strong>Gruppe</strong> — aktive Gruppen-ID + <em>„Gruppe löschen"</em>
                   (rot). Letzteres entfernt Personen, Geschenke, Vorschläge, Wunschlisten
                   und Abstimmungen <strong>unwiderruflich</strong> vom Server. Bestätigung
@@ -440,9 +456,15 @@ export default function Tutorial() {
             🤝 Trust-Prinzip
           </div>
           <p className="text-[13px] leading-[1.55] text-stone-700 dark:text-stone-300">
-            Es gibt keine echten Accounts. Identität ist nur ein Label, das du selber wählst.
-            Jeder mit dem Gruppen-Passwort kann alles. Das ist <strong>so gewollt</strong> —
-            wir wollen kein Permission-System für Menschen, denen wir Geschenke kaufen.
+            Innerhalb einer Gruppe gibt es keine echten Rollen. Identität ist nur
+            ein Label, das du selber wählst. Jeder mit dem Gruppen-Passwort kann
+            alles. Das ist <strong>so gewollt</strong> — wir wollen kein
+            Permission-System für Menschen, denen wir Geschenke kaufen.
+          </p>
+          <p className="text-[12px] leading-[1.55] text-stone-600 dark:text-stone-400 mt-1.5">
+            Daten anderer Gruppen sind seit v1.2.0 backend-seitig abgeschottet —
+            ohne Passwort kommt da niemand rein. Google-Login ist optional und
+            verknüpft nur dein Gerät mit einem stabilen Konto.
           </p>
         </div>
       </div>

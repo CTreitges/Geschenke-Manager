@@ -97,9 +97,16 @@ export default function Login() {
         // Silent — user just changed their mind.
       } else if (code === "auth/operation-not-allowed") {
         toast.error("Google-Login ist im Firebase-Projekt noch nicht aktiviert");
+      } else if (code === "auth/popup-blocked") {
+        toast.error("Popup vom Browser blockiert — bitte erlauben und nochmal versuchen");
+      } else if (code === "auth/account-exists-with-different-credential") {
+        toast.error("Dieser Account existiert schon mit einem anderen Provider");
+      } else if (code === "auth/network-request-failed") {
+        toast.error("Keine Internet-Verbindung");
       } else {
-        console.error(err);
-        toast.error("Google-Login fehlgeschlagen");
+        console.error("Google sign-in failed:", err);
+        const msg = code || (err as Error)?.message || "unbekannt";
+        toast.error(`Google-Login fehlgeschlagen (${msg})`);
       }
     } finally {
       setBusy(false);

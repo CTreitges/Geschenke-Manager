@@ -5,8 +5,10 @@ import {
   linkWithPopup,
   onAuthStateChanged,
   signInAnonymously,
+  signInWithCredential,
   signInWithPopup,
   signOut,
+  type AuthError,
   type User,
 } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
@@ -94,17 +96,29 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
         email: result.user.email ?? null,
       };
     } catch (err) {
-      const code = (err as { code?: string })?.code ?? "";
-      // These two codes mean: the Google identity already belongs to
-      // another Firebase user — we can't link, we can only sign in as
-      // that user (losing the anonymous one).
+      const authErr = err as AuthError;
+      const code = authErr?.code ?? "";
+      // The Google identity already belongs to another Firebase user.
+      // Reuse the credential from the error to sign in directly — no
+      // second popup, no risk of browser popup blocking.
       if (
-        code !== "auth/credential-already-in-use" &&
-        code !== "auth/email-already-in-use"
+        code === "auth/credential-already-in-use" ||
+        code === "auth/email-already-in-use"
       ) {
+        const credential = GoogleAuthProvider.credentialFromError(authErr);
+        if (credential) {
+          const result = await signInWithCredential(auth, credential);
+          const switched = !!before && before.uid !== result.user.uid;
+          return {
+            linked: false,
+            switched,
+            email: result.user.email ?? null,
+          };
+        }
+        // No credential on the error — fall through to a fresh popup.
+      } else {
         throw err;
       }
-      // Fall through to plain sign-in.
     }
   }
 

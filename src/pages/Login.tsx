@@ -101,13 +101,13 @@ export default function Login() {
   }
 
   async function handleGoogleSignOut() {
-    if (!confirm("Mit Google abmelden? Du wirst dann wieder anonym auf diesem Gerät.")) return;
+    if (!confirm("Bei Google abmelden? Du wirst dann wieder anonym auf diesem Gerät.")) return;
     setBusy(true);
     try {
       setActiveGroup(null);
       setAuthed(false);
       await signOutAndReanon();
-      toast.success("Mit Google abgemeldet");
+      toast.success("Bei Google abgemeldet");
     } catch (err) {
       console.error(err);
       toast.error("Abmelden fehlgeschlagen");
@@ -162,7 +162,7 @@ export default function Login() {
               disabled={busy}
               className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 underline disabled:opacity-50"
             >
-              Mit Google abmelden
+              Bei Google abmelden
             </button>
           </div>
         </div>

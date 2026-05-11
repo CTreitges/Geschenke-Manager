@@ -88,7 +88,7 @@ export default function Settings() {
   const [deleteBusy, setDeleteBusy] = useState(false);
 
   async function signOutGoogle() {
-    if (!confirm("Mit Google abmelden? Du wirst danach wieder anonym auf diesem Gerät und musst der Gruppe ggf. mit Passwort erneut beitreten.")) {
+    if (!confirm("Bei Google abmelden? Du wirst danach wieder anonym auf diesem Gerät und musst der Gruppe ggf. mit Passwort erneut beitreten.")) {
       return;
     }
     setLinkingGoogle(true);
@@ -96,7 +96,7 @@ export default function Settings() {
       setActiveGroup(null);
       setAuthed(false);
       await signOutAndReanon();
-      toast.success("Mit Google abgemeldet");
+      toast.success("Bei Google abgemeldet");
       nav("/login");
     } catch (err) {
       console.error(err);

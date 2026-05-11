@@ -9,7 +9,7 @@ import {
   useKnownGroups,
 } from "@/lib/auth";
 import { setActiveGroup } from "@/lib/storage";
-import { Icon } from "./ui";
+import { Dialog, Icon } from "./ui";
 import { cn } from "@/lib/cn";
 
 export function GroupSwitcher() {
@@ -45,89 +45,86 @@ export function GroupSwitcher() {
   }
 
   return (
-    <div className="relative">
+    <>
       <button
-        onClick={() => setOpen((o) => !o)}
-        className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-2.5 pr-2 py-1.5 inline-flex items-center gap-1.5 shadow-sm active:scale-[0.98]"
+        onClick={() => setOpen(true)}
+        className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-2.5 pr-2 py-1.5 inline-flex items-center gap-1.5 shadow-sm active:scale-[0.98] max-w-[120px]"
         aria-label="Gruppe wechseln"
       >
         <Icon.users size={14} />
-        <span className="text-xs font-semibold text-stone-700 dark:text-stone-200 max-w-[100px] truncate">
+        <span className="text-xs font-semibold text-stone-700 dark:text-stone-200 truncate">
           {activeId ?? "—"}
         </span>
-        <Icon.chev size={12} className="rotate-90 text-stone-400" />
+        <Icon.chev size={12} className="rotate-90 text-stone-400 shrink-0" />
       </button>
 
-      {open && (
-        <>
-          <div
-            className="fixed inset-0 z-40"
-            onClick={() => setOpen(false)}
-            aria-hidden="true"
-          />
-          <div className="absolute top-full right-0 mt-1.5 z-50 w-60 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 shadow-xl overflow-hidden">
-            <div className="px-3 pt-2.5 pb-1.5 text-[10px] font-bold tracking-[0.05em] uppercase text-stone-400">
-              Deine Gruppen
+      <Dialog open={open} onClose={() => setOpen(false)} title="Gruppen">
+        <div className="space-y-1">
+          {known.length === 0 ? (
+            <div className="px-1 py-2 text-sm text-stone-500 dark:text-stone-400">
+              Keine gespeicherten Gruppen auf diesem Gerät.
             </div>
-            {known.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-stone-500 dark:text-stone-400">
-                Keine gespeicherten Gruppen.
-              </div>
-            ) : (
-              known.map((g) => {
-                const active = g === activeId;
-                return (
-                  <div
-                    key={g}
-                    onClick={() => pick(g)}
+          ) : (
+            known.map((g) => {
+              const active = g === activeId;
+              return (
+                <div
+                  key={g}
+                  className={cn(
+                    "flex items-center gap-2.5 px-3 py-2.5 rounded-xl cursor-pointer active:scale-[0.99]",
+                    active
+                      ? "bg-violet-100 dark:bg-violet-950/50 border border-violet-300 dark:border-violet-800"
+                      : "bg-stone-50 dark:bg-stone-800/60 border border-[#F0EBE6] dark:border-stone-700",
+                  )}
+                  onClick={() => pick(g)}
+                >
+                  <Icon.users
+                    size={16}
+                    className={
+                      active
+                        ? "text-violet-700 dark:text-violet-300"
+                        : "text-stone-400"
+                    }
+                  />
+                  <span
                     className={cn(
-                      "px-3 py-2 flex items-center gap-2 cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-700/40",
-                      active && "bg-violet-50 dark:bg-violet-950/40",
+                      "flex-1 text-[15px] truncate",
+                      active
+                        ? "font-bold text-stone-900 dark:text-stone-50"
+                        : "font-semibold text-stone-700 dark:text-stone-200",
                     )}
                   >
-                    {active ? (
-                      <Icon.check
-                        size={14}
-                        className="text-violet-700 dark:text-violet-300 shrink-0"
-                      />
-                    ) : (
-                      <span className="w-3.5 shrink-0" />
-                    )}
-                    <span
-                      className={cn(
-                        "flex-1 text-sm truncate",
-                        active
-                          ? "font-bold text-stone-900 dark:text-stone-50"
-                          : "text-stone-700 dark:text-stone-200",
-                      )}
-                    >
-                      {g}
+                    {g}
+                  </span>
+                  {active && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded-md bg-white/60 dark:bg-stone-900/40">
+                      aktiv
                     </span>
-                    <button
-                      onClick={(e) => remove(g, e)}
-                      className="text-stone-400 hover:text-red-500 p-1 shrink-0"
-                      aria-label={`Gruppe ${g} entfernen`}
-                      title="Aus Liste entfernen"
-                    >
-                      <Icon.trash size={14} />
-                    </button>
-                  </div>
-                );
-              })
-            )}
-            <div className="border-t border-stone-100 dark:border-stone-700" />
-            <button
-              onClick={() => {
-                setOpen(false);
-                nav("/login");
-              }}
-              className="w-full px-3 py-2.5 flex items-center gap-2 text-sm font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40"
-            >
-              <Icon.plus size={14} /> Gruppe hinzufügen
-            </button>
-          </div>
-        </>
-      )}
-    </div>
+                  )}
+                  <button
+                    onClick={(e) => remove(g, e)}
+                    className="text-stone-400 hover:text-red-500 p-1.5 -mr-1 shrink-0"
+                    aria-label={`Gruppe ${g} entfernen`}
+                    title="Aus Liste entfernen"
+                  >
+                    <Icon.trash size={16} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+
+          <button
+            onClick={() => {
+              setOpen(false);
+              nav("/login");
+            }}
+            className="w-full mt-2 flex items-center justify-center gap-2 px-3 py-3 rounded-xl border-2 border-dashed border-violet-300 dark:border-violet-800 text-violet-700 dark:text-violet-300 font-semibold text-[14px] hover:bg-violet-50 dark:hover:bg-violet-950/30 active:scale-[0.99]"
+          >
+            <Icon.plus size={16} /> Gruppe hinzufügen
+          </button>
+        </div>
+      </Dialog>
+    </>
   );
 }

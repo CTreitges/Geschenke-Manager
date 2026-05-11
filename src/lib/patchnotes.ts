@@ -11,6 +11,14 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.3.3",
+    date: "2026-05-11",
+    highlights: [
+      "Tutorial aktualisiert: Google-Login und der neue Konto-Bereich in den Einstellungen sind drin",
+      "Bottom-Sheet (Gruppen-Wechsler) fix — saß auf Mobile am falschen Rand",
+    ],
+  },
+  {
     version: "v1.3.2",
     date: "2026-05-11",
     highlights: [

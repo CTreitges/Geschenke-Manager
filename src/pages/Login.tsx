@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
-import { addKnownGroup, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
-import { signInWithGoogle } from "@/lib/firebase";
+import { addKnownGroup, getGroupId, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
+import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import { joinGroupCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -15,6 +15,8 @@ export default function Login() {
   const nav = useNavigate();
   const knownGroups = useKnownGroups();
   const showSaved = isAuthed() && knownGroups.length > 0;
+  const fbUser = useFirebaseUser();
+  const googleEmail = fbUser && !fbUser.isAnonymous ? fbUser.email ?? "verknüpft" : null;
 
   useEffect(() => {
     document.title = "Geschenke-Manager — Login";
@@ -64,9 +66,13 @@ export default function Login() {
       const result = await signInWithGoogle();
       if (result.linked) {
         toast.success("Mit Google verknüpft 🎉");
-        // Member-Docs der aktuellen UID gelten weiter — direkt durchwinken,
-        // falls eine Gruppe schon aktiv ist.
-        if (isAuthed() && knownGroups.length > 0) {
+        // Member-Docs der aktuellen UID gelten weiter — drop user straight
+        // into their group instead of forcing the password form.
+        const target = getGroupId() ?? knownGroups[0] ?? null;
+        if (target) {
+          setGroupId(target);
+          setAuthed(true);
+          setActiveGroup(target);
           nav("/");
           return;
         }
@@ -89,6 +95,22 @@ export default function Login() {
         console.error(err);
         toast.error("Google-Login fehlgeschlagen");
       }
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleGoogleSignOut() {
+    if (!confirm("Mit Google abmelden? Du wirst dann wieder anonym auf diesem Gerät.")) return;
+    setBusy(true);
+    try {
+      setActiveGroup(null);
+      setAuthed(false);
+      await signOutAndReanon();
+      toast.success("Mit Google abgemeldet");
+    } catch (err) {
+      console.error(err);
+      toast.error("Abmelden fehlgeschlagen");
     } finally {
       setBusy(false);
     }
@@ -121,15 +143,40 @@ export default function Login() {
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={handleGoogleSignIn}
-        disabled={busy}
-        className="mb-5 w-full inline-flex items-center justify-center gap-2.5 py-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-50 font-semibold text-[14px] active:scale-[0.99] disabled:opacity-50 transition-transform"
-      >
-        <GoogleLogo />
-        Mit Google anmelden
-      </button>
+      {googleEmail ? (
+        <div className="mb-5">
+          <div className="w-full inline-flex items-center gap-2.5 py-3 px-3 rounded-2xl border border-emerald-300 dark:border-emerald-700 bg-emerald-50/70 dark:bg-emerald-950/30 text-stone-900 dark:text-stone-50">
+            <GoogleLogo />
+            <div className="flex-1 min-w-0 text-left">
+              <div className="text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-400">
+                Mit Google angemeldet
+              </div>
+              <div className="text-[13px] font-semibold truncate">{googleEmail}</div>
+            </div>
+            <Icon.check size={18} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+          </div>
+          <div className="text-center mt-2">
+            <button
+              type="button"
+              onClick={handleGoogleSignOut}
+              disabled={busy}
+              className="text-[11px] font-semibold text-stone-500 dark:text-stone-400 underline disabled:opacity-50"
+            >
+              Mit Google abmelden
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={busy}
+          className="mb-5 w-full inline-flex items-center justify-center gap-2.5 py-3 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-900 dark:text-stone-50 font-semibold text-[14px] active:scale-[0.99] disabled:opacity-50 transition-transform"
+        >
+          <GoogleLogo />
+          Mit Google anmelden
+        </button>
+      )}
 
       {showSaved && (
         <div className="mb-5">

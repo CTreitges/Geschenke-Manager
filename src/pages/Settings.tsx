@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import { changePasswordCF, deleteGroupCF, setActiveGroup, toggleParticipant, updateSettings } from "@/lib/storage";
-import { signInWithGoogle, useFirebaseUser } from "@/lib/firebase";
+import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import { pickColor } from "@/lib/colors";
 import { daysUntilBirthday } from "@/lib/birthdays";
 import {
@@ -86,6 +86,25 @@ export default function Settings() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePw, setDeletePw] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
+
+  async function signOutGoogle() {
+    if (!confirm("Mit Google abmelden? Du wirst danach wieder anonym auf diesem Gerät und musst der Gruppe ggf. mit Passwort erneut beitreten.")) {
+      return;
+    }
+    setLinkingGoogle(true);
+    try {
+      setActiveGroup(null);
+      setAuthed(false);
+      await signOutAndReanon();
+      toast.success("Mit Google abgemeldet");
+      nav("/login");
+    } catch (err) {
+      console.error(err);
+      toast.error("Abmelden fehlgeschlagen");
+    } finally {
+      setLinkingGoogle(false);
+    }
+  }
 
   async function linkGoogle() {
     setLinkingGoogle(true);
@@ -173,7 +192,15 @@ export default function Settings() {
             }
             icon={<Icon.lock />}
           >
-            {fbUser?.isAnonymous !== false && (
+            {fbUser?.isAnonymous === false ? (
+              <button
+                onClick={signOutGoogle}
+                disabled={linkingGoogle}
+                className="text-xs font-semibold text-red-600 dark:text-red-300 px-2.5 py-1.5 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-50"
+              >
+                {linkingGoogle ? "Melde ab…" : "Abmelden"}
+              </button>
+            ) : (
               <button
                 onClick={linkGoogle}
                 disabled={linkingGoogle}

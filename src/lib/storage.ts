@@ -308,6 +308,10 @@ const deleteGroupCallable = httpsCallable<DeletePayload, CallableResult>(
   functions,
   "deleteGroup",
 );
+const listMyGroupsCallable = httpsCallable<
+  Record<string, never>,
+  { groupIds: ID[] }
+>(functions, "listMyGroups");
 
 export async function joinGroupCF(groupId: ID, password: string): Promise<void> {
   await authReady;
@@ -337,6 +341,12 @@ export async function deleteGroupCF(
 ): Promise<void> {
   await authReady;
   await deleteGroupCallable({ groupId, password });
+}
+
+export async function listMyGroupsCF(): Promise<ID[]> {
+  await authReady;
+  const result = await listMyGroupsCallable({});
+  return result.data.groupIds ?? [];
 }
 
 // ─── Membership ─────────────────────────────────────────

@@ -11,6 +11,15 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.3.1",
+    date: "2026-05-11",
+    highlights: [
+      "Google-Anmeldung sichtbar als grüner Status mit Mail-Adresse",
+      "Mit-Google-abmelden-Knopf im Login-Screen und in Einstellungen → Konto",
+      "Nach Google-Login wirst du direkt in deine bestehende Gruppe geführt",
+    ],
+  },
+  {
     version: "v1.3.0",
     date: "2026-05-11",
     highlights: [

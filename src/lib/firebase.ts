@@ -6,6 +6,7 @@ import {
   onAuthStateChanged,
   signInAnonymously,
   signInWithPopup,
+  signOut,
   type User,
 } from "firebase/auth";
 import { initializeFirestore } from "firebase/firestore";
@@ -114,6 +115,17 @@ export async function signInWithGoogle(): Promise<GoogleSignInResult> {
     switched,
     email: result.user.email ?? null,
   };
+}
+
+/** Signs out the current Firebase user (Google or anonymous) and
+ *  immediately spins up a fresh anonymous session so the app keeps
+ *  functioning. The caller should also reset group state + nav to login. */
+export async function signOutAndReanon(): Promise<void> {
+  try {
+    await signOut(auth);
+  } finally {
+    await signInAnonymously(auth);
+  }
 }
 
 /** React hook over Firebase auth state. Returns the currently signed-in

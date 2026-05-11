@@ -1,4 +1,5 @@
 import { forwardRef, type ButtonHTMLAttributes, type CSSProperties, type InputHTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
 import type { Person } from "@/lib/types";
 import { initials } from "@/lib/colors";
@@ -244,9 +245,13 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
 Input.displayName = "Input";
 
 // ── Bottom-sheet Dialog ────────────────────────────────────────
+// Rendered via portal into document.body so it is NEVER trapped inside
+// an ancestor stacking context (e.g. the sticky header uses
+// backdrop-blur, which scopes `position: fixed` to the header otherwise).
 export function Dialog({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title?: string; children: ReactNode; footer?: ReactNode }) {
   if (!open) return null;
-  return (
+  if (typeof document === "undefined") return null;
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center animate-fadeIn">
       <div onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div
@@ -270,7 +275,8 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
         <div className="px-5 pb-4 flex-1 overflow-auto">{children}</div>
         {footer && <div className="px-5 pt-2.5 border-t border-stone-200 dark:border-stone-800">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

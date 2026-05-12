@@ -120,6 +120,27 @@ interface RedirectState {
   uidBefore: string | null;
 }
 
+// localStorage statt sessionStorage: iOS Safari löscht sessionStorage bei
+// Cross-Origin-Redirects (ITP). Da signInWithRedirect zu
+// {authDomain}/__/auth/handler navigiert (firebaseapp.com vs web.app =
+// cross-origin) und zurück, würde sessionStorage zwischendurch verloren
+// gehen — und wir hätten keinen State um Post-Redirect das richtige zu tun.
+function readRedirectState(): RedirectState | null {
+  const raw = localStorage.getItem(REDIRECT_STATE_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as RedirectState;
+  } catch {
+    return null;
+  }
+}
+function writeRedirectState(state: RedirectState) {
+  localStorage.setItem(REDIRECT_STATE_KEY, JSON.stringify(state));
+}
+function clearRedirectState() {
+  localStorage.removeItem(REDIRECT_STATE_KEY);
+}
+
 /**
  * Starts the Google sign-in flow.
  *
@@ -139,7 +160,8 @@ export async function signInWithGoogle(
       wasAnon: !!before?.isAnonymous,
       uidBefore: before?.uid ?? null,
     };
-    sessionStorage.setItem(REDIRECT_STATE_KEY, JSON.stringify(state));
+    writeRedirectState(state);
+    console.info("[auth] standalone-pwa → redirecting to Google", state);
     if (before?.isAnonymous) {
       await linkWithRedirect(before, googleProvider);
     } else {
@@ -203,36 +225,37 @@ export async function signInWithGoogle(
 
 /**
  * Consumes the result of a previously-triggered signInWithRedirect /
- * linkWithRedirect. Returns null if no redirect was in flight (normal
- * page load) or if the sessionStorage state has been cleared already.
+ * linkWithRedirect. Robust gegen verloren gegangenen localStorage-State:
+ * ruft getRedirectResult IMMER auf — Firebase Auth speichert das Ergebnis
+ * intern in IndexedDB und gibt es uns auch ohne Pre-Redirect-State zurück.
  *
- * Handles the credential-already-in-use case by falling back to a direct
- * signInWithCredential, mirroring the popup branch above.
+ * Wenn der State noch da ist, nutzen wir ihn für source + switched-Erkennung.
+ * Wenn nicht (iOS Safari ITP hat ihn beim Cross-Origin-Redirect gelöscht),
+ * fallen wir auf source="login" und switched=false zurück — der User landet
+ * dann sauber in seiner ersten Gruppe.
  */
 export async function consumeGoogleRedirectResult(): Promise<GoogleRedirectOutcome | null> {
-  const stateRaw = sessionStorage.getItem(REDIRECT_STATE_KEY);
-  if (!stateRaw) return null;
-  let state: RedirectState;
-  try {
-    state = JSON.parse(stateRaw) as RedirectState;
-  } catch {
-    sessionStorage.removeItem(REDIRECT_STATE_KEY);
-    return null;
-  }
-  sessionStorage.removeItem(REDIRECT_STATE_KEY);
+  const state = readRedirectState();
+  clearRedirectState();
+  console.info("[auth] consumeGoogleRedirectResult: state=", state);
 
   try {
     const result = await getRedirectResult(auth);
-    if (!result) return null;
+    if (!result) {
+      console.info("[auth] no redirect result");
+      return null;
+    }
     const linked = result.operationType === "link";
     const switched =
-      !linked && !!state.uidBefore && result.user.uid !== state.uidBefore;
-    return {
+      !linked && !!state?.uidBefore && result.user.uid !== state.uidBefore;
+    const outcome = {
       linked,
       switched,
       email: result.user.email ?? null,
-      source: state.source,
-    };
+      source: state?.source ?? "login",
+    } as const;
+    console.info("[auth] redirect result", outcome);
+    return outcome;
   } catch (err) {
     const authErr = err as AuthError;
     const code = authErr?.code ?? "";
@@ -244,12 +267,12 @@ export async function consumeGoogleRedirectResult(): Promise<GoogleRedirectOutco
       if (credential) {
         const signInResult = await signInWithCredential(auth, credential);
         const switched =
-          !!state.uidBefore && signInResult.user.uid !== state.uidBefore;
+          !!state?.uidBefore && signInResult.user.uid !== state.uidBefore;
         return {
           linked: false,
           switched,
           email: signInResult.user.email ?? null,
-          source: state.source,
+          source: state?.source ?? "login",
         };
       }
     }

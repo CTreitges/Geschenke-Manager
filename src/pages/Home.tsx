@@ -172,9 +172,37 @@ export default function Home() {
         )}
       </div>
 
+      <div className="px-4 mt-2">
+        <PastGiftsLink count={gifts.filter((g) => g.status === "received").length} />
+      </div>
+
       <FAB onClick={() => setAddOpen(true)} />
       <AddManualDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
+  );
+}
+
+function PastGiftsLink({ count }: { count: number }) {
+  const nav = useNavigate();
+  if (count === 0) return null;
+  return (
+    <button
+      onClick={() => nav("/past")}
+      className="w-full px-3.5 py-3 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] bg-white dark:bg-stone-800 flex items-center gap-3 active:scale-[0.99] transition-transform"
+    >
+      <div className="w-9 h-9 rounded-[10px] bg-stone-100 dark:bg-stone-700 flex items-center justify-center text-base">
+        📦
+      </div>
+      <div className="flex-1 text-left">
+        <div className="text-[14px] font-bold text-stone-900 dark:text-stone-50">
+          Alte Geschenke
+        </div>
+        <div className="text-[12px] text-stone-500 dark:text-stone-400">
+          {count} {count === 1 ? "erhaltenes Geschenk" : "erhaltene Geschenke"} ansehen
+        </div>
+      </div>
+      <Icon.chev />
+    </button>
   );
 }
 
@@ -244,29 +272,44 @@ function StackCard({
 }
 
 function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { persons, settings } = useStore();
+  const { persons, settings, gifts } = useStore();
   const [personId, setPersonId] = useState("");
   const [year, setYear] = useState(new Date().getFullYear());
+  const [occasion, setOccasion] = useState("Geburtstag");
+  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [customDate, setCustomDate] = useState("");
 
   function submit() {
     if (!personId) return;
     const p = persons.find((x) => x.id === personId);
     if (!p) return;
+    const occ = occasion.trim() || "Geburtstag";
+    const finalDate = useCustomDate && customDate ? customDate : undefined;
+    // Carry over the last gift's group-chat link for the same person+occasion
+    const lastSameKind = [...gifts]
+      .filter((g) => g.personId === personId && (g.occasion ?? "Geburtstag") === occ)
+      .sort((a, b) => b.enteredStackAt - a.enteredStackAt)[0];
     addGift({
       personId,
-      year,
+      year: finalDate ? +finalDate.slice(0, 4) || year : year,
       status: "open",
       budgetPerPerson: settings.defaultBudget,
       manuallyAdded: true,
+      occasion: occ,
+      customDate: finalDate,
+      whatsappLink: lastSameKind?.whatsappLink,
     });
     toast.success(`${p.name} zum Stack hinzugefügt`);
     setPersonId("");
+    setOccasion("Geburtstag");
+    setUseCustomDate(false);
+    setCustomDate("");
     onClose();
   }
 
   return (
     <Dialog open={open} onClose={onClose} title="Geschenk manuell hinzufügen">
-      <div className="space-y-3">
+      <div className="space-y-3 px-5 pb-2">
         <div>
           <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
             Person
@@ -274,7 +317,7 @@ function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void
           <select
             value={personId}
             onChange={(e) => setPersonId(e.target.value)}
-            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-[15px]"
+            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
           >
             <option value="">— wählen —</option>
             {persons.map((p) => (
@@ -284,18 +327,61 @@ function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void
         </div>
         <div>
           <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
+            Anlass
+          </label>
+          <input
+            type="text"
+            value={occasion}
+            onChange={(e) => setOccasion(e.target.value)}
+            placeholder="z.B. Geburtstag, Reise, Hochzeit"
+            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
+          />
+        </div>
+        <div>
+          <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
             Jahr
           </label>
           <input
             type="number"
             value={year}
             onChange={(e) => setYear(+e.target.value)}
-            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-[15px]"
+            disabled={useCustomDate}
+            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 disabled:opacity-50"
           />
         </div>
+        <label className="flex items-start gap-3 cursor-pointer select-none py-1">
+          <input
+            type="checkbox"
+            checked={useCustomDate}
+            onChange={(e) => setUseCustomDate(e.target.checked)}
+            className="mt-0.5 w-4 h-4 accent-violet-600"
+          />
+          <span className="text-[14px] text-stone-700 dark:text-stone-200">
+            Anderes Datum (statt Geburtstag)
+          </span>
+        </label>
+        {useCustomDate && (
+          <div>
+            <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
+              Datum
+            </label>
+            <input
+              type="date"
+              value={customDate}
+              onChange={(e) => setCustomDate(e.target.value)}
+              className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
+            />
+          </div>
+        )}
         <div className="flex gap-2 pt-3">
           <Button variant="secondary" onClick={onClose} className="flex-1">Abbrechen</Button>
-          <Button onClick={submit} disabled={!personId} className="flex-1">Hinzufügen</Button>
+          <Button
+            onClick={submit}
+            disabled={!personId || (useCustomDate && !customDate)}
+            className="flex-1"
+          >
+            Hinzufügen
+          </Button>
         </div>
       </div>
     </Dialog>

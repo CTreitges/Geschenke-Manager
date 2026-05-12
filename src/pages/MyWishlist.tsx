@@ -177,26 +177,18 @@ function Adder({ personId }: { personId: string }) {
   return (
     <Card className="p-3">
       <div className="flex items-center gap-2">
-        <span className="text-lg pl-1">✨</span>
+        <span className="text-lg pl-1 shrink-0">✨</span>
         <input
           placeholder="Was wünschst du dir?"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
-          className="flex-1 px-1 py-2.5 text-[15px] border-none outline-none bg-transparent text-stone-900 dark:text-stone-50"
+          className="flex-1 min-w-0 px-1 py-2.5 border-none outline-none bg-transparent text-stone-900 dark:text-stone-50"
         />
-        {!showExtra && text && (
-          <button
-            onClick={() => setShowExtra(true)}
-            className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-1"
-          >
-            + Details
-          </button>
-        )}
         <button
           onClick={add}
           disabled={!text.trim()}
-          className="rounded-[10px] w-9 h-9 flex items-center justify-center text-white"
+          className="rounded-[10px] w-9 h-9 shrink-0 flex items-center justify-center text-white"
           style={{
             background: text.trim()
               ? "linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%)"
@@ -206,20 +198,28 @@ function Adder({ personId }: { personId: string }) {
           <Icon.plus size={18} />
         </button>
       </div>
+      {!showExtra && text && (
+        <button
+          onClick={() => setShowExtra(true)}
+          className="block w-full mt-1 py-1 pl-7 text-left text-[12px] font-semibold text-violet-700 dark:text-violet-400"
+        >
+          + Link / Preis
+        </button>
+      )}
       {showExtra && (
         <div className="flex gap-2 mt-2.5 pl-7">
           <Input
             placeholder="Link (optional)"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="flex-[2] py-2 text-[13px]"
+            className="flex-[2] py-2"
           />
           <Input
             placeholder="€"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             type="number"
-            className="flex-1 py-2 text-[13px]"
+            className="flex-1 py-2"
           />
         </div>
       )}

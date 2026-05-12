@@ -11,6 +11,34 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.5.0",
+    date: "2026-05-12",
+    highlights: [
+      "Neu: Anlass + alternatives Datum pro Geschenk — z.B. Reise, Hochzeit, Jubiläum (Default bleibt Geburtstag)",
+      "Neu: Gruppen-Chat-Link (WhatsApp o.ä.) pro Geschenk, wird beim nächsten Jahr automatisch übernommen",
+      "Neu: Nach Geschenk-erhalten direkter Dialog Wer-hat-was-bezahlt — pro Vorschlag Dropdown aus den Teilnehmern",
+      "Neu: Bezahlt-Übersicht oben im Geschenk-Detail mit Summe pro Person",
+      "Neu: Alte-Geschenke-Übersicht unter dem Stack — alle erhaltenen Geschenke in chronologischer Reihenfolge",
+      "Auswahl für Gesamtsumme jetzt deutlich sichtbar mit Pill „Für Gesamtsumme ausgewählt“",
+      "Profil-Banner oben rechts führt direkt zum eigenen Profil",
+      "Post-Tutorial-Hinweis erinnert an die Test-Mail (Kein-Spam-Trainings)",
+      "Mobile-Fix: Plus-Button rutscht nicht mehr aus dem Bildschirm, kein Auto-Zoom beim Tippen",
+      "Dark-Mode-Toggle funktioniert wieder zuverlässig",
+    ],
+  },
+  {
+    version: "v1.4.0",
+    date: "2026-05-12",
+    highlights: [
+      "Neu: Geburtstags-Erinnerungen per Mail — 60 / 30 / 14 Tage vor dem Geburtstag",
+      "Test-Mail-Knopf im Profil — einmal an dich schicken und in deinem Postfach als Kein-Spam markieren, damit echte Erinnerungen später sauber ankommen",
+      "Folge-Erinnerungen entfallen automatisch, sobald die Person eine Wunschliste hat",
+      "Klick im Mail-Link führt ohne Passwort direkt in die Wunschliste (7 Tage gültig)",
+      "Unsubscribe-Link in jeder Mail; Toggle pro Person in den Profil-Einstellungen",
+      "E-Mail-Adresse pro Person in Profil-Tab + beim Anlegen einer neuen Person",
+    ],
+  },
+  {
     version: "v1.3.3",
     date: "2026-05-11",
     highlights: [

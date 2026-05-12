@@ -5,6 +5,10 @@ export interface Person {
   name: string;
   birthday: string; // "MM-DD" or "YYYY-MM-DD" (year ignored for birthday calc)
   email?: string;
+  /** false = explicitly unsubscribed via the email link. undefined/true = receives reminders. */
+  emailOptIn?: boolean;
+  /** Per-stage-per-year markers, e.g. "reminder-60d-2026": <timestamp>. Prevents double-send. */
+  notificationsSent?: Record<string, number>;
   color: string; // avatar background, hex
   createdAt: number;
 }
@@ -24,6 +28,12 @@ export interface Gift {
   participantIds: ID[];
   /** Suggestions the group has decided to actually buy. Editable after a poll closes. */
   selectedSuggestionIds?: ID[];
+  /** Description / event type, e.g. "Geburtstag", "Reise", "Hochzeit". Default "Geburtstag" if absent. */
+  occasion?: string;
+  /** Optional custom date "YYYY-MM-DD" — overrides person's birthday for stack-sorting + display. */
+  customDate?: string;
+  /** Shared WhatsApp / chat group invite link for participants of this gift. */
+  whatsappLink?: string;
 }
 
 export interface Suggestion {
@@ -36,6 +46,8 @@ export interface Suggestion {
   createdAt: number;
   /** Set if this suggestion was adopted from a wishlist item — links back to it. */
   fromWishItemId?: ID;
+  /** Person who paid for this suggestion (only meaningful after gift.status === "received"). */
+  paidBy?: ID;
 }
 
 export interface WishlistItem {

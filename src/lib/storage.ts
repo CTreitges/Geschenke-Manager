@@ -313,6 +313,16 @@ const listMyGroupsCallable = httpsCallable<
   { groupIds: ID[] }
 >(functions, "listMyGroups");
 
+const consumeMagicTokenCallable = httpsCallable<
+  { token: string },
+  { groupId: ID; personId: ID }
+>(functions, "consumeMagicToken");
+
+const sendTestMailCallable = httpsCallable<
+  { groupId: ID; personId: ID },
+  { ok: boolean }
+>(functions, "sendTestMail");
+
 export async function joinGroupCF(groupId: ID, password: string): Promise<void> {
   await authReady;
   await joinGroupCallable({ groupId, password });
@@ -347,6 +357,20 @@ export async function listMyGroupsCF(): Promise<ID[]> {
   await authReady;
   const result = await listMyGroupsCallable({});
   return result.data.groupIds ?? [];
+}
+
+export async function consumeMagicTokenCF(
+  token: string,
+): Promise<{ groupId: ID; personId: ID }> {
+  await authReady;
+  const result = await consumeMagicTokenCallable({ token });
+  return result.data;
+}
+
+export async function sendTestMailCF(personId: ID): Promise<void> {
+  await authReady;
+  if (!state.activeGroupId) throw new Error("No active group");
+  await sendTestMailCallable({ groupId: state.activeGroupId, personId });
 }
 
 // ─── Membership ─────────────────────────────────────────

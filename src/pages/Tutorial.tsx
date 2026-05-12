@@ -203,6 +203,22 @@ export default function Tutorial() {
                 Geschenke + Wünsche). Wenn du dich selbst löschst, wird deine Identität
                 automatisch zurückgesetzt.
               </p>
+              <p>
+                <strong>E-Mail (optional)</strong> — wenn hinterlegt, bekommt die Person
+                automatisch eine Erinnerung <strong>60 / 30 / 14 Tage</strong> vor ihrem
+                Geburtstag, eine Wunschliste zu schreiben. Ein Klick auf den Link in der Mail
+                führt sie ohne Passwort direkt rein. Abbestellen ist in jeder Mail möglich,
+                und die Folge-Erinnerungen entfallen sowieso, sobald die Wunschliste etwas
+                enthält.
+              </p>
+              <p>
+                <strong>🧪 Einmal Test-Mail schicken</strong> — direkt nach dem Eintragen der
+                E-Mail im <em>Profil</em>-Tab den Knopf <em>„Test-Mail an … senden"</em>{" "}
+                klicken. Die Person bekommt eine echte Mail (mit funktionierendem Link)
+                und sollte sie kurz im Posteingang öffnen und als <strong>„Kein Spam"</strong>{" "}
+                markieren — sonst landen die späteren Geburtstags-Erinnerungen womöglich
+                im Junk-Ordner. Einmal markieren reicht, die folgenden kommen dann sauber rein.
+              </p>
             </>
           }
           mock={<MockPeopleGrid />}
@@ -228,6 +244,12 @@ export default function Tutorial() {
                 Manuell hinzufügen geht über das <strong>+</strong> rechts unten — z.B. um
                 ein vergessenes Vorjahres-Geschenk nachzutragen oder ein zweites Geschenk
                 im selben Jahr.
+              </p>
+              <p>
+                Unter dem Stack: Button <strong>📦 Alte Geschenke</strong> mit allen
+                erhaltenen Geschenken in chronologischer Reihenfolge. Pro Eintrag siehst
+                du den Anlass, das Datum und die Gesamtsumme — Klick zeigt das volle
+                Detail inkl. <em>wer was bezahlt hat</em>.
               </p>
             </>
           }
@@ -273,8 +295,13 @@ export default function Tutorial() {
                 In der Übersicht auf eine Karte tippen → Geschenk-Detail mit personalisiertem
                 Banner (in der Avatar-Farbe der Person).
               </p>
-              <p>Vier Sektionen, von oben nach unten:</p>
+              <p>Sektionen, von oben nach unten:</p>
               <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
+                <li>
+                  <strong>💬 Gruppen-Link</strong> — z.B. WhatsApp-Einladung pro Geschenk
+                  hinterlegen, alle finden direkt rein. Wird beim nächsten Jahr für die
+                  gleiche Person + gleichen Anlass automatisch übernommen.
+                </li>
                 <li>
                   <strong>Teilnehmer</strong> — wer macht mit. Chip antippen = ein/aus.
                   Bei vielen Klick auf <em>„Alle hinzufügen"</em> rechts. Direkt drunter
@@ -290,8 +317,9 @@ export default function Tutorial() {
                 </li>
                 <li>
                   <strong>Vorschläge</strong> — Ideen sammeln mit Titel, optional Link/Preis.
-                  Pro Karte: <strong>Lila Checkbox links</strong> für die Auswahl,{" "}
-                  <strong>✏</strong> zum Bearbeiten von Titel/Link/Preis,{" "}
+                  Pro Karte: <strong>Lila Checkbox links</strong> für die Auswahl
+                  (sichtbar für alle als <em>„✓ Für Gesamtsumme ausgewählt"</em>),{" "}
+                  <strong>✏</strong> zum Bearbeiten,{" "}
                   <strong>✕</strong> zum Löschen.
                 </li>
                 <li>
@@ -299,8 +327,21 @@ export default function Tutorial() {
                 </li>
               </ul>
               <p>
+                <strong>📅 Anlass + Datum</strong> — beim Anlegen kannst du frei eingeben:
+                z.B. <em>„Reise"</em>, <em>„Hochzeit"</em>, <em>„Jubiläum"</em>. Default ist{" "}
+                <em>Geburtstag</em>. Per Checkbox <em>„Anderes Datum"</em> kannst du den
+                Stack-Termin vom Person-Geburtstag entkoppeln.
+              </p>
+              <p>
+                <strong>💶 Nach „Geschenk erhalten"</strong> öffnet sich automatisch der
+                Dialog <em>„Wer hat was bezahlt?"</em>. Pro Vorschlag wählst du den
+                Bezahler aus der Teilnehmer-Liste — die Zusammenfassung (wer zahlt wie
+                viel) bleibt oben im Geschenk-Detail sichtbar und kann jederzeit
+                nachbearbeitet werden.
+              </p>
+              <p>
                 Ganz unten: roter <em>Geschenk löschen</em>-Knopf, falls ihr es doch nicht
-                verfolgen wollt.
+                verfolgen wollt — funktioniert auch für vergangene Geschenke.
               </p>
             </>
           }

@@ -21,7 +21,7 @@ import { pickColor } from "@/lib/colors";
 import { useIdentity } from "@/lib/auth";
 import { formatRelativeDate } from "@/lib/dates";
 import { toast } from "sonner";
-import type { Gift, Suggestion, Poll, Person, WishlistItem } from "@/lib/types";
+import type { Gift, GiftStatus, Suggestion, Poll, Person, WishlistItem } from "@/lib/types";
 
 export default function GiftDetail() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +29,7 @@ export default function GiftDetail() {
   const nav = useNavigate();
   const myId = useIdentity();
   const [pollDetailsOpen, setPollDetailsOpen] = useState(false);
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
 
   const gift = gifts.find((g) => g.id === id);
   if (!gift) return <p className="px-4 py-8">Geschenk nicht gefunden.</p>;
@@ -123,6 +124,20 @@ export default function GiftDetail() {
           </button>
         </div>
       </div>
+
+      {/* ── Gruppen-Chat (z.B. WhatsApp) ──────────────────────── */}
+      <WhatsappLinkSection gift={gift} />
+
+      {/* ── Bezahlt-Übersicht (nur nach Geschenk-erhalten) ──── */}
+      {gift.status === "received" && (
+        <PaymentSummary
+          selectedSuggestions={giftSuggestions.filter((s) =>
+            (gift.selectedSuggestionIds ?? []).includes(s.id),
+          )}
+          persons={persons}
+          onEdit={() => setPaymentDialogOpen(true)}
+        />
+      )}
 
       {/* ── Teilnehmer ────────────────────────────────────────── */}
       <Section
@@ -236,6 +251,14 @@ export default function GiftDetail() {
                 isWinner={s.id === winnerId}
                 isSelected={selectedIds.includes(s.id)}
                 onToggleSelect={() => toggleSelection(s.id)}
+                giftStatus={gift.status}
+                participants={gift.participantIds
+                  .map((pid) => persons.find((p) => p.id === pid))
+                  .filter((p): p is Person => !!p)}
+                onSetPaidBy={(pid) => {
+                  updateSuggestion(s.id, { paidBy: pid });
+                  toast.success(pid ? "Bezahler eingetragen" : "Bezahler entfernt");
+                }}
                 onVote={() => {
                   if (myId) {
                     castVote(giftId, myId, s.id);
@@ -357,7 +380,11 @@ export default function GiftDetail() {
               if (!confirm(`Geschenk für ${person.name} als erhalten markieren?`)) return;
               markReceived(gift.id);
               toast.success("Geschenk erhalten ✓");
-              nav("/");
+              // If there are selected suggestions, open payment dialog to capture
+              // who paid for what. Otherwise navigate straight home.
+              const hasSelected = (gift.selectedSuggestionIds ?? []).length > 0;
+              if (hasSelected) setPaymentDialogOpen(true);
+              else nav("/");
             }}
             className="w-full"
           >
@@ -438,7 +465,178 @@ export default function GiftDetail() {
           </div>
         </Dialog>
       )}
+
+      {/* ── Payment-Dialog (nach „Geschenk erhalten") ──────────── */}
+      <PaymentDialog
+        open={paymentDialogOpen}
+        onClose={() => {
+          setPaymentDialogOpen(false);
+          nav("/");
+        }}
+        selectedSuggestions={giftSuggestions.filter((s) =>
+          (gift.selectedSuggestionIds ?? []).includes(s.id),
+        )}
+        participants={gift.participantIds
+          .map((pid) => persons.find((p) => p.id === pid))
+          .filter((p): p is Person => !!p)}
+        onSetPaidBy={(sid, pid) => updateSuggestion(sid, { paidBy: pid })}
+      />
     </div>
+  );
+}
+
+// ── Payment-Summary (im Gift nach „erhalten") ─────────────────
+function PaymentSummary({
+  selectedSuggestions,
+  persons,
+  onEdit,
+}: {
+  selectedSuggestions: Suggestion[];
+  persons: Person[];
+  onEdit: () => void;
+}) {
+  const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
+  const totalCost = selectedSuggestions.reduce((sum, s) => sum + (s.price ?? 0), 0);
+
+  // Aggregate per-payer
+  const byPayer = new Map<string, { total: number; items: Suggestion[] }>();
+  const unpaid: Suggestion[] = [];
+  selectedSuggestions.forEach((s) => {
+    if (!s.paidBy) {
+      unpaid.push(s);
+      return;
+    }
+    const entry = byPayer.get(s.paidBy) ?? { total: 0, items: [] };
+    entry.total += s.price ?? 0;
+    entry.items.push(s);
+    byPayer.set(s.paidBy, entry);
+  });
+  const payers = [...byPayer.entries()].sort((a, b) => b[1].total - a[1].total);
+
+  return (
+    <div className="px-4 pb-4">
+      <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30 overflow-hidden">
+        <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900">
+          <div className="text-[15px] font-bold text-emerald-900 dark:text-emerald-200">
+            💶 Bezahlt-Übersicht
+          </div>
+          <button
+            onClick={onEdit}
+            className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+          >
+            Bearbeiten
+          </button>
+        </div>
+        <div className="divide-y divide-emerald-100 dark:divide-emerald-900/40">
+          {payers.length === 0 ? (
+            <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400">
+              Noch nichts eingetragen.
+            </div>
+          ) : (
+            payers.map(([pid, info]) => {
+              const p = personById[pid];
+              return (
+                <div key={pid} className="px-3.5 py-2.5 flex items-start gap-3">
+                  {p && <Avatar person={p} size={28} />}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[14px] font-semibold text-stone-900 dark:text-stone-50">
+                        {p?.name ?? "Unbekannt"}
+                      </div>
+                      <div className="text-[14px] font-bold tabular-nums text-violet-700 dark:text-violet-300 shrink-0">
+                        {info.total} €
+                      </div>
+                    </div>
+                    <div className="text-[12px] text-stone-500 dark:text-stone-400 truncate">
+                      {info.items.map((it) => it.title).join(" · ")}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+          {unpaid.length > 0 && (
+            <div className="px-3.5 py-2.5 bg-amber-50/40 dark:bg-amber-950/20">
+              <div className="text-[12px] font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
+                Noch kein Bezahler eingetragen
+              </div>
+              <div className="text-[12px] text-stone-600 dark:text-stone-300">
+                {unpaid.map((it) => it.title).join(" · ")}
+              </div>
+            </div>
+          )}
+          <div className="px-3.5 py-2 flex items-center justify-between bg-white dark:bg-stone-900">
+            <span className="text-[13px] font-semibold text-stone-500 dark:text-stone-400">
+              Gesamt
+            </span>
+            <span className="text-[15px] font-extrabold tabular-nums text-stone-900 dark:text-stone-50">
+              {totalCost} €
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Payment-Dialog (nach Geschenk-erhalten) ───────────────────
+function PaymentDialog({
+  open,
+  onClose,
+  selectedSuggestions,
+  participants,
+  onSetPaidBy,
+}: {
+  open: boolean;
+  onClose: () => void;
+  selectedSuggestions: Suggestion[];
+  participants: Person[];
+  onSetPaidBy: (suggestionId: string, personId: string | undefined) => void;
+}) {
+  return (
+    <Dialog open={open} onClose={onClose} title="💶 Wer hat was bezahlt?">
+      <div className="space-y-3 px-5 pb-2">
+        <p className="text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
+          Trag pro Vorschlag ein, wer's bezahlt hat. Kannst du auch später noch anpassen.
+        </p>
+        {selectedSuggestions.length === 0 ? (
+          <div className="text-[13px] text-stone-500 dark:text-stone-400 italic">
+            Keine ausgewählten Vorschläge.
+          </div>
+        ) : (
+          selectedSuggestions.map((s) => (
+            <div
+              key={s.id}
+              className="px-3 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-2"
+            >
+              <div className="text-[14px] font-semibold text-stone-900 dark:text-stone-50">
+                {s.title}
+                {s.price != null && (
+                  <span className="ml-2 text-violet-700 dark:text-violet-300">
+                    · {s.price} €
+                  </span>
+                )}
+              </div>
+              <select
+                value={s.paidBy ?? ""}
+                onChange={(e) => onSetPaidBy(s.id, e.target.value || undefined)}
+                className="w-full px-2.5 py-2 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
+              >
+                <option value="">— Bezahler wählen —</option>
+                {participants.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+          ))
+        )}
+        <div className="pt-2">
+          <Button onClick={onClose} className="w-full">
+            Fertig
+          </Button>
+        </div>
+      </div>
+    </Dialog>
   );
 }
 
@@ -617,6 +815,9 @@ function SuggestionCard({
   onVote,
   onSave,
   onDelete,
+  giftStatus,
+  participants,
+  onSetPaidBy,
 }: {
   suggestion: Suggestion;
   author?: Person;
@@ -631,6 +832,9 @@ function SuggestionCard({
   onVote: () => void;
   onSave: (patch: Partial<Suggestion>) => void;
   onDelete: () => void;
+  giftStatus: GiftStatus;
+  participants: Person[];
+  onSetPaidBy: (personId: string | undefined) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(s.title);
@@ -815,6 +1019,35 @@ function SuggestionCard({
             {voters.map((v) => personsById[v]?.name).filter(Boolean).join(", ")}{" "}
             {voters.length === 1 ? "hat" : "haben"} gewählt
           </div>
+        </div>
+      )}
+
+      {/* Selected-for-group badge — sichtbar für alle */}
+      {!editing && isSelected && (
+        <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-violet-100 dark:bg-violet-950 text-violet-800 dark:text-violet-300">
+          ✓ Für Gesamtsumme ausgewählt
+        </div>
+      )}
+
+      {/* PaidBy-Dropdown nach Geschenk-erhalten */}
+      {!editing && isSelected && giftStatus === "received" && (
+        <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-stone-700 flex items-center gap-2 flex-wrap">
+          <span className="text-[13px] font-semibold text-stone-700 dark:text-stone-200 shrink-0">
+            💶 Bezahlt von:
+          </span>
+          <select
+            value={s.paidBy ?? ""}
+            onChange={(e) => onSetPaidBy(e.target.value || undefined)}
+            className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
+          >
+            <option value="">— wählen —</option>
+            {participants.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </select>
+          {s.paidBy && personsById[s.paidBy] && (
+            <Avatar person={personsById[s.paidBy]} size={22} />
+          )}
         </div>
       )}
     </div>
@@ -1025,43 +1258,127 @@ function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string | null
   return (
     <div className="mt-2 p-2.5 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-[#F0EBE6] dark:border-[#3A3633]">
       <div className="flex items-center gap-2">
-        <span className="text-base pl-1">💡</span>
+        <span className="text-base pl-1 shrink-0">💡</span>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && add()}
           placeholder="Idee teilen…"
-          className="flex-1 outline-none bg-transparent px-1 py-1.5 text-sm text-stone-900 dark:text-stone-50"
+          className="flex-1 min-w-0 outline-none bg-transparent px-1 py-1.5 text-stone-900 dark:text-stone-50"
         />
-        {!showExtra && text && (
-          <button
-            onClick={() => setShowExtra(true)}
-            className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-1.5"
-          >
-            + Details
-          </button>
-        )}
-        <Button size="sm" onClick={add} disabled={!text.trim()} style={{ minHeight: 32, padding: "6px 12px" }}>
+        <Button
+          size="sm"
+          onClick={add}
+          disabled={!text.trim()}
+          className="shrink-0"
+          style={{ minHeight: 32, padding: "6px 12px" }}
+        >
           Teilen
         </Button>
       </div>
+      {!showExtra && text && (
+        <button
+          onClick={() => setShowExtra(true)}
+          className="block w-full mt-1 py-1 pl-7 text-left text-[12px] font-semibold text-violet-700 dark:text-violet-400"
+        >
+          + Link / Preis
+        </button>
+      )}
       {showExtra && (
         <div className="flex gap-2 mt-2 pl-7">
           <Input
             placeholder="Link (optional)"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            className="flex-[2] py-2 text-[13px]"
+            className="flex-[2] py-2"
           />
           <Input
             placeholder="€"
             type="number"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            className="flex-1 py-2 text-[13px]"
+            className="flex-1 py-2"
           />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── WhatsApp / Chat-Link Section ──────────────────────────────
+function WhatsappLinkSection({ gift }: { gift: Gift }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(gift.whatsappLink ?? "");
+
+  function save() {
+    const trimmed = draft.trim();
+    updateGift(gift.id, { whatsappLink: trimmed || undefined });
+    setEditing(false);
+    toast.success(trimmed ? "Gruppen-Link gespeichert" : "Gruppen-Link entfernt");
+  }
+
+  if (gift.whatsappLink && !editing) {
+    return (
+      <div className="px-4 pb-3">
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900">
+          <span className="text-lg shrink-0">💬</span>
+          <a
+            href={gift.whatsappLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex-1 min-w-0 text-[14px] font-semibold text-emerald-800 dark:text-emerald-300 truncate"
+          >
+            Gruppen-Chat öffnen
+          </a>
+          <button
+            onClick={() => {
+              setDraft(gift.whatsappLink ?? "");
+              setEditing(true);
+            }}
+            aria-label="Link bearbeiten"
+            className="text-emerald-700 dark:text-emerald-400 p-1.5 shrink-0"
+          >
+            <Icon.pencil />
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (editing) {
+    return (
+      <div className="px-4 pb-3">
+        <div className="px-3.5 py-3 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-2">
+          <label className="text-[12px] font-semibold text-stone-500 dark:text-stone-400">
+            Gruppen-Link (z.B. WhatsApp-Einladung)
+          </label>
+          <Input
+            type="url"
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            placeholder="https://chat.whatsapp.com/..."
+          />
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setEditing(false)} className="flex-1">
+              Abbrechen
+            </Button>
+            <Button onClick={save} className="flex-1">
+              Speichern
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 pb-3">
+      <button
+        onClick={() => setEditing(true)}
+        className="w-full text-left px-3.5 py-2.5 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 text-[13px] text-stone-500 dark:text-stone-400 hover:border-violet-400 hover:text-violet-700 dark:hover:text-violet-300"
+      >
+        💬 Gruppen-Link hinzufügen (WhatsApp o.ä.)
+      </button>
     </div>
   );
 }

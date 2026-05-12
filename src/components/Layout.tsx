@@ -16,7 +16,7 @@ export function Layout({ children }: { children: ReactNode }) {
   ];
   return (
     <div
-      className="min-h-screen text-stone-900 dark:text-stone-50 pb-24"
+      className="min-h-screen text-stone-900 dark:text-stone-50 pb-[calc(7rem+env(safe-area-inset-bottom))]"
       style={{ background: "var(--gm-bg)" }}
     >
       <header className="sticky top-0 z-30 backdrop-blur border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-900/80">
@@ -39,7 +39,10 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main className="max-w-2xl mx-auto pb-8">{children}</main>
-      <nav className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800">
+      <nav
+        className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="max-w-2xl mx-auto px-2 h-16 flex">
           {tabs.map((t) => {
             const active = t.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(t.to);

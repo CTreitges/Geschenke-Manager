@@ -9,6 +9,7 @@ import {
   deleteGift,
   deletePerson,
   deleteWishItem,
+  sendTestMailCF,
   updatePerson,
 } from "@/lib/storage";
 import {
@@ -126,26 +127,18 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
     <div>
       <Card className="p-3 mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-lg pl-1">✨</span>
+          <span className="text-lg pl-1 shrink-0">✨</span>
           <input
             placeholder={`Was wünscht sich ${person.name}?`}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && add()}
-            className="flex-1 px-1 py-2.5 text-[15px] border-none outline-none bg-transparent text-stone-900 dark:text-stone-50"
+            className="flex-1 min-w-0 px-1 py-2.5 border-none outline-none bg-transparent text-stone-900 dark:text-stone-50"
           />
-          {!showExtra && text && (
-            <button
-              onClick={() => setShowExtra(true)}
-              className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-1"
-            >
-              + Details
-            </button>
-          )}
           <button
             onClick={add}
             disabled={!text.trim()}
-            className="rounded-[10px] w-9 h-9 flex items-center justify-center text-white"
+            className="rounded-[10px] w-9 h-9 shrink-0 flex items-center justify-center text-white"
             style={{
               background: text.trim()
                 ? "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)"
@@ -155,10 +148,18 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
             <Icon.plus size={18} />
           </button>
         </div>
+        {!showExtra && text && (
+          <button
+            onClick={() => setShowExtra(true)}
+            className="block w-full mt-1 py-1 pl-7 text-left text-[12px] font-semibold text-violet-700 dark:text-violet-400"
+          >
+            + Link / Preis
+          </button>
+        )}
         {showExtra && (
           <div className="flex gap-2 mt-2.5 pl-7">
-            <Input placeholder="Link (optional)" value={url} onChange={(e) => setUrl(e.target.value)} className="flex-[2] py-2 text-[13px]" />
-            <Input placeholder="€" value={price} onChange={(e) => setPrice(e.target.value)} type="number" className="flex-1 py-2 text-[13px]" />
+            <Input placeholder="Link (optional)" value={url} onChange={(e) => setUrl(e.target.value)} className="flex-[2] py-2" />
+            <Input placeholder="€" value={price} onChange={(e) => setPrice(e.target.value)} type="number" className="flex-1 py-2" />
           </div>
         )}
       </Card>
@@ -230,17 +231,32 @@ function GiftsTab({
 
   const [newGiftOpen, setNewGiftOpen] = useState(false);
   const [newGiftYear, setNewGiftYear] = useState(birthdayYearForPerson(person));
+  const [newGiftOccasion, setNewGiftOccasion] = useState("Geburtstag");
+  const [useCustomDate, setUseCustomDate] = useState(false);
+  const [customDate, setCustomDate] = useState("");
 
   function createGift() {
+    const occ = newGiftOccasion.trim() || "Geburtstag";
+    const finalDate = useCustomDate && customDate ? customDate : undefined;
+    // Carry over the last gift's group-chat link for the same person+occasion
+    const lastSameKind = [...stack, ...past]
+      .filter((g) => (g.occasion ?? "Geburtstag") === occ)
+      .sort((a, b) => b.enteredStackAt - a.enteredStackAt)[0];
     addGift({
       personId: person.id,
-      year: newGiftYear,
+      year: finalDate ? +finalDate.slice(0, 4) || newGiftYear : newGiftYear,
       status: "open",
       budgetPerPerson: settings.defaultBudget,
       manuallyAdded: true,
+      occasion: occ,
+      customDate: finalDate,
+      whatsappLink: lastSameKind?.whatsappLink,
     });
-    toast.success(`Geschenk ${newGiftYear} angelegt`);
+    toast.success(`Geschenk angelegt`);
     setNewGiftOpen(false);
+    setNewGiftOccasion("Geburtstag");
+    setUseCustomDate(false);
+    setCustomDate("");
   }
 
   function removeGift(g: import("@/lib/types").Gift) {
@@ -281,7 +297,7 @@ function GiftsTab({
                   className="px-3.5 py-3 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2.5"
                 >
                   <button
-                    onClick={() => g.status === "open" && nav(`/gift/${g.id}`)}
+                    onClick={() => nav(`/gift/${g.id}`)}
                     className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
                   >
                     <div
@@ -304,7 +320,7 @@ function GiftsTab({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
-                        Geschenk {y}
+                        {g.occasion ?? "Geburtstag"} {y}
                       </div>
                       <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
                         {g.status === "open"
@@ -318,7 +334,7 @@ function GiftsTab({
                   </button>
                   <button
                     onClick={() => removeGift(g)}
-                    className="text-stone-300 hover:text-red-500 p-1.5 shrink-0"
+                    className="text-stone-500 dark:text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 p-2 rounded-lg shrink-0"
                     aria-label="Geschenk löschen"
                     title="Geschenk löschen"
                   >
@@ -345,11 +361,38 @@ function GiftsTab({
       ) : (
         <div className="bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] p-3.5 mt-1 space-y-2.5">
           <Input
+            label="Anlass"
+            type="text"
+            value={newGiftOccasion}
+            onChange={(e) => setNewGiftOccasion(e.target.value)}
+            placeholder="z.B. Geburtstag, Reise, Hochzeit"
+          />
+          <Input
             label="Jahr"
             type="number"
             value={newGiftYear}
             onChange={(e) => setNewGiftYear(parseInt(e.target.value, 10) || newGiftYear)}
+            disabled={useCustomDate}
           />
+          <label className="flex items-start gap-3 cursor-pointer select-none py-1 px-0.5">
+            <input
+              type="checkbox"
+              checked={useCustomDate}
+              onChange={(e) => setUseCustomDate(e.target.checked)}
+              className="mt-0.5 w-4 h-4 accent-violet-600"
+            />
+            <span className="text-[14px] text-stone-700 dark:text-stone-200">
+              Anderes Datum (statt {person.name}s Geburtstag)
+            </span>
+          </label>
+          {useCustomDate && (
+            <Input
+              label="Datum"
+              type="date"
+              value={customDate}
+              onChange={(e) => setCustomDate(e.target.value)}
+            />
+          )}
           <div className="flex gap-2">
             <Button
               variant="secondary"
@@ -358,7 +401,11 @@ function GiftsTab({
             >
               Abbrechen
             </Button>
-            <Button onClick={createGift} className="flex-1">
+            <Button
+              onClick={createGift}
+              disabled={useCustomDate && !customDate}
+              className="flex-1"
+            >
               Anlegen
             </Button>
           </div>
@@ -373,12 +420,32 @@ function ProfileTab({ person }: { person: Person }) {
   const [name, setName] = useState(person.name);
   const [bd, setBd] = useState(person.birthday);
   const [email, setEmail] = useState(person.email ?? "");
+  const [remindersOn, setRemindersOn] = useState(person.emailOptIn !== false);
+  const [testing, setTesting] = useState(false);
+
+  async function sendTest() {
+    if (testing) return;
+    setTesting(true);
+    try {
+      await sendTestMailCF(person.id);
+      toast.success(`Test-Mail an ${person.email} verschickt — kann 1-2 min dauern`);
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? "Unbekannter Fehler";
+      toast.error(`Test-Mail fehlgeschlagen: ${msg}`);
+    } finally {
+      setTesting(false);
+    }
+  }
 
   function save() {
+    const trimmedEmail = email.trim();
     updatePerson(person.id, {
       name: name.trim(),
       birthday: bd,
-      email: email.trim() || undefined,
+      email: trimmedEmail || undefined,
+      // Only persist optIn when there's a mail to send to. Clearing the
+      // mail also clears the flag — keeps state tidy.
+      emailOptIn: trimmedEmail ? remindersOn : undefined,
     });
     toast.success("Gespeichert");
   }
@@ -402,9 +469,36 @@ function ProfileTab({ person }: { person: Person }) {
           <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} />
           <BirthdayPicker value={bd} onChange={setBd} />
           <Input label="E-Mail" type="email" placeholder="optional" value={email} onChange={(e) => setEmail(e.target.value)} />
+          {email.trim() && (
+            <label className="flex items-start gap-3 px-1 py-1 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={remindersOn}
+                onChange={(e) => setRemindersOn(e.target.checked)}
+                className="mt-0.5 w-4 h-4 accent-violet-600"
+              />
+              <span className="text-[13px] text-stone-600 dark:text-stone-300 leading-snug">
+                <b>Geburtstags-Erinnerung per Mail</b>
+                <br />
+                <span className="text-stone-500 dark:text-stone-400">
+                  60 / 30 / 14 Tage vor dem Geburtstag — Folge-Erinnerungen entfallen, sobald eine Wunschliste angelegt ist.
+                </span>
+              </span>
+            </label>
+          )}
           <Button onClick={save} className="w-full mt-1">Speichern</Button>
         </div>
       </Card>
+      {person.email && (
+        <Button
+          variant="secondary"
+          onClick={sendTest}
+          disabled={testing}
+          className="w-full mt-3"
+        >
+          {testing ? "Sende Test-Mail…" : `🧪 Test-Mail an ${person.email} senden`}
+        </Button>
+      )}
       <Button variant="danger" onClick={remove} className="w-full mt-3.5">
         <Icon.trash /> Person löschen
       </Button>

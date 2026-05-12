@@ -66,16 +66,32 @@ export function formatDaysUntil(days: number): string {
   return `in ${days} Tagen`;
 }
 
-/** Sort open gifts by upcoming birthday (nearest first). */
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** Days until a gift's relevant date — uses customDate if set, otherwise person's birthday. */
+export function daysUntilForGift(g: Gift, p: Person | undefined, ref: Date = new Date()): number {
+  if (g.customDate) {
+    const parts = g.customDate.split("-").map(Number);
+    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+      const [y, m, d] = parts;
+      const target = new Date(y, m - 1, d);
+      const today = startOfDay(ref);
+      return Math.round((target.getTime() - today.getTime()) / 86400000);
+    }
+  }
+  return p ? daysUntilBirthday(p, ref) : 9999;
+}
+
+/** Sort open gifts by upcoming relevant date (nearest first). */
 export function sortStack(gifts: Gift[], persons: Person[]): Gift[] {
   const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
   return [...gifts]
     .filter((g) => g.status === "open")
     .sort((a, b) => {
-      const pa = personById[a.personId];
-      const pb = personById[b.personId];
-      const da = pa ? daysUntilBirthday(pa) : 9999;
-      const db = pb ? daysUntilBirthday(pb) : 9999;
+      const da = daysUntilForGift(a, personById[a.personId]);
+      const db = daysUntilForGift(b, personById[b.personId]);
       if (da !== db) return da - db;
       return a.enteredStackAt - b.enteredStackAt;
     });

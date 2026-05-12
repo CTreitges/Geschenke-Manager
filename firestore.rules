@@ -36,10 +36,12 @@ service cloud.firestore {
     // Group root.
     match /groups/{groupId} {
       // Public-ish fields (defaultBudget, darkMode, createdAt) readable by
-      // members. Writes go through Cloud Functions.
+      // members. Members can update non-critical settings (darkMode,
+      // defaultBudget). Create/delete go through Cloud Functions only.
       allow get: if isMember(groupId);
       allow list: if false;
-      allow write: if false;
+      allow update: if isMember(groupId);
+      allow create, delete: if false;
 
       // Password hash + salt. Hard no.
       match /_meta/{doc} {
@@ -72,5 +74,11 @@ service cloud.firestore {
     match /wishlist/{doc}     { allow read, write: if false; }
     match /polls/{doc}        { allow read, write: if false; }
     match /settings/{doc}     { allow read, write: if false; }
+
+    // Birthday-reminder magic links. Only Cloud Functions read/write these.
+    match /magic_tokens/{token} { allow read, write: if false; }
+
+    // Outgoing-mail queue, drained by the Trigger Email extension.
+    match /mail/{id}            { allow read, write: if false; }
   }
 }

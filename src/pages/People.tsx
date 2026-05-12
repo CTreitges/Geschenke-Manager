@@ -117,6 +117,11 @@ function AddPersonDialog({ open, onClose }: { open: boolean; onClose: () => void
         <Input label="Name" value={name} onChange={(e) => setName(e.target.value)} autoFocus />
         <BirthdayPicker value={bd} onChange={setBd} />
         <Input label="E-Mail (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        {email.trim() && (
+          <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug px-1 -mt-1">
+            Mit Mail bekommt die Person automatisch eine Erinnerung 60/30/14 Tage vor ihrem Geburtstag, eine Wunschliste zu schreiben. Abbestellen ist in jeder Mail möglich.
+          </p>
+        )}
         <div className="flex gap-2 pt-3">
           <Button variant="secondary" onClick={onClose} className="flex-1">Abbrechen</Button>
           <Button onClick={submit} disabled={!name.trim() || !bd} className="flex-1">Speichern</Button>

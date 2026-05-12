@@ -22,10 +22,10 @@ export function IdentityChip() {
   }
   return (
     <Link
-      to="/settings"
+      to={`/person/${me.id}`}
       className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-1 pr-1.5 sm:pr-3 py-1 inline-flex items-center gap-2 shadow-sm max-w-[140px]"
-      aria-label={`Identität: ${me.name}`}
-      title={`Identität: ${me.name}`}
+      aria-label={`Mein Profil (${me.name})`}
+      title={`Mein Profil (${me.name})`}
     >
       <Avatar person={me} size={26} />
       <span className="hidden sm:inline text-xs font-semibold text-stone-700 dark:text-stone-200 truncate">

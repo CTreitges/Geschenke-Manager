@@ -1,5 +1,13 @@
 {
   "projects": {
     "default": "geschenke-manager-ec19e"
+  },
+  "targets": {},
+  "etags": {
+    "geschenke-manager-ec19e": {
+      "extensionInstances": {
+        "firestore-send-email": "044ed7f0e306d7817a0023e2f35e854a6c98341535257073d83db904448d0469"
+      }
+    }
   }
 }

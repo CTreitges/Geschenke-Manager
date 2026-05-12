@@ -26,6 +26,23 @@
   }
   ::-webkit-scrollbar { width: 0; height: 0; }
   input::placeholder { color: #A8A29E; }
+
+  /* Mobile-Safari + Android-Chrome zoomen beim Focus rein, sobald die
+     font-size eines Inputs < 16px ist (Add-Button rutscht dadurch aus dem
+     Viewport). Erzwinge min 16px für alle Texteingaben — kein Zoom-Trigger. */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+
+  /* Verhindert Double-Tap-Zoom auf Buttons/Eingaben unter Android-Chrome. */
+  input, textarea, select, button, a {
+    touch-action: manipulation;
+  }
+
+  /* Sicherheitsanker: niemals horizontalen Scroll erlauben auf html/body. */
+  html, body { overflow-x: hidden; }
 }
 
 @layer utilities {

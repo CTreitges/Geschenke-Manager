@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
+import { TestMailTipDialog } from "@/components/TestMailTipDialog";
 import Login from "@/pages/Login";
 import CreateGroup from "@/pages/CreateGroup";
 import Home from "@/pages/Home";
@@ -9,11 +10,13 @@ import PersonDetail from "@/pages/PersonDetail";
 import GiftDetail from "@/pages/GiftDetail";
 import Settings from "@/pages/Settings";
 import MyWishlist from "@/pages/MyWishlist";
+import PastGifts from "@/pages/PastGifts";
 import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
+import MagicLink from "@/pages/MagicLink";
 import { addKnownGroup, getGroupId, getKnownGroups, isAuthed, useGroupId } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
-import { setActiveGroup, updateSettings } from "@/lib/storage";
+import { setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -25,7 +28,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v2";
+const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v3";
 
 /**
  * Auto-open the tutorial on first visit per browser. Marks itself as
@@ -43,11 +46,9 @@ function FirstRunTutorial() {
   return null;
 }
 
-const DARK_DEFAULT_FLAG = "gm:dark-default-v1";
-
 export default function App() {
   const groupId = useGroupId();
-  const { settings, loaded } = useStore();
+  const { settings } = useStore();
   const [bootDone, setBootDone] = useState(false);
 
   // Boot once: legacy → group "Jeg" auto-migration, then pull any
@@ -85,17 +86,6 @@ export default function App() {
     else document.documentElement.classList.remove("dark");
   }, [settings.darkMode]);
 
-  // One-time rollout: dark mode is now the default. If this browser still
-  // sees the old `darkMode: false` (because it was the previous default and
-  // got persisted at some point), flip it once. Users who actively want
-  // light mode can toggle it back in Settings — we won't re-flip after that.
-  useEffect(() => {
-    if (!loaded) return;
-    if (localStorage.getItem(DARK_DEFAULT_FLAG) === "done") return;
-    localStorage.setItem(DARK_DEFAULT_FLAG, "done");
-    if (!settings.darkMode) updateSettings({ darkMode: true });
-  }, [loaded, settings.darkMode]);
-
   if (!bootDone) {
     return (
       <div
@@ -114,11 +104,13 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/login/new" element={<CreateGroup />} />
+      <Route path="/m/:token" element={<MagicLink />} />
       <Route
         path="/*"
         element={
           <RequireAuth>
             <FirstRunTutorial />
+            <TestMailTipDialog />
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />
@@ -126,6 +118,7 @@ export default function App() {
                 <Route path="/person/:id" element={<PersonDetail />} />
                 <Route path="/gift/:id" element={<GiftDetail />} />
                 <Route path="/wishlist" element={<MyWishlist />} />
+                <Route path="/past" element={<PastGifts />} />
                 <Route path="/tutorial" element={<Tutorial />} />
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="/settings" element={<Settings />} />

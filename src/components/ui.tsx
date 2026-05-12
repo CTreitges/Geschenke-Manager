@@ -357,11 +357,20 @@ export function Confetti({ active }: { active: boolean }) {
 }
 
 // ── Toggle ─────────────────────────────────────────────────────
-export function Toggle({ on, onChange }: { on: boolean; onChange: () => void }) {
+export function Toggle({
+  on,
+  onChange,
+  disabled,
+}: {
+  on: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
   return (
     <button
       onClick={onChange}
-      className="w-[46px] h-7 rounded-full p-0.5 flex transition-colors"
+      disabled={disabled}
+      className="w-[46px] h-7 rounded-full p-0.5 flex transition-colors disabled:opacity-50"
       style={{
         background: on
           ? "linear-gradient(135deg, #6366F1, #7C3AED)"

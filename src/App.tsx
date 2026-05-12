@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
 import { TestMailTipDialog } from "@/components/TestMailTipDialog";
 import Login from "@/pages/Login";
@@ -14,9 +15,18 @@ import PastGifts from "@/pages/PastGifts";
 import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
 import MagicLink from "@/pages/MagicLink";
-import { addKnownGroup, getGroupId, getKnownGroups, isAuthed, useGroupId } from "@/lib/auth";
+import {
+  addKnownGroup,
+  getGroupId,
+  getKnownGroups,
+  isAuthed,
+  setAuthed,
+  setGroupId,
+  useGroupId,
+} from "@/lib/auth";
+import { consumeGoogleRedirectResult } from "@/lib/firebase";
 import { useStore } from "@/lib/hooks";
-import { setActiveGroup } from "@/lib/storage";
+import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
@@ -26,6 +36,76 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
   return <>{children}</>;
+}
+
+/**
+ * Picks up the result of a signInWithRedirect / linkWithRedirect that the
+ * installed PWA triggered before the page reload. Mirrors the toast +
+ * navigation logic that the popup branch runs inline in Login/Settings.
+ *
+ * Runs only once per page load — sessionStorage is cleared inside
+ * consumeGoogleRedirectResult, so a duplicate effect call from StrictMode
+ * resolves to null on the second pass.
+ */
+function GoogleRedirectHandler() {
+  const nav = useNavigate();
+  useEffect(() => {
+    (async () => {
+      try {
+        const outcome = await consumeGoogleRedirectResult();
+        if (!outcome) return;
+        if (outcome.source === "login") {
+          let serverGroups: string[] = [];
+          try {
+            serverGroups = await listMyGroupsCF();
+            serverGroups.forEach((g) => addKnownGroup(g));
+          } catch (e) {
+            console.warn("listMyGroups failed:", e);
+          }
+          if (outcome.linked) toast.success("Mit Google verknüpft 🎉");
+          else if (outcome.switched) toast.success("Mit Google angemeldet 🎉");
+          else toast.success("Mit Google angemeldet");
+          const known = getKnownGroups();
+          const target = getGroupId() ?? serverGroups[0] ?? known[0] ?? null;
+          if (target) {
+            setGroupId(target);
+            setAuthed(true);
+            setActiveGroup(target);
+            nav("/");
+          }
+        } else {
+          if (outcome.linked) {
+            toast.success("Mit Google verknüpft 🎉");
+          } else if (outcome.switched) {
+            toast.message("Anderes Google-Konto übernommen", {
+              description:
+                "Tritt der Gruppe einmal mit Passwort bei — dann ist auch dieses Konto Mitglied.",
+            });
+            setAuthed(false);
+            nav("/login");
+          } else {
+            toast.success("Mit Google angemeldet");
+          }
+        }
+      } catch (err) {
+        const code = (err as { code?: string })?.code ?? "";
+        if (code === "auth/operation-not-allowed") {
+          toast.error("Google-Login ist im Firebase-Projekt noch nicht aktiviert");
+        } else if (code === "auth/network-request-failed") {
+          toast.error("Keine Internet-Verbindung");
+        } else if (code === "auth/account-exists-with-different-credential") {
+          toast.error("Dieser Account existiert schon mit einem anderen Provider");
+        } else {
+          console.error("Google redirect failed:", err);
+          const msg = code || (err as Error)?.message || "unbekannt";
+          toast.error(`Google-Login fehlgeschlagen (${msg})`);
+        }
+      }
+    })();
+    // We intentionally run this only on the first mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return null;
 }
 
 const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v3";
@@ -100,6 +180,15 @@ export default function App() {
     );
   }
 
+  return (
+    <>
+      <GoogleRedirectHandler />
+      <AppRoutes />
+    </>
+  );
+}
+
+function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />

@@ -249,6 +249,14 @@ export const listMyGroups = onCall({ region: REGION }, async (request) => {
   const groupIds = snap.docs
     .map((d) => d.ref.parent.parent?.id)
     .filter((x): x is string => !!x);
+  logger.info("listMyGroups", {
+    uid,
+    email: request.auth?.token?.email ?? null,
+    isAnonymous: request.auth?.token?.firebase?.sign_in_provider === "anonymous",
+    signInProvider: request.auth?.token?.firebase?.sign_in_provider ?? null,
+    groupIds,
+    count: groupIds.length,
+  });
   return { groupIds };
 });
 

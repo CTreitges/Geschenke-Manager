@@ -4,6 +4,12 @@ import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } f
 import { useStore } from "@/lib/hooks";
 import { changePasswordCF, deleteGroupCF, setActiveGroup, toggleParticipant, updateSettings } from "@/lib/storage";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
+import {
+  disablePushForGroup,
+  enablePushForGroup,
+  isPushSupported,
+  usePushEnabled,
+} from "@/lib/messaging";
 import { pickColor } from "@/lib/colors";
 import { daysUntilBirthday } from "@/lib/birthdays";
 import {
@@ -109,7 +115,12 @@ export default function Settings() {
   async function linkGoogle() {
     setLinkingGoogle(true);
     try {
-      const result = await signInWithGoogle();
+      const outcome = await signInWithGoogle("settings");
+      if (outcome.kind === "redirect") {
+        // PWA-Modus — Browser lädt jetzt neu, App.tsx übernimmt nach Reload.
+        return;
+      }
+      const result = outcome.result;
       if (result.linked) {
         toast.success("Mit Google verknüpft 🎉");
       } else if (result.switched) {
@@ -344,9 +355,7 @@ export default function Settings() {
         </Group>
 
         <Group title="Mitteilungen">
-          <Row label="Mail-Benachrichtigungen" hint="Erinnerungen vor Geburtstagen" icon={<Icon.mail />}>
-            <Chip variant="neutral">bald verfügbar</Chip>
-          </Row>
+          <PushNotificationsRow groupId={groupId} />
         </Group>
 
         <Group title="Sicherheit">
@@ -435,6 +444,104 @@ export default function Settings() {
         </div>
       </Dialog>
     </>
+  );
+}
+
+function PushNotificationsRow({ groupId }: { groupId: string | null }) {
+  const enabled = usePushEnabled(groupId);
+  const [supported, setSupported] = useState<boolean | null>(null);
+  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
+    typeof Notification !== "undefined" ? Notification.permission : "unsupported",
+  );
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    isPushSupported().then((s) => {
+      if (!cancelled) setSupported(s);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  async function toggle() {
+    if (!groupId || busy) return;
+    setBusy(true);
+    try {
+      if (enabled) {
+        await disablePushForGroup(groupId);
+        toast.success("Benachrichtigungen aus");
+      } else {
+        await enablePushForGroup(groupId);
+        setPermission(Notification.permission);
+        toast.success("Benachrichtigungen aktiv 🔔");
+      }
+    } catch (err) {
+      console.error(err);
+      const msg = (err as Error)?.message ?? "Fehlgeschlagen";
+      toast.error(msg);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (supported === null) {
+    return (
+      <Row
+        label="Push-Benachrichtigungen"
+        hint="Wenn jemand in den 30-Tage-Stack rutscht"
+        icon={<Icon.mail />}
+      >
+        <Chip variant="neutral">prüfe…</Chip>
+      </Row>
+    );
+  }
+
+  if (!supported) {
+    return (
+      <Row
+        label="Push-Benachrichtigungen"
+        hint="Auf diesem Gerät / Browser nicht unterstützt"
+        icon={<Icon.mail />}
+      >
+        <Chip variant="neutral">nicht verfügbar</Chip>
+      </Row>
+    );
+  }
+
+  if (permission === "denied") {
+    return (
+      <Row
+        label="Push-Benachrichtigungen"
+        hint="Im Browser blockiert — Berechtigung in den Browser-Settings freigeben"
+        icon={<Icon.mail />}
+      >
+        <Chip variant="neutral">blockiert</Chip>
+      </Row>
+    );
+  }
+
+  if (!groupId) {
+    return (
+      <Row
+        label="Push-Benachrichtigungen"
+        hint="Erst einer Gruppe beitreten"
+        icon={<Icon.mail />}
+      >
+        <Chip variant="neutral">—</Chip>
+      </Row>
+    );
+  }
+
+  return (
+    <Row
+      label="Push-Benachrichtigungen"
+      hint="Sobald jemand in den 30-Tage-Stack rutscht, kommt eine Push-Nachricht."
+      icon={<Icon.mail />}
+    >
+      <Toggle on={!!enabled} onChange={toggle} disabled={busy} />
+    </Row>
   );
 }
 

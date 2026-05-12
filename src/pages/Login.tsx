@@ -63,7 +63,12 @@ export default function Login() {
   async function handleGoogleSignIn() {
     setBusy(true);
     try {
-      const result = await signInWithGoogle();
+      const outcome = await signInWithGoogle("login");
+      if (outcome.kind === "redirect") {
+        // PWA-Modus — Browser lädt jetzt neu, App.tsx übernimmt nach Reload.
+        return;
+      }
+      const result = outcome.result;
       // Sync the server-side membership list into local known-groups, so
       // a fresh device picks up gruppen the user already belongs to.
       let serverGroups: string[] = [];

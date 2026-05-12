@@ -50,10 +50,12 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
 function GoogleRedirectHandler() {
   const nav = useNavigate();
   useEffect(() => {
+    console.info("[auth] GoogleRedirectHandler mounted");
     (async () => {
       try {
         const outcome = await consumeGoogleRedirectResult();
         if (!outcome) return;
+        console.info("[auth] post-redirect outcome", outcome);
         if (outcome.source === "login") {
           let serverGroups: string[] = [];
           try {
@@ -67,11 +69,14 @@ function GoogleRedirectHandler() {
           else toast.success("Mit Google angemeldet");
           const known = getKnownGroups();
           const target = getGroupId() ?? serverGroups[0] ?? known[0] ?? null;
+          console.info("[auth] post-redirect target group", { target, serverGroups, known });
           if (target) {
             setGroupId(target);
             setAuthed(true);
             setActiveGroup(target);
             nav("/");
+          } else {
+            console.warn("[auth] no target group after google-login — staying on /login");
           }
         } else {
           if (outcome.linked) {
@@ -166,24 +171,26 @@ export default function App() {
     else document.documentElement.classList.remove("dark");
   }, [settings.darkMode]);
 
-  if (!bootDone) {
-    return (
-      <div
-        className="min-h-screen flex items-center justify-center text-stone-500 dark:text-stone-400 text-sm"
-        style={{
-          background:
-            "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
-        }}
-      >
-        Lade Gruppendaten…
-      </div>
-    );
-  }
-
+  // GoogleRedirectHandler MUSS unabhängig vom bootDone-Gate gemounted sein —
+  // sonst ruft `getRedirectResult` erst nach autoMigrate+consolidate auf,
+  // verzögert oder verpasst den Post-Redirect-State. Wir rendern ihn auch
+  // während des Loaders.
   return (
     <>
       <GoogleRedirectHandler />
-      <AppRoutes />
+      {!bootDone ? (
+        <div
+          className="min-h-screen flex items-center justify-center text-stone-500 dark:text-stone-400 text-sm"
+          style={{
+            background:
+              "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
+          }}
+        >
+          Lade Gruppendaten…
+        </div>
+      ) : (
+        <AppRoutes />
+      )}
     </>
   );
 }

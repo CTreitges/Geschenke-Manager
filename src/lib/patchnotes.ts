@@ -11,6 +11,14 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.6.1",
+    date: "2026-05-13",
+    highlights: [
+      "📲 Neuer Install-Tipp direkt nach dem Tutorial — erklärt gerätespezifisch, wie du die App auf den Startbildschirm bekommst (Chrome/Edge: ein Klick, iPhone/iPad: Safari-Teilen-Menü)",
+      "Einstellungen → App: Installier-Button erscheint nur im Browser; in der installierten PWA verschwindet er, und ist sie schon installiert, zeigt der Bereich das stattdessen an",
+    ],
+  },
+  {
     version: "v1.6.0",
     date: "2026-05-13",
     highlights: [

@@ -5,6 +5,7 @@ import { isAuthed } from "@/lib/auth";
 
 const TIP_KEY = "gm:test-mail-tip-seen:v1";
 const TUTORIAL_KEY = "gm:tutorial-seen:v4";
+const PWA_TIP_KEY = "gm:pwa-install-tip-seen:v1";
 
 /**
  * One-time follow-up after the first-run tutorial. Reminds the user to send
@@ -14,7 +15,16 @@ const TUTORIAL_KEY = "gm:tutorial-seen:v4";
  */
 export function TestMailTipDialog() {
   const [open, setOpen] = useState(false);
+  const [tick, setTick] = useState(0);
   const loc = useLocation();
+
+  // Re-evaluate as soon as the PWA-install tip closes — otherwise this
+  // dialog would only pop up at the next navigation.
+  useEffect(() => {
+    const handler = () => setTick((t) => t + 1);
+    window.addEventListener("gm:pwa-install-tip-closed", handler);
+    return () => window.removeEventListener("gm:pwa-install-tip-closed", handler);
+  }, []);
 
   useEffect(() => {
     // Don't surface on the tutorial itself or while still on auth pages.
@@ -23,8 +33,11 @@ export function TestMailTipDialog() {
     if (localStorage.getItem(TIP_KEY) === "yes") return;
     // Only after the tutorial has been auto-opened (and presumably read).
     if (localStorage.getItem(TUTORIAL_KEY) !== "yes") return;
+    // Wait until the PWA-install tip has run (or self-marked as not needed),
+    // so the two dialogs don't pop up at the same time.
+    if (localStorage.getItem(PWA_TIP_KEY) !== "yes") return;
     setOpen(true);
-  }, [loc.pathname]);
+  }, [loc.pathname, tick]);
 
   function close() {
     localStorage.setItem(TIP_KEY, "yes");

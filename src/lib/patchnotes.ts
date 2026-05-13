@@ -11,6 +11,18 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.6.0",
+    date: "2026-05-13",
+    highlights: [
+      "📲 App ist jetzt installierbar — auf Android über den Install-Prompt, auf iOS via Teilen → 'Zum Home-Bildschirm'. Eigenes Icon, eigener Splashscreen, läuft ohne Browser-Leiste",
+      "🔔 Push-Benachrichtigungen aufs Handy: sobald jemand in den 30-Tage-Stack rutscht, kommt eine Push (Toggle in Einstellungen → Konto)",
+      "Eigene Splashscreens für alle iPhone- und iPad-Modelle — App-Start ohne weißes Flackern",
+      "Offline-tauglich: Daten werden lokal gecached, Multi-Tab-Sync inklusive",
+      "Update-Hinweis erscheint automatisch, sobald eine neue Version live ist",
+      "Hotfix: Google-Login klappt jetzt zuverlässig auch in der installierten PWA (iOS-Safari-ITP-Workaround)",
+    ],
+  },
+  {
     version: "v1.5.0",
     date: "2026-05-12",
     highlights: [

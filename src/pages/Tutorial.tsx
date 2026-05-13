@@ -107,6 +107,12 @@ export default function Tutorial() {
             wieder über das <strong>?</strong> oben rechts oder die{" "}
             <em>Einstellungen</em>.
           </p>
+          <p className="text-[13px] leading-[1.5] opacity-95 mt-2">
+            📲 Wenn dein Browser fragt, ob du die App{" "}
+            <strong>installieren</strong> willst — sag ja. Nur dann gibt's
+            Push-Benachrichtigungen zu anstehenden Geburtstagen und einen
+            sauberen Standalone-Look ohne Browser-Leiste.
+          </p>
         </div>
       </div>
 
@@ -424,6 +430,20 @@ export default function Tutorial() {
                   Abmelden ebenso. Mit Google synchronisiert sich deine
                   Mitgliedschaft automatisch auf jedes Gerät mit demselben
                   Konto.
+                </li>
+                <li>
+                  <strong>📲 App installieren</strong> — wenn dein Browser einen
+                  Install-Prompt zeigt, einmal annehmen. Auf iOS: Safari →
+                  Teilen-Knopf → <em>„Zum Home-Bildschirm"</em>. Erst dann ist
+                  die App standalone (eigenes Icon, kein Browser-UI, eigener
+                  Splashscreen).
+                </li>
+                <li>
+                  <strong>🔔 Push-Benachrichtigungen</strong> — Toggle aktiviert
+                  eine Push aufs Handy, sobald eine Person in den{" "}
+                  <em>30-Tage-Stack</em> rutscht. Funktioniert nur in der
+                  installierten App und nach einmaliger Erlaubnis im
+                  System-Dialog. Pro Gruppe getrennt einschaltbar.
                 </li>
                 <li>
                   <strong>Gruppe</strong> — aktive Gruppen-ID + <em>„Gruppe löschen"</em>

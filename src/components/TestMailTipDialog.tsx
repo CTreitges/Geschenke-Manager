@@ -4,7 +4,7 @@ import { Button, Dialog } from "./ui";
 import { isAuthed } from "@/lib/auth";
 
 const TIP_KEY = "gm:test-mail-tip-seen:v1";
-const TUTORIAL_KEY = "gm:tutorial-seen:v3";
+const TUTORIAL_KEY = "gm:tutorial-seen:v4";
 
 /**
  * One-time follow-up after the first-run tutorial. Reminds the user to send

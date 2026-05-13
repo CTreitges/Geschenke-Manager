@@ -113,7 +113,7 @@ function GoogleRedirectHandler() {
   return null;
 }
 
-const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v3";
+const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v4";
 
 /**
  * Auto-open the tutorial on first visit per browser. Marks itself as

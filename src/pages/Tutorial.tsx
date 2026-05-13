@@ -108,10 +108,12 @@ export default function Tutorial() {
             <em>Einstellungen</em>.
           </p>
           <p className="text-[13px] leading-[1.5] opacity-95 mt-2">
-            📲 Wenn dein Browser fragt, ob du die App{" "}
-            <strong>installieren</strong> willst — sag ja. Nur dann gibt's
-            Push-Benachrichtigungen zu anstehenden Geburtstagen und einen
-            sauberen Standalone-Look ohne Browser-Leiste.
+            📲 Direkt nach diesem Tutorial kommt ein <strong>Install-Tipp</strong>{" "}
+            — gerätespezifisch (Chrome/Edge: ein Klick, iPhone/iPad: Safari →
+            Teilen → <em>„Zum Home-Bildschirm"</em>). Nur in der installierten
+            App gibt's Push-Benachrichtigungen zu Geburtstagen und einen
+            sauberen Standalone-Look ohne Browser-Leiste. Den Button findest
+            du auch jederzeit in <em>Einstellungen → App</em>.
           </p>
         </div>
       </div>
@@ -432,11 +434,14 @@ export default function Tutorial() {
                   Konto.
                 </li>
                 <li>
-                  <strong>📲 App installieren</strong> — wenn dein Browser einen
-                  Install-Prompt zeigt, einmal annehmen. Auf iOS: Safari →
-                  Teilen-Knopf → <em>„Zum Home-Bildschirm"</em>. Erst dann ist
-                  die App standalone (eigenes Icon, kein Browser-UI, eigener
-                  Splashscreen).
+                  <strong>App → Installieren</strong> — eigene Sektion, die nur
+                  im Browser auftaucht. <strong>Chrome / Edge</strong>: Button{" "}
+                  <em>„📲 Installieren"</em> öffnet den nativen Prompt direkt.{" "}
+                  <strong>iPhone / iPad</strong>: nur über Safari möglich →
+                  Teilen-Symbol → <em>„Zum Home-Bildschirm"</em>. In der bereits
+                  installierten PWA verschwindet die Sektion automatisch und
+                  zeigt stattdessen <em>„✓ App ist installiert"</em>. Erst dann
+                  hast du eigenes Icon, kein Browser-UI und eigenen Splashscreen.
                 </li>
                 <li>
                   <strong>🔔 Push-Benachrichtigungen</strong> — Toggle aktiviert

@@ -11,6 +11,13 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.6.2",
+    date: "2026-05-13",
+    highlights: [
+      "Tutorial-Update: Hero-Intro erwähnt den neuen Install-Tip, Schritt 9 beschreibt die App-Sektion in den Einstellungen (verschwindet in der PWA, zeigt sonst Install-Button bzw. „✓ installiert“)",
+    ],
+  },
+  {
     version: "v1.6.1",
     date: "2026-05-13",
     highlights: [

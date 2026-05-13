@@ -10,6 +10,13 @@ import {
   isPushSupported,
   usePushEnabled,
 } from "@/lib/messaging";
+import {
+  getCachedInstallPrompt,
+  isStandalonePWA,
+  onInstallPromptChange,
+  tryInstallPwa,
+  wasPwaInstalledEver,
+} from "@/lib/pwa";
 import { pickColor } from "@/lib/colors";
 import { daysUntilBirthday } from "@/lib/birthdays";
 import {
@@ -354,6 +361,8 @@ export default function Settings() {
           </Row>
         </Group>
 
+        <PwaInstallGroup />
+
         <Group title="Mitteilungen">
           <PushNotificationsRow groupId={groupId} />
         </Group>
@@ -542,6 +551,84 @@ function PushNotificationsRow({ groupId }: { groupId: string | null }) {
     >
       <Toggle on={!!enabled} onChange={toggle} disabled={busy} />
     </Row>
+  );
+}
+
+function PwaInstallGroup() {
+  const [hasPrompt, setHasPrompt] = useState(!!getCachedInstallPrompt());
+  const [installedEver, setInstalledEver] = useState(wasPwaInstalledEver());
+  const [installing, setInstalling] = useState(false);
+  const standalone = isStandalonePWA();
+
+  useEffect(() => {
+    return onInstallPromptChange(() => {
+      setHasPrompt(!!getCachedInstallPrompt());
+      setInstalledEver(wasPwaInstalledEver());
+    });
+  }, []);
+
+  // App läuft als installierte PWA → Bereich komplett ausblenden.
+  if (standalone) return null;
+
+  async function handleInstall() {
+    if (!hasPrompt) {
+      toast.message("Dein Browser bietet gerade keinen Direkt-Install", {
+        description:
+          "Android/Edge/Chrome: Menü → „App installieren“. iPhone/iPad: Safari → Teilen → „Zum Home-Bildschirm“.",
+      });
+      return;
+    }
+    setInstalling(true);
+    try {
+      const outcome = await tryInstallPwa();
+      if (outcome === "accepted") {
+        toast.success("App installiert 🎉");
+        setInstalledEver(true);
+      } else if (outcome === "dismissed") {
+        toast.message("Installation abgebrochen");
+      } else {
+        toast.error("Installieren nicht möglich");
+      }
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  if (installedEver) {
+    return (
+      <Group title="App">
+        <Row
+          label="App ist installiert"
+          hint="Öffne sie über das Icon auf dem Startbildschirm oder Dock — dort gibt's auch Push-Benachrichtigungen."
+          icon={<Icon.check />}
+        >
+          <Chip variant="accent">✓ aktiv</Chip>
+        </Row>
+      </Group>
+    );
+  }
+
+  return (
+    <Group title="App">
+      <Row
+        label="App installieren"
+        hint={
+          hasPrompt
+            ? "Eigenes Icon, Vollbild-Modus, Push-Benachrichtigungen."
+            : "iPhone/iPad: Safari → Teilen → „Zum Home-Bildschirm“. Android: Menü → „App installieren“."
+        }
+        icon={<Icon.gift />}
+      >
+        <Button
+          onClick={handleInstall}
+          variant={hasPrompt ? "primary" : "secondary"}
+          size="sm"
+          disabled={installing}
+        >
+          {installing ? "…" : hasPrompt ? "📲 Installieren" : "So geht's"}
+        </Button>
+      </Row>
+    </Group>
   );
 }
 

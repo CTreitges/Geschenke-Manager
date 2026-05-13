@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
+import { PwaInstallTipDialog } from "@/components/PwaInstallTipDialog";
 import { TestMailTipDialog } from "@/components/TestMailTipDialog";
 import Login from "@/pages/Login";
 import CreateGroup from "@/pages/CreateGroup";
@@ -206,6 +207,7 @@ function AppRoutes() {
         element={
           <RequireAuth>
             <FirstRunTutorial />
+            <PwaInstallTipDialog />
             <TestMailTipDialog />
             <Layout>
               <Routes>

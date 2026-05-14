@@ -368,6 +368,13 @@ export default function Tutorial() {
               <p>
                 Ganz unten: roter <em>Geschenk löschen</em>-Knopf, falls ihr es doch nicht
                 verfolgen wollt — funktioniert auch für vergangene Geschenke.
+                Direkt darunter ein dezenter{" "}
+                <strong>🕓 Verlauf · zurücksetzen auf frühere Version</strong>:
+                jede Änderung am Geschenk wird im Hintergrund archiviert (die
+                letzten 20 Versionen). Wenn du dich verklickt hast oder ein
+                Feld falsch gesetzt ist → Modal öffnen, ältere Version
+                anklicken, wiederherstellen. Funktioniert auch für gelöschte
+                Geschenke über den Papierkorb in den Einstellungen.
               </p>
             </>
           }
@@ -509,6 +516,15 @@ export default function Tutorial() {
                 <li>
                   <strong>Hilfe → So funktioniert's</strong> & <strong>Feedback</strong>{" "}
                   (siehe Schritt 10)
+                </li>
+                <li>
+                  <strong>Hilfe → Papierkorb · Verlauf</strong> — automatischer
+                  Backup-Mechanismus: jede Änderung an Geschenken, Personen,
+                  Vorschlägen, Wunschlisten und Abstimmungen wird im Hintergrund
+                  archiviert (die letzten 20 Versionen pro Eintrag). Hier
+                  findest du auch alle gelöschten Items wieder und kannst sie
+                  mit einem Klick wiederherstellen. Schutz gegen versehentliche
+                  Klicks und gegen versteckte Bugs.
                 </li>
                 <li>
                   <strong>Abmelden</strong> — meldet diesen Browser ab und leert die

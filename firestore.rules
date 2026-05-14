@@ -14,8 +14,11 @@ rules_version = '2';
 // - The top-level /groups collection cannot be listed by clients (no
 //   enumeration of group ids). Individual `get` only succeeds if you are
 //   a member.
-// - /feedback is intentionally cross-group: any authenticated user can read
-//   and write. Trust principle applies as before.
+// - /feedback is cross-group, but ownership-gated: a single OWNER (matched
+//   by the Google account email) can read/edit/delete ALL feedback; every
+//   other authenticated user can only read/edit/delete their own (matched
+//   by byUid == request.auth.uid). Create requires the caller to stamp
+//   their own UID into byUid.
 // - All legacy top-level collections (persons, gifts, …, settings) are
 //   denied — they are read-only safety-net backups that the app no longer
 //   touches.
@@ -28,9 +31,21 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
     }
 
-    // Cross-group feedback inbox.
+    function isFeedbackOwner() {
+      return request.auth != null
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == 'owner@example.invalid';
+    }
+
+    // Cross-group feedback inbox. Owner sees all; everyone else only sees
+    // entries whose byUid matches their own auth uid.
     match /feedback/{id} {
-      allow read, create, update, delete: if request.auth != null;
+      allow read: if isFeedbackOwner()
+        || (request.auth != null && resource.data.byUid == request.auth.uid);
+      allow create: if request.auth != null
+        && request.resource.data.byUid == request.auth.uid;
+      allow update, delete: if isFeedbackOwner()
+        || (request.auth != null && resource.data.byUid == request.auth.uid);
     }
 
     // Web-Push FCM-Tokens, pro User-UID. Nur der eigene User schreibt/liest;

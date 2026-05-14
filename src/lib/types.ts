@@ -13,7 +13,15 @@ export interface Person {
   createdAt: number;
 }
 
-export type GiftStatus = "open" | "received";
+/**
+ * Lifecycle: open → confirmed → received.
+ * - "open": Vorschläge sammeln, abstimmen, ggf. Auswahl treffen.
+ * - "confirmed": Auswahl ist festgenagelt — Wunschliste + "Idee teilen"
+ *   verschwinden, "Gesamtsumme" statt "theoretisch", Bezahler-Summe wird
+ *   sichtbar. Lässt sich rückgängig machen.
+ * - "received": Geschenk ist überreicht — final.
+ */
+export type GiftStatus = "open" | "confirmed" | "received";
 
 export interface Gift {
   id: ID;
@@ -66,8 +74,9 @@ export interface Poll {
   status: PollStatus;
   startedAt?: number;
   closedAt?: number;
-  // votes: personId -> suggestionId
-  votes: Record<ID, ID>;
+  /** Mehrfach-Stimmen pro Person: personId → suggestionId[].
+   *  (Frühere Version war Record<ID, ID> — wird beim Lesen normalisiert.) */
+  votes: Record<ID, ID[]>;
 }
 
 export interface Feedback {

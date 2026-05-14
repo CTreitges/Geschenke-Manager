@@ -285,8 +285,19 @@ export function setActiveGroup(groupId: string | null) {
           collection(db, "groups", groupId, "polls"),
           (snap) => {
             state.polls = snap.docs.map((d) => {
-              const data = d.data() as Omit<Poll, "giftId">;
-              return { giftId: d.id, ...data, votes: data.votes ?? {} };
+              const raw = d.data() as {
+                status?: Poll["status"];
+                startedAt?: number;
+                closedAt?: number;
+                votes?: Record<string, unknown>;
+              };
+              return {
+                giftId: d.id,
+                status: raw.status ?? "none",
+                startedAt: raw.startedAt,
+                closedAt: raw.closedAt,
+                votes: normalizeVotes(raw.votes),
+              };
             });
             notify();
           },
@@ -334,6 +345,27 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
   const out = {} as T;
   for (const k in obj) {
     if (obj[k] !== undefined) out[k] = obj[k];
+  }
+  return out;
+}
+
+/**
+ * Konvertiert das Vote-Mapping in das aktuelle Multi-Vote-Format. Akzeptiert
+ * sowohl alte String-Werte (`{ personId: suggestionId }`) als auch das neue
+ * Array-Format (`{ personId: suggestionId[] }`) — alte Daten werden
+ * transparent in die einlementige Liste hochgeschrieben.
+ */
+function normalizeVotes(raw: Record<string, unknown> | undefined): Record<ID, ID[]> {
+  if (!raw) return {};
+  const out: Record<ID, ID[]> = {};
+  for (const [pid, v] of Object.entries(raw)) {
+    if (Array.isArray(v)) {
+      out[pid] = v.filter((x): x is string => typeof x === "string");
+    } else if (typeof v === "string" && v) {
+      out[pid] = [v];
+    } else {
+      out[pid] = [];
+    }
   }
   return out;
 }
@@ -574,6 +606,16 @@ export async function markReceived(giftId: ID) {
   await updateGift(giftId, { status: "received", receivedAt: Date.now() });
 }
 
+/** Auswahl festschnallen (Zwischen-Status vor "received"). */
+export async function markConfirmed(giftId: ID) {
+  await updateGift(giftId, { status: "confirmed" });
+}
+
+/** Bestätigung wieder aufheben — zurück in den "open"-Zustand. */
+export async function unconfirmGift(giftId: ID) {
+  await updateGift(giftId, { status: "open" });
+}
+
 export async function setGiftSelections(giftId: ID, ids: ID[]) {
   await updateDoc(gdoc("gifts", giftId), { selectedSuggestionIds: ids });
 }
@@ -631,16 +673,34 @@ export async function setPollStatus(giftId: ID, status: Poll["status"]) {
   );
 }
 
+/** Toggelt die Stimme einer Person für genau einen Vorschlag. Mehrfach-Voten
+ *  unterstützt: pro Person kann eine Liste von suggestionIds existieren. */
 export async function castVote(giftId: ID, personId: ID, suggestionId: ID) {
+  const existing = state.polls.find((p) => p.giftId === giftId);
+  const current = existing?.votes[personId] ?? [];
+  const next = current.includes(suggestionId)
+    ? current.filter((x) => x !== suggestionId)
+    : [...current, suggestionId];
   const ref = gdoc("polls", giftId);
-  await setDoc(ref, { votes: { [personId]: suggestionId } }, { merge: true });
+  await setDoc(ref, { votes: { [personId]: next } }, { merge: true });
 }
 
-export async function removeVote(giftId: ID, personId: ID) {
+/** Entfernt eine spezifische Stimme einer Person. */
+export async function removeVote(
+  giftId: ID,
+  personId: ID,
+  suggestionId?: ID,
+) {
   const existing = state.polls.find((p) => p.giftId === giftId);
   if (!existing) return;
-  const next: Record<ID, ID> = { ...existing.votes };
-  delete next[personId];
+  const next: Record<ID, ID[]> = { ...existing.votes };
+  if (suggestionId) {
+    const list = (next[personId] ?? []).filter((x) => x !== suggestionId);
+    if (list.length > 0) next[personId] = list;
+    else delete next[personId];
+  } else {
+    delete next[personId];
+  }
   await updateDoc(gdoc("polls", giftId), { votes: next });
 }
 

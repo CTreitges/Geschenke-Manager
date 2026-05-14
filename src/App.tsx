@@ -165,6 +165,22 @@ export default function App() {
   // gm:group-change event.
   useEffect(() => {
     setActiveGroup(groupId);
+    // Migration: vor v1.7.2 wurde die "Wer bin ich?"-Auswahl nur in
+    // localStorage gespeichert. Damit der grüne Marker auch für Leute
+    // sichtbar wird, die die App schon seit Längerem nutzen, schreiben
+    // wir die lokale Identität beim Group-Wechsel einmal in die Cloud
+    // nach (idempotent, setDoc+merge). Andere Geräte sehen die
+    // Identität dann automatisch in der members-Subscription.
+    if (groupId) {
+      const localId = localStorage.getItem(`gm:identity:v1:${groupId}`);
+      if (localId) {
+        import("@/lib/storage")
+          .then((s) => s.setMyIdentityCloud(localId))
+          .catch(() => {
+            /* best-effort */
+          });
+      }
+    }
   }, [groupId]);
 
   useEffect(() => {

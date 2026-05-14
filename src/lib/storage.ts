@@ -492,13 +492,28 @@ export async function leaveGroup(groupId: ID): Promise<void> {
  *  (members/{uid}.identityPersonId). Damit andere User sehen, welche
  *  Personen schon aktiv genutzt werden. Best-effort, fire-and-forget. */
 export async function setMyIdentityCloud(personId: ID | null): Promise<void> {
-  if (!state.activeGroupId) return;
+  if (!state.activeGroupId) {
+    console.info("[identity-sync] skipped: no active group");
+    return;
+  }
   try {
-    const uid = await authReady;
-    const ref = doc(db, "groups", state.activeGroupId, "members", uid);
-    await updateDoc(ref, { identityPersonId: personId ?? "" });
+    await authReady;
+    const user = auth.currentUser;
+    if (!user) {
+      console.warn("[identity-sync] skipped: not authenticated");
+      return;
+    }
+    const ref = doc(db, "groups", state.activeGroupId, "members", user.uid);
+    // setDoc + merge ist robuster als updateDoc — falls das identityPersonId-
+    // Feld zum ersten Mal gesetzt wird, schreibt es einfach das Feld dazu.
+    await setDoc(ref, { identityPersonId: personId ?? "" }, { merge: true });
+    console.info("[identity-sync] wrote", {
+      groupId: state.activeGroupId,
+      uid: user.uid,
+      personId,
+    });
   } catch (err) {
-    console.warn("identity cloud-sync failed", err);
+    console.warn("[identity-sync] failed", err);
   }
 }
 

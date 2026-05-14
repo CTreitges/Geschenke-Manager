@@ -78,11 +78,12 @@ service cloud.firestore {
         allow list: if isMember(groupId);
         allow create: if false; // only via createGroup / joinGroup
         // Updates erlaubt für den eigenen Member-Eintrag, aber nur für
-        // den notifyStack-Toggle. Alles andere (joinedAt, uid) bleibt
+        // den notifyStack-Toggle und das identityPersonId-Feld (Cloud-Sync
+        // der "Wer bin ich?"-Auswahl). Alles andere (joinedAt, uid) bleibt
         // immutable.
         allow update: if request.auth != null
           && request.auth.uid == uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["notifyStack"]);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["notifyStack", "identityPersonId"]);
         allow delete: if request.auth != null && request.auth.uid == uid;
       }
 

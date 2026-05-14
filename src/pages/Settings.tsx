@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
@@ -6,7 +6,7 @@ import {
   changePasswordCF,
   deleteGroupCF,
   setActiveGroup,
-  toggleParticipant,
+  setDefaultParticipation,
   updateSettings,
 } from "@/lib/storage";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
@@ -24,7 +24,7 @@ import {
   wasPwaInstalledEver,
 } from "@/lib/pwa";
 import { pickColor } from "@/lib/colors";
-import { daysUntilBirthday } from "@/lib/birthdays";
+import { daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import {
   getKnownGroups,
   removeKnownGroup,
@@ -37,7 +37,14 @@ import {
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { persons, gifts, settings } = useStore();
+  const { persons, settings, members } = useStore();
+  // Welche Personen sind aktuell von irgendeinem User als „Wer bin ich"
+  // ausgewählt? Wird über members.identityPersonId synchronisiert.
+  const claimedPersonIds = new Set(
+    members
+      .map((m) => m.identityPersonId)
+      .filter((x): x is string => !!x),
+  );
   const nav = useNavigate();
   const identity = useIdentity() ?? "";
   const groupId = useGroupId();
@@ -48,22 +55,7 @@ export default function Settings() {
   const [newPw, setNewPw] = useState("");
   const [linkingGoogle, setLinkingGoogle] = useState(false);
 
-  const myParticipations = useMemo(() => {
-    if (!me) return [];
-    return gifts
-      .filter(
-        (g) =>
-          (g.status === "open" || g.status === "confirmed") &&
-          g.personId !== me.id,
-      )
-      .map((g) => ({ gift: g, person: persons.find((p) => p.id === g.personId) }))
-      .filter((x): x is { gift: typeof gifts[number]; person: typeof persons[number] } => !!x.person)
-      .sort((a, b) => {
-        const da = daysUntilBirthday(a.person) ?? 9999;
-        const db = daysUntilBirthday(b.person) ?? 9999;
-        return da - db;
-      });
-  }, [gifts, persons, me]);
+  // (alte myParticipations-Logik durch person.defaultParticipantIds ersetzt.)
 
   useEffect(() => {
     setBudget(settings.defaultBudget);
@@ -271,23 +263,47 @@ export default function Settings() {
               )}
               {persons.map((p) => {
                 const active = identity === p.id;
+                // Grüne Umrandung = irgendein User in der Gruppe hat sich
+                // schon als diese Person identifiziert (über Cloud-Sync,
+                // gerätübergreifend).
+                const claimed = claimedPersonIds.has(p.id);
+                const baseColor = p.color || pickColor(p.id);
                 return (
                   <button
                     key={p.id}
                     onClick={() => pickIdentity(p.id)}
-                    className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-[13px] font-semibold border transition-colors"
+                    className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-[13px] font-semibold transition-colors"
                     style={
                       active
                         ? {
-                            background: `linear-gradient(135deg, ${p.color || pickColor(p.id)}, ${(p.color || pickColor(p.id))}dd)`,
+                            background: `linear-gradient(135deg, ${baseColor}, ${baseColor}dd)`,
                             color: "#fff",
-                            border: "1px solid transparent",
+                            border: claimed
+                              ? "2px solid #10B981"
+                              : "1px solid transparent",
                           }
-                        : { background: "transparent" }
+                        : {
+                            background: "transparent",
+                            border: claimed
+                              ? "2px solid #10B981"
+                              : "1px solid rgb(214 211 209 / 1)",
+                          }
                     }
+                    title={claimed ? "Wird aktiv von einem User benutzt" : undefined}
                   >
                     <Avatar person={p} size={22} />
                     {p.name}
+                    {claimed && (
+                      <span
+                        className="ml-0.5 text-[10px] leading-none"
+                        style={{
+                          color: active ? "#10B981" : "#10B981",
+                        }}
+                        aria-label="aktiv benutzt"
+                      >
+                        ●
+                      </span>
+                    )}
                   </button>
                 );
               })}
@@ -295,46 +311,74 @@ export default function Settings() {
           </div>
         </Group>
 
-        <Group title={me ? `Wo macht ${me.name} mit?` : "Meine Teilnahmen"}>
+        <Group
+          title={me ? `Wo macht ${me.name} mit?` : "Meine Teilnahmen"}
+          collapsible
+          defaultOpen={false}
+          hint={
+            me
+              ? `${
+                  persons.filter(
+                    (p) =>
+                      p.id !== me.id &&
+                      (p.defaultParticipantIds ?? []).includes(me.id),
+                  ).length
+                } / ${Math.max(0, persons.length - 1)} aktiv`
+              : undefined
+          }
+        >
           {!me ? (
             <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
-              Wähle oben „Wer bin ich?" — danach kannst du hier pro Geschenk
-              an- und abhaken, ob du mitmachst.
+              Wähle oben „Wer bin ich?" — danach kannst du hier pro Person
+              an- und abhaken, ob du bei ihren Geschenken mitmachst.
             </div>
-          ) : myParticipations.length === 0 ? (
+          ) : persons.filter((p) => p.id !== me.id).length === 0 ? (
             <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
-              Aktuell keine offenen Geschenke. Sobald 30 Tage vor einem
-              Geburtstag eines im Stack landet, taucht es hier auf.
+              Noch keine anderen Personen in der Gruppe.
             </div>
           ) : (
-            myParticipations.map(({ gift: g, person: p }, i) => {
-              const joined = g.participantIds.includes(me.id);
-              const days = daysUntilBirthday(p);
-              return (
-                <div
-                  key={g.id}
-                  className={`px-3.5 py-3 flex items-center gap-3 ${
-                    i > 0 ? "border-t border-[#F5F1ED] dark:border-stone-700" : ""
-                  }`}
-                >
-                  <Avatar person={p} size={32} />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
-                      {p.name}
+            <>
+              <div className="px-3.5 py-2.5 text-[12px] text-stone-500 dark:text-stone-400 border-b border-[#F5F1ED] dark:border-stone-700">
+                Toggle setzt deine Standard-Teilnahme. Wirkt sofort auf alle
+                offenen und bestätigten Geschenke der Person.
+              </div>
+              {persons
+                .filter((p) => p.id !== me.id)
+                .map((p, i) => {
+                  const isDefault =
+                    p.defaultParticipantIds?.includes(me.id) ?? false;
+                  const days = daysUntilBirthday(p);
+                  return (
+                    <div
+                      key={p.id}
+                      className={`px-3.5 py-3 flex items-center gap-3 ${
+                        i > 0
+                          ? "border-t border-[#F5F1ED] dark:border-stone-700"
+                          : ""
+                      }`}
+                    >
+                      <Avatar person={p} size={32} />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
+                          {p.name}
+                        </div>
+                        <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                          {formatBirthday(p)}
+                          {days != null && days >= 0
+                            ? ` · in ${days} T.`
+                            : ""}
+                        </div>
+                      </div>
+                      <Toggle
+                        on={isDefault}
+                        onChange={() =>
+                          setDefaultParticipation(p.id, me.id, !isDefault)
+                        }
+                      />
                     </div>
-                    <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                      Geschenk {g.year}
-                      {days != null && days >= 0 ? ` · in ${days} T.` : ""}
-                      {` · ${g.participantIds.length} dabei`}
-                    </div>
-                  </div>
-                  <Toggle
-                    on={joined}
-                    onChange={() => toggleParticipant(g.id, me.id)}
-                  />
-                </div>
-              );
-            })
+                  );
+                })}
+            </>
           )}
         </Group>
 
@@ -642,13 +686,52 @@ function PwaInstallGroup() {
   );
 }
 
-function Group({ title, children }: { title: string; children: ReactNode }) {
+function Group({
+  title,
+  children,
+  collapsible,
+  defaultOpen = true,
+  hint,
+}: {
+  title: string;
+  children: ReactNode;
+  collapsible?: boolean;
+  defaultOpen?: boolean;
+  hint?: string;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  if (!collapsible) {
+    return (
+      <div className="mb-4">
+        <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 px-3.5 pt-1.5 pb-1.5">
+          {title}
+        </div>
+        <Card className="p-0 overflow-hidden">{children}</Card>
+      </div>
+    );
+  }
   return (
     <div className="mb-4">
-      <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 px-3.5 pt-1.5 pb-1.5">
-        {title}
-      </div>
-      <Card className="p-0 overflow-hidden">{children}</Card>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between gap-2 px-3.5 pt-1.5 pb-1.5 text-left"
+      >
+        <div className="flex items-baseline gap-2 min-w-0">
+          <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400">
+            {title}
+          </span>
+          {hint && (
+            <span className="text-[11px] font-medium text-stone-400 truncate">
+              {hint}
+            </span>
+          )}
+        </div>
+        <Icon.chev
+          size={14}
+          className={`text-stone-400 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+      </button>
+      {open && <Card className="p-0 overflow-hidden">{children}</Card>}
     </div>
   );
 }

@@ -9,6 +9,10 @@ export interface Person {
   emailOptIn?: boolean;
   /** Per-stage-per-year markers, e.g. "reminder-60d-2026": <timestamp>. Prevents double-send. */
   notificationsSent?: Record<string, number>;
+  /** Globale Default-Teilnehmer: Personen aus dieser Liste werden bei jedem
+   *  neuen Geschenk für diese Person automatisch als Teilnehmer übernommen.
+   *  Gesteuert via Settings → "Wo mache ich mit?". */
+  defaultParticipantIds?: ID[];
   color: string; // avatar background, hex
   createdAt: number;
 }
@@ -97,4 +101,17 @@ export interface Settings {
   defaultBudget: number;
   passwordHash: string; // SHA-256
   darkMode: boolean;
+}
+
+/** Member-Doc unter /groups/{gid}/members/{uid}. UID ist die Firebase-
+ *  Auth-UID, die einer konkreten Person der Gruppe entspricht (Identity-
+ *  Sync). Wird verwendet, um zu zeigen, welche Personen aktiv genutzt
+ *  werden. */
+export interface Member {
+  uid: ID;
+  joinedAt?: number;
+  notifyStack?: boolean;
+  /** Welche Person dieser User in der Gruppe als „Wer bin ich" gesetzt
+   *  hat. Wird vom Client synchronisiert (siehe storage.setMyIdentityCloud). */
+  identityPersonId?: ID;
 }

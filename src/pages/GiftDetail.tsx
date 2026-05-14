@@ -315,7 +315,8 @@ export default function GiftDetail() {
         )}
       </Section>
 
-      {/* ── Abstimmung ────────────────────────────────────────── */}
+      {/* ── Abstimmung — nur im offenen Status ────────────────── */}
+      {gift.status === "open" && (
       <Section title="Abstimmung">
         {pollStatus === "none" && (
           <div className="text-center py-1">
@@ -393,6 +394,7 @@ export default function GiftDetail() {
           />
         )}
       </Section>
+      )}
 
       {/* ── Dezente Bezahlt-Übersicht (unten, ab confirmed) ─────── */}
       {gift.status !== "open" && (

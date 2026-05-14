@@ -9,6 +9,7 @@ import {
   arrayUnion,
   arrayRemove,
   writeBatch,
+  getDoc,
   getDocs,
   query,
   where,
@@ -554,17 +555,28 @@ export async function ensureAutoGift(
   year: number,
   budgetPerPerson: number,
 ): Promise<void> {
+  // WICHTIG: erst per getDoc auf die deterministische ID prüfen — sonst
+  // überschreibt das setDoc unten ein bereits bestehendes Geschenk dieser
+  // Person+Jahr-Kombination, das gerade nicht im "open"-Status ist
+  // (confirmed, received). Bis v1.7.0 war hier nur ein query-Filter auf
+  // status=="open" — das führte dazu, dass "Auswahl bestätigen" das Gift
+  // beim nächsten Stack-Render mit leeren Feldern wieder überschrieb.
+  const ref = gdoc("gifts", `${personId}_${year}`);
+  const existing = await getDoc(ref);
+  if (existing.exists()) return;
+
+  // Zusätzlich noch ein Query für manuell hinzugefügte Geschenke mit
+  // random-IDs (legacy), damit bei mehreren offenen Karten keine
+  // weitere automatisch hinzukommt.
   const q = query(
     gcol("gifts"),
     where("personId", "==", personId),
     where("year", "==", year),
-    where("status", "==", "open"),
     limit(1),
   );
   const found = await getDocs(q);
   if (!found.empty) return;
 
-  const ref = gdoc("gifts", `${personId}_${year}`);
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
   await setDoc(
     ref,

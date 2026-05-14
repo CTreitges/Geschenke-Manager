@@ -73,7 +73,13 @@ export interface Poll {
 export interface Feedback {
   id: ID;
   text: string;
-  by?: ID;        // identity that submitted it
+  by?: ID;        // identity (personId in some group) that submitted it
+  /** Firebase auth UID of the submitter. Required for new entries — used by
+   *  firestore rules to gate read/update/delete to the author. */
+  byUid?: string;
+  /** Best-effort email of the submitter (Google-account, if linked). Used
+   *  for the owner-can-see-all check in the UI. */
+  byEmail?: string;
   createdAt: number;
   resolved?: boolean;
 }

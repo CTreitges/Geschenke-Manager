@@ -3,6 +3,8 @@ import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader } from 
 import { useStore } from "@/lib/hooks";
 import { addFeedback, deleteFeedback, updateFeedback } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
+import { useFirebaseUser } from "@/lib/firebase";
+import { isFeedbackOwner } from "@/lib/feedback-owner";
 import { toast } from "sonner";
 import type { Feedback as FB, Person } from "@/lib/types";
 
@@ -21,6 +23,9 @@ function formatRelative(ts: number): string {
 export default function Feedback() {
   const { feedback, persons } = useStore();
   const myId = useIdentity();
+  const fbUser = useFirebaseUser();
+  const myUid = fbUser?.uid ?? null;
+  const isOwner = isFeedbackOwner(fbUser);
   const [text, setText] = useState("");
 
   const sorted = [...feedback].sort((a, b) => {
@@ -39,11 +44,21 @@ export default function Feedback() {
     toast.success("Feedback abgeschickt");
   }
 
+  function canEdit(f: FB): boolean {
+    if (isOwner) return true;
+    if (!myUid) return false;
+    return f.byUid === myUid;
+  }
+
   return (
     <>
       <PageHeader
         title="Feedback"
-        subtitle="Wünsche, Ideen, Bugs — alles willkommen"
+        subtitle={
+          isOwner
+            ? "Owner-Sicht: alle Feedbacks aus allen Gruppen"
+            : "Wünsche, Ideen, Bugs — alles willkommen"
+        }
       />
 
       <div className="px-4 pb-24">
@@ -64,8 +79,8 @@ export default function Feedback() {
           <div className="flex items-center justify-between mt-1 pl-7">
             <span className="text-[11px] text-stone-400">
               {myId
-                ? "Wird dir zugeordnet"
-                : "Anonym — wähle in Settings deine Identität, falls du genannt werden willst"}
+                ? "Wird dir zugeordnet · nur du & der Owner sehen es"
+                : "Nur du & der Owner sehen dein Feedback"}
             </span>
             <Button size="sm" onClick={submit} disabled={!text.trim()}>
               <Icon.plus size={14} /> Senden
@@ -88,7 +103,8 @@ export default function Feedback() {
                 key={f.id}
                 fb={f}
                 author={persons.find((p) => p.id === f.by)}
-                canEdit={!myId || f.by === myId || !f.by}
+                canEdit={canEdit(f)}
+                showEmail={isOwner}
               />
             ))}
           </Section>
@@ -101,7 +117,8 @@ export default function Feedback() {
                 key={f.id}
                 fb={f}
                 author={persons.find((p) => p.id === f.by)}
-                canEdit={!myId || f.by === myId || !f.by}
+                canEdit={canEdit(f)}
+                showEmail={isOwner}
               />
             ))}
           </Section>
@@ -123,7 +140,17 @@ function Section({ title, count, children }: { title: string; count: number; chi
   );
 }
 
-function FeedbackCard({ fb, author, canEdit }: { fb: FB; author?: Person; canEdit: boolean }) {
+function FeedbackCard({
+  fb,
+  author,
+  canEdit,
+  showEmail,
+}: {
+  fb: FB;
+  author?: Person;
+  canEdit: boolean;
+  showEmail?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(fb.text);
 
@@ -180,17 +207,19 @@ function FeedbackCard({ fb, author, canEdit }: { fb: FB; author?: Person; canEdi
             {fb.text}
           </div>
           <div className="flex items-center justify-between mt-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] text-stone-400">
+            <div className="flex items-center gap-1.5 text-[11px] text-stone-400 min-w-0">
               {author ? (
                 <>
                   <Avatar person={author} size={16} />
                   <span>{author.name}</span>
                   <span>·</span>
                 </>
+              ) : showEmail && fb.byEmail ? (
+                <span className="truncate">{fb.byEmail} ·</span>
               ) : (
                 <span>anonym ·</span>
               )}
-              <span>{formatRelative(fb.createdAt)}</span>
+              <span className="shrink-0">{formatRelative(fb.createdAt)}</span>
             </div>
             {canEdit && (
               <div className="flex gap-1">

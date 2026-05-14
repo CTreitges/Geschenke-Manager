@@ -14,8 +14,10 @@ import {
   where,
   limit,
 } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { auth, authReady, db, functions } from "./firebase";
+import { isFeedbackOwner } from "./feedback-owner";
 import type {
   Feedback,
   Gift,
@@ -95,25 +97,80 @@ function groupRootDoc() {
 }
 
 // ─── Cross-group feedback subscription ──────────────────
+// Re-subscribes whenever the Firebase auth user changes (anonymous →
+// Google, sign-out, account switch). The query is owner-aware:
+// - The owner account (see feedback-owner.ts) subscribes to ALL feedback.
+// - Everyone else subscribes only to their own (where byUid == myUid),
+//   which is exactly what firestore.rules permits.
 let feedbackUnsub: (() => void) | null = null;
+let feedbackUidWatching: string | null = null;
+let feedbackOwnerWatching: boolean | null = null;
+let feedbackAuthUnsub: (() => void) | null = null;
+
+function teardownFeedbackData() {
+  if (feedbackUnsub) {
+    feedbackUnsub();
+    feedbackUnsub = null;
+  }
+  feedbackUidWatching = null;
+  feedbackOwnerWatching = null;
+  state.feedback = [];
+}
+
+function applyFeedbackSubscription() {
+  const user = auth.currentUser;
+  if (!user) {
+    teardownFeedbackData();
+    notify();
+    return;
+  }
+  const owner = isFeedbackOwner(user);
+  const uid = user.uid;
+  // Avoid resubscribing if nothing relevant changed.
+  if (
+    feedbackUnsub &&
+    feedbackUidWatching === uid &&
+    feedbackOwnerWatching === owner
+  ) {
+    return;
+  }
+  if (feedbackUnsub) {
+    feedbackUnsub();
+    feedbackUnsub = null;
+  }
+  feedbackUidWatching = uid;
+  feedbackOwnerWatching = owner;
+
+  const ref = owner
+    ? collection(db, "feedback")
+    : query(collection(db, "feedback"), where("byUid", "==", uid));
+
+  feedbackUnsub = onSnapshot(
+    ref,
+    (snap) => {
+      state.feedback = snap.docs.map((d) => ({
+        id: d.id,
+        ...(d.data() as Omit<Feedback, "id">),
+      }));
+      notify();
+    },
+    (err) => {
+      console.warn("feedback subscription error:", err);
+    },
+  );
+}
+
 function ensureFeedbackSubscription() {
-  if (feedbackUnsub) return;
+  if (feedbackAuthUnsub) {
+    applyFeedbackSubscription();
+    return;
+  }
+  feedbackAuthUnsub = onAuthStateChanged(auth, () => {
+    applyFeedbackSubscription();
+  });
   authReady
     .then(() => {
-      if (feedbackUnsub) return;
-      feedbackUnsub = onSnapshot(
-        collection(db, "feedback"),
-        (snap) => {
-          state.feedback = snap.docs.map((d) => ({
-            id: d.id,
-            ...(d.data() as Omit<Feedback, "id">),
-          }));
-          notify();
-        },
-        (err) => {
-          console.warn("feedback subscription error:", err);
-        },
-      );
+      applyFeedbackSubscription();
     })
     .catch(() => {
       /* anon auth failure — surface via permissionError, see setActiveGroup */
@@ -588,8 +645,20 @@ export async function removeVote(giftId: ID, personId: ID) {
 }
 
 // ─── Feedback (cross-group, top-level) ──────────────────
-export async function addFeedback(f: Omit<Feedback, "id" | "createdAt">) {
-  await addDoc(collection(db, "feedback"), clean({ ...f, createdAt: Date.now() }));
+export async function addFeedback(
+  f: Omit<Feedback, "id" | "createdAt" | "byUid" | "byEmail">,
+) {
+  const uid = await authReady;
+  const email = auth.currentUser?.email?.toLowerCase() ?? undefined;
+  await addDoc(
+    collection(db, "feedback"),
+    clean({
+      ...f,
+      byUid: uid,
+      byEmail: email,
+      createdAt: Date.now(),
+    }),
+  );
 }
 
 export async function updateFeedback(id: ID, patch: Partial<Feedback>) {

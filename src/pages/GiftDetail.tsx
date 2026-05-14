@@ -30,6 +30,10 @@ export default function GiftDetail() {
   const myId = useIdentity();
   const [pollDetailsOpen, setPollDetailsOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  // Wird gesetzt, wenn der Dialog im Zuge von "Geschenk erhalten" geöffnet
+  // wurde — dann soll das Schließen zurück auf die Startseite. Bei reinem
+  // "Bearbeiten" aus der Übersicht bleibt der User auf der Geschenk-Seite.
+  const [navHomeAfterPayment, setNavHomeAfterPayment] = useState(false);
 
   const gift = gifts.find((g) => g.id === id);
   if (!gift) return <p className="px-4 py-8">Geschenk nicht gefunden.</p>;
@@ -128,13 +132,17 @@ export default function GiftDetail() {
       {/* ── Gruppen-Chat (z.B. WhatsApp) ──────────────────────── */}
       <WhatsappLinkSection gift={gift} />
 
-      {/* ── Bezahlt-Übersicht (nur nach Geschenk-erhalten) ──── */}
-      {gift.status === "received" && (
+      {/* ── Bezahlt-Übersicht ─────────────────────────────────── */}
+      {/* Schon vor "erhalten" sichtbar, sobald mindestens ein Vorschlag
+          ausgewählt ist — User können sich vorab abstimmen wer was zahlt.
+          Nach "erhalten" verschwindet der "vorläufig"-Hinweis. */}
+      {(gift.selectedSuggestionIds ?? []).length > 0 && (
         <PaymentSummary
           selectedSuggestions={giftSuggestions.filter((s) =>
             (gift.selectedSuggestionIds ?? []).includes(s.id),
           )}
           persons={persons}
+          provisional={gift.status === "open"}
           onEdit={() => setPaymentDialogOpen(true)}
         />
       )}
@@ -380,11 +388,19 @@ export default function GiftDetail() {
               if (!confirm(`Geschenk für ${person.name} als erhalten markieren?`)) return;
               markReceived(gift.id);
               toast.success("Geschenk erhalten ✓");
-              // If there are selected suggestions, open payment dialog to capture
-              // who paid for what. Otherwise navigate straight home.
-              const hasSelected = (gift.selectedSuggestionIds ?? []).length > 0;
-              if (hasSelected) setPaymentDialogOpen(true);
-              else nav("/");
+              // Dialog nur öffnen, wenn ausgewählte Vorschläge noch keinen
+              // Bezahler haben. Vorab eingetragene Bezahler werden einfach
+              // "gefestigt" — kein Reibung nötig.
+              const selected = giftSuggestions.filter((s) =>
+                (gift.selectedSuggestionIds ?? []).includes(s.id),
+              );
+              const missing = selected.some((s) => !s.paidBy);
+              if (missing) {
+                setNavHomeAfterPayment(true);
+                setPaymentDialogOpen(true);
+              } else {
+                nav("/");
+              }
             }}
             className="w-full"
           >
@@ -466,12 +482,15 @@ export default function GiftDetail() {
         </Dialog>
       )}
 
-      {/* ── Payment-Dialog (nach „Geschenk erhalten") ──────────── */}
+      {/* ── Payment-Dialog ────────────────────────────────────── */}
       <PaymentDialog
         open={paymentDialogOpen}
         onClose={() => {
           setPaymentDialogOpen(false);
-          nav("/");
+          if (navHomeAfterPayment) {
+            setNavHomeAfterPayment(false);
+            nav("/");
+          }
         }}
         selectedSuggestions={giftSuggestions.filter((s) =>
           (gift.selectedSuggestionIds ?? []).includes(s.id),
@@ -485,14 +504,19 @@ export default function GiftDetail() {
   );
 }
 
-// ── Payment-Summary (im Gift nach „erhalten") ─────────────────
+// ── Payment-Summary ───────────────────────────────────────────
+// Sichtbar sobald Vorschläge ausgewählt sind. `provisional=true` zeigt
+// einen Hinweis dass die Zuordnung noch geändert werden kann; nach dem
+// Erhalt der Geschenke wird sie "gefestigt" (Hinweis verschwindet).
 function PaymentSummary({
   selectedSuggestions,
   persons,
+  provisional,
   onEdit,
 }: {
   selectedSuggestions: Suggestion[];
   persons: Person[];
+  provisional: boolean;
   onEdit: () => void;
 }) {
   const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
@@ -513,21 +537,53 @@ function PaymentSummary({
   });
   const payers = [...byPayer.entries()].sort((a, b) => b[1].total - a[1].total);
 
+  // Farb-Palette: vorläufig → amber (Aufmerksamkeit, "noch im Fluss"),
+  // gefestigt → emerald (final, abgeschlossen).
+  const accent = provisional
+    ? {
+        border: "border-amber-200 dark:border-amber-900",
+        bg: "bg-amber-50/50 dark:bg-amber-950/30",
+        headBorder: "border-amber-200 dark:border-amber-900",
+        headText: "text-amber-900 dark:text-amber-200",
+        editText: "text-amber-700 dark:text-amber-300",
+        editHover: "hover:bg-amber-100 dark:hover:bg-amber-900/40",
+        divide: "divide-amber-100 dark:divide-amber-900/40",
+      }
+    : {
+        border: "border-emerald-200 dark:border-emerald-900",
+        bg: "bg-emerald-50/50 dark:bg-emerald-950/30",
+        headBorder: "border-emerald-200 dark:border-emerald-900",
+        headText: "text-emerald-900 dark:text-emerald-200",
+        editText: "text-emerald-700 dark:text-emerald-300",
+        editHover: "hover:bg-emerald-100 dark:hover:bg-emerald-900/40",
+        divide: "divide-emerald-100 dark:divide-emerald-900/40",
+      };
+
   return (
     <div className="px-4 pb-4">
-      <div className="rounded-2xl border border-emerald-200 dark:border-emerald-900 bg-emerald-50/50 dark:bg-emerald-950/30 overflow-hidden">
-        <div className="px-3.5 py-2.5 flex items-center justify-between border-b border-emerald-200 dark:border-emerald-900">
-          <div className="text-[15px] font-bold text-emerald-900 dark:text-emerald-200">
+      <div className={`rounded-2xl border ${accent.border} ${accent.bg} overflow-hidden`}>
+        <div className={`px-3.5 py-2.5 flex items-center justify-between border-b ${accent.headBorder}`}>
+          <div className={`text-[15px] font-bold ${accent.headText}`}>
             💶 Bezahlt-Übersicht
+            {provisional && (
+              <span className="ml-2 align-middle text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
+                vorläufig
+              </span>
+            )}
           </div>
           <button
             onClick={onEdit}
-            className="text-[12px] font-semibold text-emerald-700 dark:text-emerald-300 px-2 py-1 rounded-md hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+            className={`text-[12px] font-semibold ${accent.editText} px-2 py-1 rounded-md ${accent.editHover}`}
           >
             Bearbeiten
           </button>
         </div>
-        <div className="divide-y divide-emerald-100 dark:divide-emerald-900/40">
+        {provisional && (
+          <div className="px-3.5 py-2 text-[12px] text-amber-800/90 dark:text-amber-300/90 border-b border-amber-100 dark:border-amber-900/40">
+            📝 Wird nach „Geschenk erhalten" gefestigt — bis dahin änderbar.
+          </div>
+        )}
+        <div className={`divide-y ${accent.divide}`}>
           {payers.length === 0 ? (
             <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400">
               Noch nichts eingetragen.
@@ -1029,24 +1085,32 @@ function SuggestionCard({
         </div>
       )}
 
-      {/* PaidBy-Dropdown nach Geschenk-erhalten */}
-      {!editing && isSelected && giftStatus === "received" && (
-        <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-stone-700 flex items-center gap-2 flex-wrap">
-          <span className="text-[13px] font-semibold text-stone-700 dark:text-stone-200 shrink-0">
-            💶 Bezahlt von:
-          </span>
-          <select
-            value={s.paidBy ?? ""}
-            onChange={(e) => onSetPaidBy(e.target.value || undefined)}
-            className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
-          >
-            <option value="">— wählen —</option>
-            {participants.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-          {s.paidBy && personsById[s.paidBy] && (
-            <Avatar person={personsById[s.paidBy]} size={22} />
+      {/* PaidBy-Dropdown: schon im offenen Status verfügbar — wird nach
+          "Geschenk erhalten" gefestigt. */}
+      {!editing && isSelected && (
+        <div className="mt-2.5 pt-2.5 border-t border-stone-100 dark:border-stone-700 space-y-1.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[13px] font-semibold text-stone-700 dark:text-stone-200 shrink-0">
+              💶 Bezahlt von:
+            </span>
+            <select
+              value={s.paidBy ?? ""}
+              onChange={(e) => onSetPaidBy(e.target.value || undefined)}
+              className="flex-1 min-w-[140px] px-2.5 py-1.5 rounded-lg bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
+            >
+              <option value="">— wählen —</option>
+              {participants.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+            {s.paidBy && personsById[s.paidBy] && (
+              <Avatar person={personsById[s.paidBy]} size={22} />
+            )}
+          </div>
+          {giftStatus === "open" && (
+            <div className="text-[11px] text-amber-700 dark:text-amber-300/90 flex items-center gap-1">
+              📝 vorläufig — wird nach Erhalten gefestigt
+            </div>
           )}
         </div>
       )}

@@ -5,13 +5,9 @@ import { useStore } from "@/lib/hooks";
 import {
   changePasswordCF,
   deleteGroupCF,
-  deleteArchiveEntry,
-  listTrash,
-  restoreFromArchive,
   setActiveGroup,
   toggleParticipant,
   updateSettings,
-  type ArchiveEntry,
 } from "@/lib/storage";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import {
@@ -113,7 +109,6 @@ export default function Settings() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletePw, setDeletePw] = useState("");
   const [deleteBusy, setDeleteBusy] = useState(false);
-  const [trashOpen, setTrashOpen] = useState(false);
 
   async function signOutGoogle() {
     if (!confirm("Bei Google abmelden? Du wirst danach wieder anonym auf diesem Gerät und musst der Gruppe ggf. mit Passwort erneut beitreten.")) {
@@ -374,16 +369,7 @@ export default function Settings() {
           <Row label="Feedback" hint="Wünsche, Ideen, Bugs" icon={<Icon.mail />} onClick={() => nav("/feedback")}>
             <Icon.chev className="text-stone-400" />
           </Row>
-          <Row
-            label="Papierkorb · Verlauf"
-            hint="Gelöschte Geschenke, Personen & Co. wiederherstellen"
-            icon={<Icon.trash />}
-            onClick={() => setTrashOpen(true)}
-          >
-            <Icon.chev className="text-stone-400" />
-          </Row>
         </Group>
-        <TrashDialog open={trashOpen} onClose={() => setTrashOpen(false)} />
 
         <PwaInstallGroup />
 
@@ -715,155 +701,3 @@ function Row({
   );
 }
 
-// ── Papierkorb-Dialog ────────────────────────────────────────
-// Listet alle Lösch-Snapshots der aktuellen Gruppe (vom Cloud-Function-
-// Trigger archiveGroupDocChange archiviert). 1-Klick Wiederherstellen
-// schreibt das Doc zurück an seine ursprüngliche Adresse.
-function TrashDialog({
-  open,
-  onClose,
-}: {
-  open: boolean;
-  onClose: () => void;
-}) {
-  const [entries, setEntries] = useState<ArchiveEntry[] | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setEntries(null);
-    listTrash()
-      .then((res) => {
-        if (!cancelled) setEntries(res);
-      })
-      .catch((err) => {
-        console.warn("trash fetch failed", err);
-        if (!cancelled) setEntries([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open]);
-
-  async function reload() {
-    setEntries(null);
-    try {
-      setEntries(await listTrash());
-    } catch (err) {
-      console.warn("trash reload failed", err);
-      setEntries([]);
-    }
-  }
-
-  function labelFor(coll: ArchiveEntry["collection"]): string {
-    switch (coll) {
-      case "gifts":
-        return "Geschenk";
-      case "persons":
-        return "Person";
-      case "suggestions":
-        return "Vorschlag";
-      case "wishlist":
-        return "Wunsch";
-      case "polls":
-        return "Abstimmung";
-    }
-  }
-
-  return (
-    <Dialog open={open} onClose={onClose} title="🗑 Papierkorb">
-      <div className="space-y-3 px-5 pb-2">
-        <p className="text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
-          Hier liegen gelöschte Geschenke, Personen und andere Einträge der
-          letzten Tage. „Wiederherstellen" macht das Löschen rückgängig.
-        </p>
-        {entries === null && (
-          <div className="text-[13px] text-stone-400 italic">Lade Papierkorb …</div>
-        )}
-        {entries && entries.length === 0 && (
-          <div className="text-[13px] text-stone-500 italic">
-            Papierkorb ist leer.
-          </div>
-        )}
-        {entries && entries.length > 0 && (
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {entries.map((e) => {
-              const d = new Date(e.archivedAt);
-              const dateLabel = d.toLocaleString("de-DE", {
-                day: "2-digit",
-                month: "short",
-                hour: "2-digit",
-                minute: "2-digit",
-              });
-              const data = e.data as Record<string, unknown>;
-              const name = typeof data.name === "string" ? data.name : undefined;
-              const title = typeof data.title === "string" ? data.title : undefined;
-              const summary = name ?? title ?? labelFor(e.collection);
-
-              return (
-                <div
-                  key={e.id}
-                  className="px-3 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center gap-2.5"
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50 truncate">
-                      {labelFor(e.collection)} · {summary}
-                    </div>
-                    <div className="text-[11px] text-stone-500 dark:text-stone-400">
-                      {dateLabel}
-                    </div>
-                  </div>
-                  <button
-                    onClick={async () => {
-                      setBusyId(e.id);
-                      try {
-                        await restoreFromArchive(e);
-                        toast.success("Wiederhergestellt");
-                        await reload();
-                      } catch (err) {
-                        console.error(err);
-                        toast.error("Wiederherstellen fehlgeschlagen");
-                      } finally {
-                        setBusyId(null);
-                      }
-                    }}
-                    disabled={busyId === e.id}
-                    className="text-[12px] font-semibold text-violet-700 dark:text-violet-300 px-2.5 py-1.5 rounded-md hover:bg-violet-100 dark:hover:bg-violet-950 disabled:opacity-50 shrink-0"
-                  >
-                    {busyId === e.id ? "…" : "Wiederherstellen"}
-                  </button>
-                  <button
-                    onClick={async () => {
-                      if (!confirm("Diesen Eintrag endgültig aus dem Papierkorb entfernen?")) return;
-                      setBusyId(e.id);
-                      try {
-                        await deleteArchiveEntry(e.id);
-                        await reload();
-                      } catch (err) {
-                        console.error(err);
-                        toast.error("Löschen fehlgeschlagen");
-                      } finally {
-                        setBusyId(null);
-                      }
-                    }}
-                    disabled={busyId === e.id}
-                    className="text-stone-400 hover:text-red-500 px-1.5 py-1.5 disabled:opacity-50"
-                    aria-label="Endgültig löschen"
-                  >
-                    <Icon.x size={14} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-        <div className="pt-2">
-          <Button variant="secondary" onClick={onClose} className="w-full">
-            Schließen
-          </Button>
-        </div>
-      </div>
-    </Dialog>
-  );
-}

@@ -14,8 +14,6 @@ export const PATCH_NOTES: PatchNote[] = [
     version: "v1.7.1",
     date: "2026-05-14",
     highlights: [
-      "🕓 Automatischer Verlauf für alle Geschenke, Personen, Vorschläge, Wunschlisten und Abstimmungen — jede Änderung wird im Hintergrund gesichert. Im Geschenk-Detail unten gibt's einen „🕓 Verlauf“-Link, der die letzten 20 Versionen zeigt und einen 1-Klick-Restore",
-      "🗑 Papierkorb in den Einstellungen: gelöschte Items aus allen Sammlungen tauchen dort auf und lassen sich wiederherstellen",
       "Hotfix: ensureAutoGift hatte bestätigte Geschenke beim Stack-Re-Render mit einem leeren Doc überschrieben. Jetzt prüft die Funktion erst per getDoc, ob die ID bereits existiert. Bestätigte Geschenke bleiben im offenen Stack — sie verschwinden erst beim Erhalten",
     ],
   },

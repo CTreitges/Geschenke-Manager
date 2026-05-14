@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Button, Chip, Dialog, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
@@ -7,11 +7,9 @@ import {
   castVote,
   deleteGift,
   deleteSuggestion,
-  listDocHistory,
   markConfirmed,
   markReceived,
   removeVote,
-  restoreFromArchive,
   setAllParticipants,
   setGiftSelections,
   setPollStatus,
@@ -19,7 +17,6 @@ import {
   unconfirmGift,
   updateGift,
   updateSuggestion,
-  type ArchiveEntry,
 } from "@/lib/storage";
 import { ageOnNextBirthday, daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import { pickColor } from "@/lib/colors";
@@ -39,7 +36,6 @@ export default function GiftDetail() {
   // wurde — dann soll das Schließen zurück auf die Startseite. Bei reinem
   // "Bearbeiten" aus der Übersicht bleibt der User auf der Geschenk-Seite.
   const [navHomeAfterPayment, setNavHomeAfterPayment] = useState(false);
-  const [historyOpen, setHistoryOpen] = useState(false);
 
   const gift = gifts.find((g) => g.id === id);
   if (!gift) return <p className="px-4 py-8">Geschenk nicht gefunden.</p>;
@@ -493,12 +489,6 @@ export default function GiftDetail() {
         >
           <Icon.trash /> Geschenk löschen
         </Button>
-        <button
-          onClick={() => setHistoryOpen(true)}
-          className="w-full text-center text-[12px] font-medium text-stone-500 dark:text-stone-400 hover:text-violet-700 dark:hover:text-violet-300 py-1.5"
-        >
-          🕓 Verlauf · zurücksetzen auf frühere Version
-        </button>
       </div>
 
       <div className="pb-24" />
@@ -556,14 +546,6 @@ export default function GiftDetail() {
           </div>
         </Dialog>
       )}
-
-      {/* ── Verlauf-Modal ─────────────────────────────────────── */}
-      <HistoryDialog
-        open={historyOpen}
-        onClose={() => setHistoryOpen(false)}
-        collection="gifts"
-        docId={gift.id}
-      />
 
       {/* ── Payment-Dialog ────────────────────────────────────── */}
       <PaymentDialog
@@ -714,141 +696,6 @@ function Section({
         </div>
       </div>
       {children}
-    </div>
-  );
-}
-
-// ── Verlauf-Modal ─────────────────────────────────────────────
-// Zeigt die letzten 20 Snapshots eines Dokuments (vom Cloud-Function-
-// Trigger archiveGroupDocChange archiviert) und erlaubt einen 1-Klick-
-// Restore. Funktioniert generisch für gifts/persons/suggestions/
-// wishlist/polls — hier im GiftDetail gemountet, in Settings-
-// Papierkorb wird dieselbe API für gelöschte Items verwendet.
-function HistoryDialog({
-  open,
-  onClose,
-  collection,
-  docId,
-}: {
-  open: boolean;
-  onClose: () => void;
-  collection: "gifts" | "persons" | "suggestions" | "wishlist" | "polls";
-  docId: string;
-}) {
-  const [entries, setEntries] = useState<ArchiveEntry[] | null>(null);
-  const [busyId, setBusyId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    let cancelled = false;
-    setEntries(null);
-    listDocHistory(collection, docId)
-      .then((res) => {
-        if (!cancelled) setEntries(res);
-      })
-      .catch((err) => {
-        console.warn("history fetch failed", err);
-        if (!cancelled) setEntries([]);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, collection, docId]);
-
-  return (
-    <Dialog open={open} onClose={onClose} title="🕓 Verlauf">
-      <div className="space-y-3 px-5 pb-2">
-        <p className="text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
-          Vor jedem Update oder Löschen wird automatisch ein Snapshot
-          gespeichert. Hier sind die letzten 20 Versionen. Klick auf
-          „Wiederherstellen" schreibt diese Version zurück — der jetzige
-          Zustand wird dabei selbst archiviert, also kannst du es jederzeit
-          wieder rückgängig machen.
-        </p>
-        {entries === null && (
-          <div className="text-[13px] text-stone-400 italic">Lade Verlauf …</div>
-        )}
-        {entries && entries.length === 0 && (
-          <div className="text-[13px] text-stone-500 italic">
-            Noch keine archivierten Versionen. Der Verlauf füllt sich ab jetzt
-            automatisch bei jedem Schreibvorgang.
-          </div>
-        )}
-        {entries && entries.length > 0 && (
-          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
-            {entries.map((e) => (
-              <HistoryRow
-                key={e.id}
-                entry={e}
-                busy={busyId === e.id}
-                onRestore={async () => {
-                  setBusyId(e.id);
-                  try {
-                    await restoreFromArchive(e);
-                    toast.success("Version wiederhergestellt");
-                    onClose();
-                  } catch (err) {
-                    console.error(err);
-                    toast.error("Wiederherstellen fehlgeschlagen");
-                  } finally {
-                    setBusyId(null);
-                  }
-                }}
-              />
-            ))}
-          </div>
-        )}
-        <div className="pt-2">
-          <Button variant="secondary" onClick={onClose} className="w-full">
-            Schließen
-          </Button>
-        </div>
-      </div>
-    </Dialog>
-  );
-}
-
-function HistoryRow({
-  entry,
-  busy,
-  onRestore,
-}: {
-  entry: ArchiveEntry;
-  busy: boolean;
-  onRestore: () => void;
-}) {
-  const d = new Date(entry.archivedAt);
-  const dateLabel = d.toLocaleString("de-DE", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  // Versuche aus dem before-Doc menschen-lesbare Hinweise zu extrahieren
-  const data = entry.data as Record<string, unknown>;
-  const status = typeof data.status === "string" ? data.status : undefined;
-  const title = typeof data.title === "string" ? data.title : undefined;
-  const name = typeof data.name === "string" ? data.name : undefined;
-  const summary = name ?? title ?? (status ? `Status: ${status}` : "Snapshot");
-
-  return (
-    <div className="px-3 py-2.5 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center gap-2.5">
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50 truncate">
-          {summary}
-        </div>
-        <div className="text-[11px] text-stone-500 dark:text-stone-400">
-          {dateLabel} ·{" "}
-          {entry.op === "delete" ? "vor Löschung" : "vor Update"}
-        </div>
-      </div>
-      <button
-        onClick={onRestore}
-        disabled={busy}
-        className="text-[12px] font-semibold text-violet-700 dark:text-violet-300 px-2.5 py-1.5 rounded-md hover:bg-violet-100 dark:hover:bg-violet-950 disabled:opacity-50 shrink-0"
-      >
-        {busy ? "…" : "Wiederherstellen"}
-      </button>
     </div>
   );
 }

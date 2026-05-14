@@ -716,11 +716,16 @@ export async function removeVote(
   await updateDoc(gdoc("polls", giftId), { votes: next });
 }
 
-// ─── Archive / History / Restore ────────────────────────
+// ─── Archive / History / Restore (Dev-Hilfsmittel) ──────
 // Backed by Cloud-Function-Trigger archiveGroupDocChange: jede Update-
 // oder Delete-Operation an gifts/persons/suggestions/wishlist/polls
-// produziert einen Snapshot in groups/{gid}/_archive/{archId}. Hier
-// nur die Client-API zum Lesen und Wiederherstellen.
+// produziert einen Snapshot in groups/{gid}/_archive/{archId}. Diese
+// API ist absichtlich NICHT in der App-UI sichtbar — sie ist als
+// Safety-Net für Development-Fails gedacht. Wenn ein Bug Daten
+// zerstört, kann man via Browser-Console
+// `import("@/lib/storage").then(s => s.listTrash().then(console.log))`
+// das verlorene Doc finden und mit `restoreFromArchive(entry)`
+// wiederherstellen.
 
 export type ArchivableCollection =
   | "gifts"

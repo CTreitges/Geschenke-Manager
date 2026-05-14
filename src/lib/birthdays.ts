@@ -84,11 +84,13 @@ export function daysUntilForGift(g: Gift, p: Person | undefined, ref: Date = new
   return p ? daysUntilBirthday(p, ref) : 9999;
 }
 
-/** Sort open gifts by upcoming relevant date (nearest first). */
+/** Sort gifts in the stack (open + confirmed) by upcoming relevant date
+ *  (nearest first). Bestätigte Geschenke bleiben im Stack — sie verschwinden
+ *  erst, wenn der Status auf "received" gewechselt wird. */
 export function sortStack(gifts: Gift[], persons: Person[]): Gift[] {
   const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
   return [...gifts]
-    .filter((g) => g.status === "open")
+    .filter((g) => g.status === "open" || g.status === "confirmed")
     .sort((a, b) => {
       const da = daysUntilForGift(a, personById[a.personId]);
       const db = daysUntilForGift(b, personById[b.personId]);

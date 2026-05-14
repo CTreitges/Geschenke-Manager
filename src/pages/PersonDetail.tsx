@@ -43,7 +43,8 @@ export default function PersonDetail() {
 
   const myWishes = wishlist.filter((w) => w.personId === person.id);
   const myGifts = gifts.filter((g) => g.personId === person.id);
-  const stack = myGifts.filter((g) => g.status === "open");
+  // Stack = offen + bestätigt; past = erhalten.
+  const stack = myGifts.filter((g) => g.status === "open" || g.status === "confirmed");
   const past = myGifts.filter((g) => g.status === "received");
 
   const tabs: { id: Tab; label: string }[] = [
@@ -304,13 +305,13 @@ function GiftsTab({
                       className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
                       style={{
                         background:
-                          g.status === "open"
+                          g.status !== "received"
                             ? "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)"
                             : undefined,
-                        color: g.status === "open" ? "#fff" : undefined,
+                        color: g.status !== "received" ? "#fff" : undefined,
                       }}
                     >
-                      {g.status === "open" ? (
+                      {g.status !== "received" ? (
                         <Icon.gift />
                       ) : (
                         <span className="text-stone-500">
@@ -323,13 +324,25 @@ function GiftsTab({
                         {g.occasion ?? "Geburtstag"} {y}
                       </div>
                       <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                        {g.status === "open"
+                        {g.status !== "received"
                           ? `${g.participantIds.length} Personen · ${g.participantIds.length * g.budgetPerPerson} €`
                           : "erhalten"}
                       </div>
                     </div>
-                    <Chip variant={g.status === "open" ? "info" : "success"}>
-                      {g.status === "open" ? "offen" : "erhalten"}
+                    <Chip
+                      variant={
+                        g.status === "open"
+                          ? "info"
+                          : g.status === "confirmed"
+                            ? "accent"
+                            : "success"
+                      }
+                    >
+                      {g.status === "open"
+                        ? "offen"
+                        : g.status === "confirmed"
+                          ? "bestätigt"
+                          : "erhalten"}
                     </Chip>
                   </button>
                   <button

@@ -45,7 +45,11 @@ export default function Settings() {
   const myParticipations = useMemo(() => {
     if (!me) return [];
     return gifts
-      .filter((g) => g.status === "open" && g.personId !== me.id)
+      .filter(
+        (g) =>
+          (g.status === "open" || g.status === "confirmed") &&
+          g.personId !== me.id,
+      )
       .map((g) => ({ gift: g, person: persons.find((p) => p.id === g.personId) }))
       .filter((x): x is { gift: typeof gifts[number]; person: typeof persons[number] } => !!x.person)
       .sort((a, b) => {

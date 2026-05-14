@@ -492,14 +492,15 @@ export default function Tutorial() {
                   auf einen Blick, wer die App schon aktiv nutzt.
                 </li>
                 <li>
-                  <strong>Wo mache ich mit?</strong> — zusammenklappbare Liste{" "}
-                  <em>aller</em> anderen Personen in der Gruppe (nicht mehr nur
-                  die nächsten 30 Tage). Pro Person ein Toggle: an = du bist bei
-                  allen offenen und bestätigten Geschenken dieser Person dabei
-                  und wirst auch bei zukünftigen automatisch eingetragen; aus =
-                  raus. Spart das Hin- und Herklicken durch die einzelnen
-                  Geschenk-Karten. Der Header zeigt rechts „X / Y aktiv", damit
-                  du den Überblick behältst.
+                  <strong>Wo mache ich mit?</strong> — zusammenklappbarer Kasten
+                  mit <em>allen</em> anderen Personen in der Gruppe (nicht mehr
+                  nur die nächsten 30 Tage). Zugeklappt zeigt der Kasten in
+                  einer Zeile <em>„Bei X von Y Personen aktiv"</em>; ein Tipp
+                  klappt die volle Liste auf. Pro Person ein Toggle: an = du
+                  bist bei allen offenen und bestätigten Geschenken dieser
+                  Person dabei und wirst auch bei zukünftigen automatisch
+                  eingetragen; aus = raus. Spart das Hin- und Herklicken durch
+                  die einzelnen Geschenk-Karten.
                 </li>
                 <li>
                   <strong>Default-Budget pro Person</strong> — wird bei neuen Geschenken

@@ -7,12 +7,14 @@ import {
   castVote,
   deleteGift,
   deleteSuggestion,
+  markConfirmed,
   markReceived,
   removeVote,
   setAllParticipants,
   setGiftSelections,
   setPollStatus,
   toggleParticipant,
+  unconfirmGift,
   updateGift,
   updateSuggestion,
 } from "@/lib/storage";
@@ -56,16 +58,22 @@ export default function GiftDetail() {
   const selectedIds = gift.selectedSuggestionIds ?? [];
 
   // ── Vote tally ────────────────────────────────────────────────
+  // Multi-Vote: pro Person kann es mehrere suggestionIds geben. Im Tally
+  // taucht eine Person mehrfach auf — einmal pro Vorschlag den sie wählt.
   const voteTally = useMemo(() => {
     const tally: Record<string, string[]> = {};
     giftSuggestions.forEach((s) => (tally[s.id] = []));
     if (poll) {
-      Object.entries(poll.votes).forEach(([pid, sid]) => {
-        if (tally[sid]) tally[sid].push(pid);
+      Object.entries(poll.votes).forEach(([pid, sids]) => {
+        sids.forEach((sid) => {
+          if (tally[sid]) tally[sid].push(pid);
+        });
       });
     }
     return tally;
   }, [giftSuggestions, poll]);
+
+  const myVotes = (myId && poll?.votes[myId]) || [];
 
   const totalVotes = Object.values(voteTally).reduce((a, v) => a + v.length, 0);
   const winnerId =
@@ -100,8 +108,20 @@ export default function GiftDetail() {
         title={`Geschenk für ${person.name}`}
         subtitle={`🎁 Jahr ${gift.year} · in ${daysUntilBirthday(person)} Tagen`}
         right={
-          <Chip variant={gift.status === "open" ? "info" : "success"}>
-            {gift.status === "open" ? "offen" : "erhalten"}
+          <Chip
+            variant={
+              gift.status === "open"
+                ? "info"
+                : gift.status === "confirmed"
+                  ? "accent"
+                  : "success"
+            }
+          >
+            {gift.status === "open"
+              ? "offen"
+              : gift.status === "confirmed"
+                ? "bestätigt"
+                : "erhalten"}
           </Chip>
         }
       />
@@ -131,21 +151,6 @@ export default function GiftDetail() {
 
       {/* ── Gruppen-Chat (z.B. WhatsApp) ──────────────────────── */}
       <WhatsappLinkSection gift={gift} />
-
-      {/* ── Bezahlt-Übersicht ─────────────────────────────────── */}
-      {/* Schon vor "erhalten" sichtbar, sobald mindestens ein Vorschlag
-          ausgewählt ist — User können sich vorab abstimmen wer was zahlt.
-          Nach "erhalten" verschwindet der "vorläufig"-Hinweis. */}
-      {(gift.selectedSuggestionIds ?? []).length > 0 && (
-        <PaymentSummary
-          selectedSuggestions={giftSuggestions.filter((s) =>
-            (gift.selectedSuggestionIds ?? []).includes(s.id),
-          )}
-          persons={persons}
-          provisional={gift.status === "open"}
-          onEdit={() => setPaymentDialogOpen(true)}
-        />
-      )}
 
       {/* ── Teilnehmer ────────────────────────────────────────── */}
       <Section
@@ -194,50 +199,53 @@ export default function GiftDetail() {
         <BudgetEditor gift={gift} totalBudget={totalBudget} />
       </Section>
 
-      {/* ── Wunschliste der Person ────────────────────────────── */}
-      <Section
-        title={`Wunschliste von ${person.name}`}
-        hint={personWishes.length > 0 ? `${personWishes.length}` : undefined}
-      >
-        {personWishes.length === 0 ? (
-          <div className="text-[13px] text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-800/50 rounded-xl px-3.5 py-3 border border-[#F0EBE6] dark:border-[#3A3633]">
-            Noch keine Wünsche von {person.name}. Wenn {person.name} sich was wünscht, taucht es hier
-            auf — und ihr könnt es mit einem Tipp in die Vorschläge übernehmen.
-          </div>
-        ) : (
-          <div className="flex flex-col gap-2">
-            {personWishes.map((w) => (
-              <WishlistRow
-                key={w.id}
-                wish={w}
-                taken={giftSuggestions.some((s) => s.fromWishItemId === w.id)}
-                onAdopt={() => {
-                  addSuggestion({
-                    giftId,
-                    title: w.title,
-                    url: w.url,
-                    price: w.price,
-                    suggestedBy: myId ?? gift.personId,
-                    fromWishItemId: w.id,
-                  });
-                  toast.success("In Vorschläge übernommen");
-                }}
-              />
-            ))}
-          </div>
-        )}
-      </Section>
+      {/* ── Wunschliste der Person — nur solange offen ────────── */}
+      {gift.status === "open" && (
+        <Section
+          title={`Wunschliste von ${person.name}`}
+          hint={personWishes.length > 0 ? `${personWishes.length}` : undefined}
+        >
+          {personWishes.length === 0 ? (
+            <div className="text-[13px] text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-800/50 rounded-xl px-3.5 py-3 border border-[#F0EBE6] dark:border-[#3A3633]">
+              Noch keine Wünsche von {person.name}. Wenn {person.name} sich was wünscht, taucht es hier
+              auf — und ihr könnt es mit einem Tipp in die Vorschläge übernehmen.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {personWishes.map((w) => (
+                <WishlistRow
+                  key={w.id}
+                  wish={w}
+                  taken={giftSuggestions.some((s) => s.fromWishItemId === w.id)}
+                  onAdopt={() => {
+                    addSuggestion({
+                      giftId,
+                      title: w.title,
+                      url: w.url,
+                      price: w.price,
+                      suggestedBy: myId ?? gift.personId,
+                      fromWishItemId: w.id,
+                    });
+                    toast.success("In Vorschläge übernommen");
+                  }}
+                />
+              ))}
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* ── Vorschläge mit Auswahl ────────────────────────────── */}
       <Section title="Vorschläge" hint={`${giftSuggestions.length}`}>
-        {/* My-vote banner during active poll */}
+        {/* My-vote banner during active poll — Mehrfach-Auswahl möglich */}
         {pollStatus === "active" && myId && (
           <MyVoteBanner
-            mySuggestionId={poll?.votes[myId]}
-            suggestions={giftSuggestions}
-            onClear={() => {
+            myVotedSuggestions={myVotes
+              .map((sid) => giftSuggestions.find((s) => s.id === sid))
+              .filter((s): s is Suggestion => !!s)}
+            onClearAll={() => {
               removeVote(giftId, myId);
-              toast.success("Stimme zurückgenommen");
+              toast.success("Alle Stimmen zurückgenommen");
             }}
           />
         )}
@@ -254,7 +262,7 @@ export default function GiftDetail() {
                 voters={voteTally[s.id] || []}
                 personsById={Object.fromEntries(persons.map((p) => [p.id, p]))}
                 pollStatus={pollStatus}
-                myVote={poll && myId ? poll.votes[myId] === s.id : false}
+                myVote={myVotes.includes(s.id)}
                 myId={myId}
                 isWinner={s.id === winnerId}
                 isSelected={selectedIds.includes(s.id)}
@@ -269,9 +277,9 @@ export default function GiftDetail() {
                 }}
                 onVote={() => {
                   if (myId) {
+                    const was = myVotes.includes(s.id);
                     castVote(giftId, myId, s.id);
-                    const had = poll?.votes[myId];
-                    toast.success(had && had !== s.id ? "Stimme geändert" : "Stimme gespeichert");
+                    toast.success(was ? "Stimme entfernt" : "Stimme gespeichert");
                   }
                 }}
                 onSave={(patch) => {
@@ -288,13 +296,17 @@ export default function GiftDetail() {
             ))}
           </div>
         )}
-        <SuggestionAdder giftId={giftId} myId={myId} />
+        {gift.status === "open" && (
+          <SuggestionAdder giftId={giftId} myId={myId} />
+        )}
 
         {selectedIds.length > 0 && (
           <SelectedSummary
             selectedIds={selectedIds}
             suggestions={giftSuggestions}
             sum={selectedSum}
+            provisional={gift.status === "open"}
+            allowEdit={gift.status === "open"}
             onRemove={(sid) =>
               setGiftSelections(giftId, selectedIds.filter((x) => x !== sid))
             }
@@ -321,7 +333,7 @@ export default function GiftDetail() {
               <Icon.vote /> Abstimmung starten
             </Button>
             <p className="text-xs text-stone-500 dark:text-stone-400 mt-2 leading-snug">
-              Jede Person hat eine Stimme. Stimmen sind sichtbar.
+              Jede Person kann beliebig viele Vorschläge wählen. Stimmen sind sichtbar.
             </p>
           </div>
         )}
@@ -337,7 +349,10 @@ export default function GiftDetail() {
                   Abstimmung läuft
                 </div>
                 <div className="text-xs text-violet-700/80 dark:text-violet-400/80">
-                  {Object.keys(poll?.votes ?? {}).length} von {gift.participantIds.length} Stimmen
+                  {Object.keys(poll?.votes ?? {}).filter(
+                    (pid) => (poll?.votes[pid]?.length ?? 0) > 0,
+                  ).length}
+                  {" "}von {gift.participantIds.length} haben abgestimmt
                 </div>
               </div>
             </div>
@@ -379,9 +394,31 @@ export default function GiftDetail() {
         )}
       </Section>
 
+      {/* ── Dezente Bezahlt-Übersicht (unten, ab confirmed) ─────── */}
+      {gift.status !== "open" && (
+        <PayerTotalsLine
+          selectedSuggestions={giftSuggestions.filter((s) =>
+            (gift.selectedSuggestionIds ?? []).includes(s.id),
+          )}
+          personsById={Object.fromEntries(persons.map((p) => [p.id, p]))}
+        />
+      )}
+
       {/* ── CTAs ─────────────────────────────────────────────── */}
       <div className="px-4 pt-2 pb-2 space-y-2.5">
-        {gift.status === "open" && (
+        {gift.status === "open" && selectedIds.length > 0 && (
+          <Button
+            size="lg"
+            onClick={() => {
+              markConfirmed(gift.id);
+              toast.success("Auswahl bestätigt ✓");
+            }}
+            className="w-full"
+          >
+            <Icon.check /> Auswahl bestätigen
+          </Button>
+        )}
+        {gift.status === "confirmed" && (
           <Button
             size="lg"
             onClick={() => {
@@ -389,8 +426,7 @@ export default function GiftDetail() {
               markReceived(gift.id);
               toast.success("Geschenk erhalten ✓");
               // Dialog nur öffnen, wenn ausgewählte Vorschläge noch keinen
-              // Bezahler haben. Vorab eingetragene Bezahler werden einfach
-              // "gefestigt" — kein Reibung nötig.
+              // Bezahler haben.
               const selected = giftSuggestions.filter((s) =>
                 (gift.selectedSuggestionIds ?? []).includes(s.id),
               );
@@ -401,6 +437,33 @@ export default function GiftDetail() {
               } else {
                 nav("/");
               }
+            }}
+            className="w-full"
+          >
+            <Icon.check /> Geschenk erhalten
+          </Button>
+        )}
+        {gift.status === "confirmed" && (
+          <Button
+            variant="secondary"
+            onClick={() => {
+              unconfirmGift(gift.id);
+              toast.success("Bestätigung aufgehoben");
+            }}
+            className="w-full"
+          >
+            <Icon.x size={16} /> Bestätigung aufheben
+          </Button>
+        )}
+        {gift.status === "open" && selectedIds.length === 0 && (
+          <Button
+            size="lg"
+            variant="secondary"
+            onClick={() => {
+              if (!confirm(`Geschenk für ${person.name} als erhalten markieren?\n\nKein Vorschlag ausgewählt — die Bestätigung wird übersprungen.`)) return;
+              markReceived(gift.id);
+              toast.success("Geschenk erhalten ✓");
+              nav("/");
             }}
             className="w-full"
           >
@@ -504,132 +567,43 @@ export default function GiftDetail() {
   );
 }
 
-// ── Payment-Summary ───────────────────────────────────────────
-// Sichtbar sobald Vorschläge ausgewählt sind. `provisional=true` zeigt
-// einen Hinweis dass die Zuordnung noch geändert werden kann; nach dem
-// Erhalt der Geschenke wird sie "gefestigt" (Hinweis verschwindet).
-function PaymentSummary({
+// ── Dezente Bezahler-Summen-Zeile ─────────────────────────────
+// Eine schlanke Zeile am Ende des Geschenk-Details: pro Person ein
+// kleiner Avatar + Name + Summe. Erscheint nur, sobald mindestens ein
+// paidBy gesetzt ist. Keine Header-Box, kein Hinweistext.
+function PayerTotalsLine({
   selectedSuggestions,
-  persons,
-  provisional,
-  onEdit,
+  personsById,
 }: {
   selectedSuggestions: Suggestion[];
-  persons: Person[];
-  provisional: boolean;
-  onEdit: () => void;
+  personsById: Record<string, Person>;
 }) {
-  const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
-  const totalCost = selectedSuggestions.reduce((sum, s) => sum + (s.price ?? 0), 0);
-
-  // Aggregate per-payer
-  const byPayer = new Map<string, { total: number; items: Suggestion[] }>();
-  const unpaid: Suggestion[] = [];
+  const byPayer = new Map<string, number>();
   selectedSuggestions.forEach((s) => {
-    if (!s.paidBy) {
-      unpaid.push(s);
-      return;
-    }
-    const entry = byPayer.get(s.paidBy) ?? { total: 0, items: [] };
-    entry.total += s.price ?? 0;
-    entry.items.push(s);
-    byPayer.set(s.paidBy, entry);
+    if (!s.paidBy) return;
+    byPayer.set(s.paidBy, (byPayer.get(s.paidBy) ?? 0) + (s.price ?? 0));
   });
-  const payers = [...byPayer.entries()].sort((a, b) => b[1].total - a[1].total);
-
-  // Farb-Palette: vorläufig → amber (Aufmerksamkeit, "noch im Fluss"),
-  // gefestigt → emerald (final, abgeschlossen).
-  const accent = provisional
-    ? {
-        border: "border-amber-200 dark:border-amber-900",
-        bg: "bg-amber-50/50 dark:bg-amber-950/30",
-        headBorder: "border-amber-200 dark:border-amber-900",
-        headText: "text-amber-900 dark:text-amber-200",
-        editText: "text-amber-700 dark:text-amber-300",
-        editHover: "hover:bg-amber-100 dark:hover:bg-amber-900/40",
-        divide: "divide-amber-100 dark:divide-amber-900/40",
-      }
-    : {
-        border: "border-emerald-200 dark:border-emerald-900",
-        bg: "bg-emerald-50/50 dark:bg-emerald-950/30",
-        headBorder: "border-emerald-200 dark:border-emerald-900",
-        headText: "text-emerald-900 dark:text-emerald-200",
-        editText: "text-emerald-700 dark:text-emerald-300",
-        editHover: "hover:bg-emerald-100 dark:hover:bg-emerald-900/40",
-        divide: "divide-emerald-100 dark:divide-emerald-900/40",
-      };
+  if (byPayer.size === 0) return null;
+  const payers = [...byPayer.entries()].sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="px-4 pb-4">
-      <div className={`rounded-2xl border ${accent.border} ${accent.bg} overflow-hidden`}>
-        <div className={`px-3.5 py-2.5 flex items-center justify-between border-b ${accent.headBorder}`}>
-          <div className={`text-[15px] font-bold ${accent.headText}`}>
-            💶 Bezahlt-Übersicht
-            {provisional && (
-              <span className="ml-2 align-middle text-[11px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-1.5 py-0.5 rounded">
-                vorläufig
+    <div className="px-4 pb-3">
+      <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap text-[12px] text-stone-500 dark:text-stone-400">
+        <span className="shrink-0">💶 Bezahlt:</span>
+        {payers.map(([pid, total]) => {
+          const p = personsById[pid];
+          return (
+            <span key={pid} className="inline-flex items-center gap-1">
+              {p && <Avatar person={p} size={16} />}
+              <span className="text-stone-700 dark:text-stone-200">
+                {p?.name ?? "?"}
               </span>
-            )}
-          </div>
-          <button
-            onClick={onEdit}
-            className={`text-[12px] font-semibold ${accent.editText} px-2 py-1 rounded-md ${accent.editHover}`}
-          >
-            Bearbeiten
-          </button>
-        </div>
-        {provisional && (
-          <div className="px-3.5 py-2 text-[12px] text-amber-800/90 dark:text-amber-300/90 border-b border-amber-100 dark:border-amber-900/40">
-            📝 Wird nach „Geschenk erhalten" gefestigt — bis dahin änderbar.
-          </div>
-        )}
-        <div className={`divide-y ${accent.divide}`}>
-          {payers.length === 0 ? (
-            <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400">
-              Noch nichts eingetragen.
-            </div>
-          ) : (
-            payers.map(([pid, info]) => {
-              const p = personById[pid];
-              return (
-                <div key={pid} className="px-3.5 py-2.5 flex items-start gap-3">
-                  {p && <Avatar person={p} size={28} />}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="text-[14px] font-semibold text-stone-900 dark:text-stone-50">
-                        {p?.name ?? "Unbekannt"}
-                      </div>
-                      <div className="text-[14px] font-bold tabular-nums text-violet-700 dark:text-violet-300 shrink-0">
-                        {info.total} €
-                      </div>
-                    </div>
-                    <div className="text-[12px] text-stone-500 dark:text-stone-400 truncate">
-                      {info.items.map((it) => it.title).join(" · ")}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-          {unpaid.length > 0 && (
-            <div className="px-3.5 py-2.5 bg-amber-50/40 dark:bg-amber-950/20">
-              <div className="text-[12px] font-semibold text-amber-800 dark:text-amber-300 mb-0.5">
-                Noch kein Bezahler eingetragen
-              </div>
-              <div className="text-[12px] text-stone-600 dark:text-stone-300">
-                {unpaid.map((it) => it.title).join(" · ")}
-              </div>
-            </div>
-          )}
-          <div className="px-3.5 py-2 flex items-center justify-between bg-white dark:bg-stone-900">
-            <span className="text-[13px] font-semibold text-stone-500 dark:text-stone-400">
-              Gesamt
+              <span className="font-semibold tabular-nums text-stone-900 dark:text-stone-100">
+                {total} €
+              </span>
             </span>
-            <span className="text-[15px] font-extrabold tabular-nums text-stone-900 dark:text-stone-50">
-              {totalCost} €
-            </span>
-          </div>
-        </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -749,46 +723,51 @@ function ParticipantBulkButtons({
 }
 
 // ── My-vote banner ────────────────────────────────────────────
+// Multi-Vote: zeigt alle Vorschläge, für die ich gestimmt habe (mit Komma
+// getrennt). Zurücknehmen leert alle eigenen Stimmen auf einmal.
 function MyVoteBanner({
-  mySuggestionId,
-  suggestions,
-  onClear,
+  myVotedSuggestions,
+  onClearAll,
 }: {
-  mySuggestionId: string | undefined;
-  suggestions: Suggestion[];
-  onClear: () => void;
+  myVotedSuggestions: Suggestion[];
+  onClearAll: () => void;
 }) {
-  const my = mySuggestionId ? suggestions.find((s) => s.id === mySuggestionId) : null;
+  const has = myVotedSuggestions.length > 0;
   return (
     <div
       className="mb-2.5 px-3.5 py-2.5 rounded-xl flex items-center gap-2.5"
       style={{
-        background: my ? "rgba(124, 58, 237, 0.08)" : "rgba(245, 158, 11, 0.08)",
-        border: `1px solid ${my ? "rgba(124, 58, 237, 0.2)" : "rgba(245, 158, 11, 0.25)"}`,
+        background: has ? "rgba(124, 58, 237, 0.08)" : "rgba(245, 158, 11, 0.08)",
+        border: `1px solid ${has ? "rgba(124, 58, 237, 0.2)" : "rgba(245, 158, 11, 0.25)"}`,
       }}
     >
-      <span className="text-base">{my ? "✓" : "🗳️"}</span>
+      <span className="text-base">{has ? "✓" : "🗳️"}</span>
       <div className="flex-1 text-[13px] min-w-0">
-        {my ? (
+        {has ? (
           <>
-            <span className="text-stone-500 dark:text-stone-400">Du hast gewählt:</span>{" "}
-            <span className="font-semibold text-stone-900 dark:text-stone-50">{my.title}</span>
+            <span className="text-stone-500 dark:text-stone-400">
+              Du hast {myVotedSuggestions.length === 1 ? "gewählt:" : `${myVotedSuggestions.length}× gewählt:`}
+            </span>{" "}
+            <span className="font-semibold text-stone-900 dark:text-stone-50">
+              {myVotedSuggestions.map((s) => s.title).join(", ")}
+            </span>
             <div className="text-xs text-stone-400 mt-0.5">
-              Auf einen anderen Vorschlag klicken zum Ändern, oder Stimme zurücknehmen.
+              Du darfst beliebig viele Vorschläge wählen — Klick toggelt die
+              jeweilige Stimme.
             </div>
           </>
         ) : (
           <span className="font-semibold text-amber-800 dark:text-amber-300">
-            Du hast noch nicht gestimmt — wähle einen Vorschlag.
+            Du hast noch nicht gestimmt — wähle einen oder mehrere Vorschläge.
           </span>
         )}
       </div>
-      {my && (
+      {has && (
         <button
-          onClick={onClear}
+          onClick={onClearAll}
           className="text-xs font-semibold text-violet-700 dark:text-violet-300 px-2 py-1 rounded-md hover:bg-violet-50 dark:hover:bg-violet-950 shrink-0"
         >
-          Zurücknehmen
+          Alle zurücknehmen
         </button>
       )}
     </div>
@@ -796,16 +775,23 @@ function MyVoteBanner({
 }
 
 // ── Selected summary ──────────────────────────────────────────
+// `provisional` schaltet das Wording um: "Theoretische Gesamtsumme" (open)
+// vs. "Gesamtsumme" (confirmed/received). `allowEdit` blendet im
+// confirmed/received-State die Entfernen-/Alle-löschen-Buttons aus.
 function SelectedSummary({
   selectedIds,
   suggestions,
   sum,
+  provisional,
+  allowEdit,
   onRemove,
   onClear,
 }: {
   selectedIds: string[];
   suggestions: Suggestion[];
   sum: number;
+  provisional: boolean;
+  allowEdit: boolean;
   onRemove: (id: string) => void;
   onClear: () => void;
 }) {
@@ -816,7 +802,8 @@ function SelectedSummary({
     <div className="mt-3 px-3.5 py-3 rounded-xl bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900">
       <div className="flex items-center justify-between mb-2">
         <div className="text-[13px] font-bold text-violet-700 dark:text-violet-300">
-          {selected.length} ausgewählt · Theoretische Gesamtsumme
+          {selected.length} ausgewählt ·{" "}
+          {provisional ? "Theoretische Gesamtsumme" : "Gesamtsumme"}
         </div>
         <div className="text-[20px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums">
           {sum} €
@@ -834,17 +821,19 @@ function SelectedSummary({
             <span className="text-violet-700 dark:text-violet-300 font-semibold tabular-nums">
               {s.price != null ? `${s.price} €` : "—"}
             </span>
-            <button
-              onClick={() => onRemove(s.id)}
-              className="text-stone-400 hover:text-red-500 px-1"
-              aria-label="Aus Auswahl entfernen"
-            >
-              <Icon.x size={14} />
-            </button>
+            {allowEdit && (
+              <button
+                onClick={() => onRemove(s.id)}
+                className="text-stone-400 hover:text-red-500 px-1"
+                aria-label="Aus Auswahl entfernen"
+              >
+                <Icon.x size={14} />
+              </button>
+            )}
           </div>
         ))}
       </div>
-      {selected.length > 1 && (
+      {allowEdit && selected.length > 1 && (
         <button
           onClick={onClear}
           className="mt-1.5 text-xs font-semibold text-violet-700/80 dark:text-violet-400/80"

@@ -341,11 +341,29 @@ export default function Tutorial() {
                 Stack-Termin vom Person-Geburtstag entkoppeln.
               </p>
               <p>
-                <strong>💶 Nach „Geschenk erhalten"</strong> öffnet sich automatisch der
-                Dialog <em>„Wer hat was bezahlt?"</em>. Pro Vorschlag wählst du den
-                Bezahler aus der Teilnehmer-Liste — die Zusammenfassung (wer zahlt wie
-                viel) bleibt oben im Geschenk-Detail sichtbar und kann jederzeit
-                nachbearbeitet werden.
+                <strong>📐 Lifecycle: offen → bestätigt → erhalten.</strong>{" "}
+                Im <em>offenen</em> Status sammelt ihr Vorschläge, stimmt ab und
+                trefft eure Auswahl. Mit <strong>„✓ Auswahl bestätigen"</strong>{" "}
+                schaltet ihr in den Zwischenzustand <em>bestätigt</em>:
+                Wunschliste und „Idee teilen" verschwinden, weil die Auswahl
+                final ist, und aus „Theoretische Gesamtsumme" wird einfach{" "}
+                <em>Gesamtsumme</em>. Ihr könnt jederzeit „Bestätigung aufheben"
+                klicken, um zurück in den offenen Modus zu gehen. Wenn alles
+                besorgt ist, geht's mit <strong>„✓ Geschenk erhalten"</strong>{" "}
+                in den finalen Status.
+              </p>
+              <p>
+                <strong>💶 Bezahler — schon vorab oder nach Erhalt:</strong> Sobald
+                ein Vorschlag per Checkbox <em>„Für Gesamtsumme ausgewählt"</em>{" "}
+                markiert ist, erscheint direkt darunter ein{" "}
+                <em>„💶 Bezahlt von: …"</em>-Dropdown. Vor dem Bestätigen steht
+                klein <em>„vorläufig — wird nach Erhalten gefestigt"</em>: ihr
+                könnt euch in Ruhe abstimmen, alles bleibt änderbar. Ganz unten
+                im Geschenk-Detail (ab <em>bestätigt</em>) steht eine dezente
+                Zeile mit der Summe pro Person — immer aktuell. Der Dialog{" "}
+                <em>„Wer hat was bezahlt?"</em> springt nach <em>„Geschenk
+                erhalten"</em> nur noch auf, wenn noch unausgefüllte Bezahler
+                übrig sind.
               </p>
               <p>
                 Ganz unten: roter <em>Geschenk löschen</em>-Knopf, falls ihr es doch nicht
@@ -359,18 +377,22 @@ export default function Tutorial() {
         <Step
           n={7}
           icon="🗳️"
-          title="Abstimmen — und die eigene Stimme bearbeiten"
+          title="Abstimmen — Mehrfach-Wahl möglich"
           body={
             <>
               <p>
                 <strong>„Abstimmung starten"</strong> klicken → jeder Teilnehmer sieht
-                rechts an jedem Vorschlag einen Stimm-Kreis. <strong>Eine Stimme pro
-                Person</strong>, sofort sichtbar (transparente Wahl, keine Geheimwahl).
+                rechts an jedem Vorschlag einen Stimm-Kreis.{" "}
+                <strong>Jede Person darf beliebig viele Vorschläge wählen</strong>{" "}
+                — Klick toggelt die Stimme (gut, wenn ihr mehrere Geschenke
+                macht oder eine Top-3 sammeln wollt). Stimmen sind sofort für
+                alle sichtbar — transparente Wahl, keine Geheimwahl.
               </p>
               <p>
-                Oben in der Vorschläge-Sektion ein Banner <em>„Du hast gewählt: …"</em> mit
-                Knopf <strong>Zurücknehmen</strong>. Klick auf einen anderen Vorschlag =
-                Stimme ändern. Alles bleibt für alle live sichtbar.
+                Oben in der Vorschläge-Sektion ein Banner{" "}
+                <em>„Du hast 2× gewählt: Kopfhörer, Karte"</em> mit Knopf{" "}
+                <strong>Alle zurücknehmen</strong>. Klick auf einen Vorschlag-Kreis
+                fügt deine Stimme hinzu oder entfernt sie.
               </p>
               <p>
                 <strong>„Abstimmung beenden"</strong> zeigt ein kompaktes Ergebnis mit
@@ -386,7 +408,7 @@ export default function Tutorial() {
         <Step
           n={8}
           icon="✅"
-          title="Auswahl + Kauf"
+          title="Auswahl bestätigen + Kauf"
           body={
             <>
               <p>
@@ -397,14 +419,20 @@ export default function Tutorial() {
                 einzelnes Entfernen.
               </p>
               <p>
-                Das funktioniert auch nach geschlossener Abstimmung — Auswahl bearbeiten,
-                Vorschläge ändern, Stimmen-Ergebnis bleibt erhalten und ist über{" "}
-                <em>Details</em> jederzeit nachschlagbar.
+                Sobald ihr euch sicher seid: <strong>„✓ Auswahl bestätigen"</strong>{" "}
+                klicken. Damit wechselt das Geschenk in den Status{" "}
+                <em>bestätigt</em> — Wunschliste und „Idee teilen" verschwinden,
+                aus „Theoretisch" wird einfach „Gesamtsumme", und unten erscheint
+                eine kleine Zeile mit der Summe <em>pro Bezahler</em>. Ändern
+                könnt ihr trotzdem noch (Bezahler-Dropdowns, einzelne Vorschläge
+                editieren) — und „Bestätigung aufheben" bringt euch jederzeit
+                zurück in den offenen Modus.
               </p>
               <p>
-                Ist alles besorgt: ganz unten <strong>„✓ Geschenk erhalten"</strong> — das
-                Geschenk verschwindet aus der Übersicht und bleibt unter{" "}
-                <em>Person → Geschenke</em> in der Historie.
+                Ist alles besorgt: <strong>„✓ Geschenk erhalten"</strong> — das
+                Geschenk verschwindet aus dem Stack und taucht unter{" "}
+                <em>📦 Alte Geschenke</em> bzw.{" "}
+                <em>Person → Geschenke</em> in der Historie auf.
               </p>
             </>
           }
@@ -503,14 +531,15 @@ export default function Tutorial() {
                   Einstellungen → Feedback
                 </Link>{" "}
                 kannst du Wünsche, Ideen, Bugs eintragen. Feedback ist{" "}
-                <strong>gruppenübergreifend</strong> — egal in welcher Gruppe du gerade
-                bist, alle sehen dieselbe Inbox. Jeder kann editieren oder als{" "}
-                <em>erledigt</em> markieren — Trust-Prinzip wie überall.
+                <strong>privat</strong>: nur du selbst (und der App-Owner, also
+                der, der die App pflegt) seht dein Feedback. Andere
+                Gruppen-Mitglieder können es weder lesen, editieren noch
+                löschen — auch nicht über Umwege. Backend-seitig abgesichert.
               </p>
               <p>
                 Wenn deine Identität gesetzt ist, wird das Feedback dir zugeordnet (kleiner
-                Avatar). Sonst landet es als <em>anonym</em> in der Liste — auch das ist
-                völlig okay.
+                Avatar). Bist du mit Google angemeldet, sieht der Owner auch deine
+                E-Mail — sonst landest du als <em>anonym</em> in seiner Inbox.
               </p>
             </>
           }

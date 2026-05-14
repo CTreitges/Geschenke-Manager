@@ -11,6 +11,18 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.7.0",
+    date: "2026-05-14",
+    highlights: [
+      "🆕 Neuer Zwischenstatus „bestätigt“ — Auswahl treffen, „✓ Auswahl bestätigen“ klicken, das Geschenk muss aber noch nicht erhalten sein. Im bestätigten Zustand verschwinden Wunschliste und „Idee teilen“ (Auswahl ist final), aus „Theoretische Gesamtsumme“ wird „Gesamtsumme“, und unten erscheint die Bezahler-Zeile. Jederzeit über „Bestätigung aufheben“ rückgängig",
+      "🗳️ Unbegrenzte Stimmen pro Person — jede Person kann jetzt für mehrere Vorschläge gleichzeitig stimmen (Klick toggelt). Sinnvoll, wenn ihr mehrere Geschenke macht oder eure Top-3 sammeln wollt",
+      "💶 Bezahler-Dropdown pro ausgewähltem Vorschlag — schon im offenen Status verfügbar mit kleinem „vorläufig“-Hinweis, im bestätigten/erhaltenen Zustand gefestigt",
+      "Dezente Bezahler-Summen-Zeile unten am Geschenk: pro Person aufsummiert, wer wieviel bezahlt — erscheint ab „bestätigt“",
+      "💬 Feedback ist jetzt privat: nur du selbst (und der App-Owner) sieht dein Feedback. Andere Gruppen-Mitglieder können dein Feedback weder lesen, editieren noch löschen — backend-seitig abgesichert über firestore-Rules",
+      "Dialog „Wer hat was bezahlt?“ springt nach „Geschenk erhalten“ nur noch auf, wenn noch Bezahler fehlen — vorab schon alles eingetragen → direkt zurück zur Übersicht",
+    ],
+  },
+  {
     version: "v1.6.2",
     date: "2026-05-13",
     highlights: [

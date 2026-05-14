@@ -16,7 +16,8 @@ export const PATCH_NOTES: PatchNote[] = [
     highlights: [
       "🎯 In den Einstellungen → „Wo macht … mit?“ könnt ihr jetzt für jede Person der Gruppe ein Default setzen — nicht mehr nur für die nächsten 30 Tage. Der Toggle wirkt sofort auf alle offenen und bestätigten Geschenke und gilt automatisch auch für zukünftige",
       "Die Sektion ist jetzt zusammenklappbar — die Karte zeigt einklappig eine kompakte Zusammenfassung „Bei X von Y Personen aktiv“, ein Tipp klappt die volle Liste auf",
-      "🟢 In „Wer bin ich?“: Personen, die schon von irgendeinem User in der Gruppe als Identität gewählt sind, haben einen grünen Rahmen + Punkt — so sieht man auf einen Blick, wer die App schon aktiv nutzt (gerätübergreifend, via Cloud-Sync). setMyIdentityCloud nutzt jetzt setDoc+merge für robusten Sync auch beim allerersten Setzen",
+      "🟢 In „Wer bin ich?“: Personen, die schon von irgendeinem User in der Gruppe als Identität gewählt sind, haben einen grünen Rahmen + Punkt — so sieht man auf einen Blick, wer die App schon aktiv nutzt (gerätübergreifend, via Cloud-Sync). setMyIdentityCloud nutzt setDoc+merge für robusten Sync auch beim allerersten Setzen",
+      "Migration mitgeliefert: ältere Geräte (vor v1.7.2) hatten die Identität nur lokal. Beim ersten Öffnen der neuen Version wird sie automatisch in die Cloud nachgezogen — keine manuelle Aktion nötig",
       "💬 Feedback-Fix: nach späterem Google-Login wurde die initiale Auth-UID weiterverwendet, was die firestore-Rule beim Senden ablehnte — Feedback schien gespeichert, war es aber nicht. Jetzt wird die aktuelle UID gelesen und Fehler werden direkt angezeigt",
       "Erledigte Feedbacks sind in einer aufklappbaren Sektion (default zu)",
     ],

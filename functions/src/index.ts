@@ -1,6 +1,7 @@
 import * as admin from "firebase-admin";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
 import * as crypto from "crypto";
@@ -916,3 +917,74 @@ function renderHtmlPage(title: string, body: string): string {
   </p>
 </body></html>`;
 }
+
+// ───── Archive / History / Undo ──────────────────────────────────
+// Cloud-Function-Trigger, der jede Update- oder Delete-Operation an den
+// relevanten Group-Subcollections protokolliert. Das vor-dem-Write
+// gespeicherte Doc landet in /groups/{groupId}/_archive/{archiveId} und
+// kann vom Client per setDoc auf das Original-Doc wiederhergestellt
+// werden. Sichert die App gegen versteckte Überschreibungs-Bugs (siehe
+// ensureAutoGift-Vorfall am 2026-05-14).
+const ARCHIVABLE_COLLECTIONS = new Set([
+  "gifts",
+  "persons",
+  "suggestions",
+  "wishlist",
+  "polls",
+]);
+
+export const archiveGroupDocChange = onDocumentWritten(
+  {
+    document: "groups/{groupId}/{collectionId}/{docId}",
+    region: REGION,
+  },
+  async (event) => {
+    const { groupId, collectionId, docId } = event.params;
+    if (!ARCHIVABLE_COLLECTIONS.has(collectionId)) return;
+    const before = event.data?.before;
+    if (!before?.exists) return; // Create-Events brauchen kein Archiv
+    const beforeData = before.data();
+    if (!beforeData) return;
+
+    const after = event.data?.after;
+    const op = !after?.exists ? "delete" : "update";
+
+    const archiveRef = db
+      .collection("groups")
+      .doc(groupId)
+      .collection("_archive")
+      .doc();
+
+    await archiveRef.set({
+      collection: collectionId,
+      docId,
+      op,
+      data: beforeData,
+      archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    logger.info("archived", { groupId, collectionId, docId, op });
+
+    // Cleanup: max 20 Archive pro (collection, docId). Älteste werden
+    // entfernt, damit eine einzelne Karte nicht hunderte Versionen
+    // ansammelt.
+    try {
+      const snap = await db
+        .collection("groups")
+        .doc(groupId)
+        .collection("_archive")
+        .where("collection", "==", collectionId)
+        .where("docId", "==", docId)
+        .orderBy("archivedAt", "desc")
+        .get();
+      if (snap.size > 20) {
+        const toDelete = snap.docs.slice(20);
+        const batch = db.batch();
+        toDelete.forEach((d) => batch.delete(d.ref));
+        await batch.commit();
+      }
+    } catch (err) {
+      logger.warn("archive cleanup failed", { err });
+    }
+  },
+);

@@ -716,6 +716,109 @@ export async function removeVote(
   await updateDoc(gdoc("polls", giftId), { votes: next });
 }
 
+// ─── Archive / History / Restore ────────────────────────
+// Backed by Cloud-Function-Trigger archiveGroupDocChange: jede Update-
+// oder Delete-Operation an gifts/persons/suggestions/wishlist/polls
+// produziert einen Snapshot in groups/{gid}/_archive/{archId}. Hier
+// nur die Client-API zum Lesen und Wiederherstellen.
+
+export type ArchivableCollection =
+  | "gifts"
+  | "persons"
+  | "suggestions"
+  | "wishlist"
+  | "polls";
+
+export interface ArchiveEntry {
+  id: ID;
+  collection: ArchivableCollection;
+  docId: ID;
+  op: "update" | "delete";
+  data: Record<string, unknown>;
+  archivedAt: number; // ms
+}
+
+function normalizeArchive(
+  id: string,
+  raw: Record<string, unknown>,
+): ArchiveEntry | null {
+  const collection = raw.collection as string | undefined;
+  const docId = raw.docId as string | undefined;
+  const op = raw.op as string | undefined;
+  if (!collection || !docId || !op) return null;
+  const ts = raw.archivedAt as { toMillis?: () => number } | number | undefined;
+  const archivedAt =
+    typeof ts === "number"
+      ? ts
+      : ts && typeof ts.toMillis === "function"
+        ? ts.toMillis()
+        : Date.now();
+  return {
+    id,
+    collection: collection as ArchivableCollection,
+    docId,
+    op: op as "update" | "delete",
+    data: (raw.data as Record<string, unknown>) ?? {},
+    archivedAt,
+  };
+}
+
+/** Listet die letzten Snapshots eines spezifischen Docs (neuste zuerst). */
+export async function listDocHistory(
+  collectionId: ArchivableCollection,
+  docId: ID,
+): Promise<ArchiveEntry[]> {
+  if (!state.activeGroupId) return [];
+  const q = query(
+    collection(db, "groups", state.activeGroupId, "_archive"),
+    where("collection", "==", collectionId),
+    where("docId", "==", docId),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => normalizeArchive(d.id, d.data() as Record<string, unknown>))
+    .filter((x): x is ArchiveEntry => !!x)
+    .sort((a, b) => b.archivedAt - a.archivedAt);
+}
+
+/** Listet alle Lösch-Snapshots der Gruppe — Papierkorb. */
+export async function listTrash(): Promise<ArchiveEntry[]> {
+  if (!state.activeGroupId) return [];
+  const q = query(
+    collection(db, "groups", state.activeGroupId, "_archive"),
+    where("op", "==", "delete"),
+  );
+  const snap = await getDocs(q);
+  return snap.docs
+    .map((d) => normalizeArchive(d.id, d.data() as Record<string, unknown>))
+    .filter((x): x is ArchiveEntry => !!x)
+    .sort((a, b) => b.archivedAt - a.archivedAt);
+}
+
+/** Stellt ein archiviertes Doc wieder her — schreibt die Snapshot-Felder
+ *  zurück auf das Original. Für Gifts: anschließend werden auch alle
+ *  verwaisten Suggestions wieder mit dem Gift verbunden (sind sowieso
+ *  noch da, weil deleteGift sie zwar parallel löscht — aber das Archiv
+ *  enthält sie ggf. nicht). Suggestions/Polls werden separat
+ *  wiederhergestellt, wenn der User das möchte. */
+export async function restoreFromArchive(entry: ArchiveEntry): Promise<void> {
+  if (!state.activeGroupId) throw new Error("No active group");
+  const ref = gdoc(entry.collection, entry.docId);
+  // Snapshot enthält das vollständige Doc — wir schreiben es als
+  // setDoc (ohne merge), damit auch Felder, die später gesetzt wurden,
+  // wieder verschwinden. So entspricht das Ergebnis exakt dem
+  // archivierten Zustand.
+  await setDoc(ref, clean(entry.data as Record<string, unknown>));
+}
+
+/** Löscht einen einzelnen Archive-Eintrag (Member-only, kein Restore). */
+export async function deleteArchiveEntry(archiveId: ID): Promise<void> {
+  if (!state.activeGroupId) throw new Error("No active group");
+  await deleteDoc(
+    doc(db, "groups", state.activeGroupId, "_archive", archiveId),
+  );
+}
+
 // ─── Feedback (cross-group, top-level) ──────────────────
 export async function addFeedback(
   f: Omit<Feedback, "id" | "createdAt" | "byUid" | "byEmail">,

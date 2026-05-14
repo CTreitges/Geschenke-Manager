@@ -92,6 +92,16 @@ service cloud.firestore {
       match /suggestions/{doc}  { allow read, write: if isMember(groupId); }
       match /wishlist/{doc}     { allow read, write: if isMember(groupId); }
       match /polls/{doc}        { allow read, write: if isMember(groupId); }
+
+      // Archiv-Verlauf für Restore. Schreibt die archiveGroupDocChange-
+      // Cloud-Function via Admin-SDK (bypasst Rules). Members dürfen
+      // ausschließlich lesen und löschen (z.B. zum „Verlauf bereinigen").
+      // Restore = Member schreibt die archivierten Felder zurück auf das
+      // Original-Doc, dafür ist hier kein write nötig.
+      match /_archive/{doc}     {
+        allow read, delete: if isMember(groupId);
+        allow create, update: if false;
+      }
     }
 
     // Legacy top-level collections from the pre-multi-group era — locked.

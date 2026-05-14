@@ -23,6 +23,7 @@ import type {
   Feedback,
   Gift,
   ID,
+  Member,
   Person,
   Poll,
   Settings,
@@ -37,6 +38,7 @@ interface State {
   wishlist: WishlistItem[];
   polls: Poll[];
   feedback: Feedback[];
+  members: Member[];
   settings: Settings;
   /** Group doc has arrived. */
   loaded: boolean;
@@ -63,6 +65,7 @@ const emptyState = (): State => ({
   wishlist: [],
   polls: [],
   feedback: [],
+  members: [],
   settings: DEFAULT_SETTINGS,
   loaded: false,
   giftsHydrated: false,
@@ -283,6 +286,19 @@ export function setActiveGroup(groupId: string | null) {
       );
       unsubscribers.push(
         onSnapshot(
+          collection(db, "groups", groupId, "members"),
+          (snap) => {
+            state.members = snap.docs.map((d) => {
+              const data = d.data() as Omit<Member, "uid">;
+              return { uid: d.id, ...data };
+            });
+            notify();
+          },
+          onErr("members"),
+        ),
+      );
+      unsubscribers.push(
+        onSnapshot(
           collection(db, "groups", groupId, "polls"),
           (snap) => {
             state.polls = snap.docs.map((d) => {
@@ -472,6 +488,20 @@ export async function leaveGroup(groupId: ID): Promise<void> {
   await deleteDoc(doc(db, "groups", groupId, "members", uid));
 }
 
+/** Synchronisiert die lokale "Wer bin ich?"-Auswahl mit der Cloud
+ *  (members/{uid}.identityPersonId). Damit andere User sehen, welche
+ *  Personen schon aktiv genutzt werden. Best-effort, fire-and-forget. */
+export async function setMyIdentityCloud(personId: ID | null): Promise<void> {
+  if (!state.activeGroupId) return;
+  try {
+    const uid = await authReady;
+    const ref = doc(db, "groups", state.activeGroupId, "members", uid);
+    await updateDoc(ref, { identityPersonId: personId ?? "" });
+  } catch (err) {
+    console.warn("identity cloud-sync failed", err);
+  }
+}
+
 // ─── Persons ────────────────────────────────────────────
 export async function addPerson(p: Omit<Person, "id" | "createdAt">) {
   await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));
@@ -539,13 +569,17 @@ export async function addGift(
   g: Omit<Gift, "id" | "enteredStackAt" | "stackOrder" | "participantIds">,
 ) {
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
+  // Default-Teilnehmer der beschenkten Person übernehmen (gesetzt via
+  // Settings → „Wo mache ich mit?"). Fallback: leer.
+  const host = state.persons.find((p) => p.id === g.personId);
+  const initialParticipants = host?.defaultParticipantIds ?? [];
   await addDoc(
     gcol("gifts"),
     clean({
       ...g,
       enteredStackAt: Date.now(),
       stackOrder: maxOrder + 1,
-      participantIds: [],
+      participantIds: initialParticipants,
     }),
   );
 }
@@ -577,6 +611,10 @@ export async function ensureAutoGift(
   const found = await getDocs(q);
   if (!found.empty) return;
 
+  // Default-Teilnehmer der beschenkten Person übernehmen.
+  const host = state.persons.find((p) => p.id === personId);
+  const initialParticipants = host?.defaultParticipantIds ?? [];
+
   const maxOrder = state.gifts.reduce((m, x) => Math.max(m, x.stackOrder), 0);
   await setDoc(
     ref,
@@ -588,9 +626,57 @@ export async function ensureAutoGift(
       manuallyAdded: false,
       enteredStackAt: Date.now(),
       stackOrder: maxOrder + 1,
-      participantIds: [] as string[],
+      participantIds: initialParticipants,
     }),
   );
+}
+
+/** Setzt den globalen Default „Person `participantId` nimmt bei den
+ *  Geschenken für `hostPersonId` teil". Wendet die Änderung sofort auf
+ *  alle offenen + bestätigten Geschenke dieser Person an. */
+export async function setDefaultParticipation(
+  hostPersonId: ID,
+  participantId: ID,
+  on: boolean,
+): Promise<void> {
+  const host = state.persons.find((p) => p.id === hostPersonId);
+  if (!host) return;
+  const currentDefaults = host.defaultParticipantIds ?? [];
+  const has = currentDefaults.includes(participantId);
+  if (on === has) {
+    // Default ist schon korrekt — wir wenden die Änderung trotzdem auf
+    // aktive Gifts an, damit der Toggle als „force apply" funktioniert.
+  }
+  const nextDefaults = on
+    ? Array.from(new Set([...currentDefaults, participantId]))
+    : currentDefaults.filter((x) => x !== participantId);
+
+  const batch = writeBatch(db);
+  batch.update(gdoc("persons", hostPersonId), {
+    defaultParticipantIds: nextDefaults,
+  });
+
+  state.gifts
+    .filter(
+      (g) =>
+        g.personId === hostPersonId &&
+        (g.status === "open" || g.status === "confirmed"),
+    )
+    .forEach((g) => {
+      const current = g.participantIds ?? [];
+      const giftHas = current.includes(participantId);
+      if (on && !giftHas) {
+        batch.update(gdoc("gifts", g.id), {
+          participantIds: [...current, participantId],
+        });
+      } else if (!on && giftHas) {
+        batch.update(gdoc("gifts", g.id), {
+          participantIds: current.filter((x) => x !== participantId),
+        });
+      }
+    });
+
+  await batch.commit();
 }
 
 export async function updateGift(id: ID, patch: Partial<Gift>) {
@@ -828,8 +914,16 @@ export async function deleteArchiveEntry(archiveId: ID): Promise<void> {
 export async function addFeedback(
   f: Omit<Feedback, "id" | "createdAt" | "byUid" | "byEmail">,
 ) {
-  const uid = await authReady;
-  const email = auth.currentUser?.email?.toLowerCase() ?? undefined;
+  // WICHTIG: aktuellen User aus auth.currentUser nehmen, nicht aus
+  // authReady. authReady resolvt nur EINMAL initial; bei späterem Google-
+  // Login ändert sich die UID, aber authReady liefert weiterhin die alte.
+  // Die firestore-rule prüft request.auth.uid (= aktuelle UID) gegen
+  // byUid — wäre die UID veraltet, käme permission-denied beim Create.
+  await authReady; // sicherstellen dass Auth überhaupt initialisiert ist
+  const user = auth.currentUser;
+  if (!user) throw new Error("Nicht angemeldet — Feedback konnte nicht gespeichert werden");
+  const uid = user.uid;
+  const email = user.email?.toLowerCase() ?? undefined;
   await addDoc(
     collection(db, "feedback"),
     clean({

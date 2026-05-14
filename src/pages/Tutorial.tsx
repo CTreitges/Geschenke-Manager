@@ -486,13 +486,20 @@ export default function Tutorial() {
                   (oder zurück zum Login).
                 </li>
                 <li>
-                  <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 2)
+                  <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 2).
+                  Personen mit grünem Rahmen werden gerade von einem anderen
+                  User in der Gruppe als „Wer bin ich" verwendet — so siehst du
+                  auf einen Blick, wer die App schon aktiv nutzt.
                 </li>
                 <li>
-                  <strong>Wo mache ich mit?</strong> — Liste aller offenen Geschenke
-                  anderer Personen mit einem Toggle pro Eintrag. Anhaken = mitmachen,
-                  abhaken = raus. Spart das Hin- und Herklicken durch die Stack-Karten,
-                  wenn du dich für mehrere Geschenke auf einmal entscheiden willst.
+                  <strong>Wo mache ich mit?</strong> — zusammenklappbare Liste{" "}
+                  <em>aller</em> anderen Personen in der Gruppe (nicht mehr nur
+                  die nächsten 30 Tage). Pro Person ein Toggle: an = du bist bei
+                  allen offenen und bestätigten Geschenken dieser Person dabei
+                  und wirst auch bei zukünftigen automatisch eingetragen; aus =
+                  raus. Spart das Hin- und Herklicken durch die einzelnen
+                  Geschenk-Karten. Der Header zeigt rechts „X / Y aktiv", damit
+                  du den Überblick behältst.
                 </li>
                 <li>
                   <strong>Default-Budget pro Person</strong> — wird bei neuen Geschenken
@@ -540,6 +547,12 @@ export default function Tutorial() {
                 Wenn deine Identität gesetzt ist, wird das Feedback dir zugeordnet (kleiner
                 Avatar). Bist du mit Google angemeldet, sieht der Owner auch deine
                 E-Mail — sonst landest du als <em>anonym</em> in seiner Inbox.
+                Eigenes Feedback bleibt für dich jederzeit{" "}
+                <strong>bearbeitbar</strong>, <strong>löschbar</strong> und du
+                kannst es als <em>erledigt</em> markieren oder wieder öffnen.
+                Erledigte Einträge wandern in eine{" "}
+                <strong>aufklappbare Sektion</strong> (default zu), damit die
+                offenen Items oben Vorrang haben.
               </p>
             </>
           }

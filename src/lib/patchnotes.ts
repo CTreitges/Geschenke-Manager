@@ -11,6 +11,17 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.7.2",
+    date: "2026-05-14",
+    highlights: [
+      "🎯 In den Einstellungen → „Wo macht … mit?“ könnt ihr jetzt für jede Person der Gruppe ein Default setzen — nicht mehr nur für die nächsten 30 Tage. Der Toggle wirkt sofort auf alle offenen und bestätigten Geschenke und gilt automatisch auch für zukünftige",
+      "Die Sektion ist jetzt zusammenklappbar (Header-Chip zeigt „X / Y aktiv“), damit sie nicht zu viel Platz wegnimmt",
+      "🟢 In „Wer bin ich?“: Personen, die schon von irgendeinem User in der Gruppe als Identität gewählt sind, haben einen grünen Rahmen + Punkt — so sieht man auf einen Blick, wer die App schon aktiv nutzt (gerätübergreifend, via Cloud-Sync)",
+      "💬 Feedback-Fix: nach späterem Google-Login wurde die initiale Auth-UID weiterverwendet, was die firestore-Rule beim Senden ablehnte — Feedback schien gespeichert, war es aber nicht. Jetzt wird die aktuelle UID gelesen und Fehler werden direkt angezeigt",
+      "Erledigte Feedbacks sind in einer aufklappbaren Sektion (default zu)",
+    ],
+  },
+  {
     version: "v1.7.1",
     date: "2026-05-14",
     highlights: [

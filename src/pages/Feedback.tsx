@@ -36,13 +36,24 @@ export default function Feedback() {
   const open = sorted.filter((f) => !f.resolved);
   const done = sorted.filter((f) => f.resolved);
 
-  function submit() {
+  const [submitting, setSubmitting] = useState(false);
+  async function submit() {
     const t = text.trim();
     if (!t) return;
-    addFeedback({ text: t, by: myId ?? undefined });
-    setText("");
-    toast.success("Feedback abgeschickt");
+    setSubmitting(true);
+    try {
+      await addFeedback({ text: t, by: myId ?? undefined });
+      setText("");
+      toast.success("Feedback abgeschickt");
+    } catch (err) {
+      console.error("addFeedback failed:", err);
+      const msg = (err as { message?: string })?.message ?? "Unbekannter Fehler";
+      toast.error(`Konnte nicht senden: ${msg}`);
+    } finally {
+      setSubmitting(false);
+    }
   }
+  const [doneOpen, setDoneOpen] = useState(false);
 
   function canEdit(f: FB): boolean {
     if (isOwner) return true;
@@ -82,8 +93,12 @@ export default function Feedback() {
                 ? "Wird dir zugeordnet · nur du & der Owner sehen es"
                 : "Nur du & der Owner sehen dein Feedback"}
             </span>
-            <Button size="sm" onClick={submit} disabled={!text.trim()}>
-              <Icon.plus size={14} /> Senden
+            <Button
+              size="sm"
+              onClick={submit}
+              disabled={!text.trim() || submitting}
+            >
+              <Icon.plus size={14} /> {submitting ? "…" : "Senden"}
             </Button>
           </div>
         </Card>
@@ -111,7 +126,12 @@ export default function Feedback() {
         )}
 
         {done.length > 0 && (
-          <Section title="Erledigt" count={done.length}>
+          <CollapsibleSection
+            title="Erledigt"
+            count={done.length}
+            open={doneOpen}
+            onToggle={() => setDoneOpen((v) => !v)}
+          >
             {done.map((f) => (
               <FeedbackCard
                 key={f.id}
@@ -121,7 +141,7 @@ export default function Feedback() {
                 showEmail={isOwner}
               />
             ))}
-          </Section>
+          </CollapsibleSection>
         )}
       </div>
     </>
@@ -136,6 +156,39 @@ function Section({ title, count, children }: { title: string; count: number; chi
         <Chip variant="neutral">{count}</Chip>
       </div>
       <div className="flex flex-col gap-2">{children}</div>
+    </div>
+  );
+}
+
+function CollapsibleSection({
+  title,
+  count,
+  open,
+  onToggle,
+  children,
+}: {
+  title: string;
+  count: number;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mb-5">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center gap-2 mb-2 pl-1 text-left"
+      >
+        <Icon.chev
+          size={12}
+          className={`text-stone-400 transition-transform ${open ? "rotate-90" : ""}`}
+        />
+        <h3 className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400">
+          {title}
+        </h3>
+        <Chip variant="neutral">{count}</Chip>
+      </button>
+      {open && <div className="flex flex-col gap-2">{children}</div>}
     </div>
   );
 }

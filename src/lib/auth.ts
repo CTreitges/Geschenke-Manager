@@ -139,6 +139,14 @@ export function setIdentity(personId: string | null) {
   if (personId) localStorage.setItem(k, personId);
   else localStorage.removeItem(k);
   window.dispatchEvent(new Event(IDENTITY_EVENT));
+  // Cloud-Sync (best-effort) — andere User sehen, welche Personen schon
+  // als „Wer bin ich" gewählt sind. Dynamischer Import vermeidet die
+  // zirkuläre Abhängigkeit auth.ts → storage.ts → auth.ts.
+  import("./storage")
+    .then((s) => s.setMyIdentityCloud(personId))
+    .catch(() => {
+      /* nicht kritisch */
+    });
 }
 
 function subscribeIdentity(cb: () => void) {

@@ -315,17 +315,20 @@ export default function Settings() {
           title={me ? `Wo macht ${me.name} mit?` : "Meine Teilnahmen"}
           collapsible
           defaultOpen={false}
-          hint={
+          collapsedSummary={
             me
-              ? `${
-                  persons.filter(
+              ? (() => {
+                  const active = persons.filter(
                     (p) =>
                       p.id !== me.id &&
                       (p.defaultParticipantIds ?? []).includes(me.id),
-                  ).length
-                } / ${Math.max(0, persons.length - 1)} aktiv`
-              : undefined
+                  ).length;
+                  const total = Math.max(0, persons.length - 1);
+                  return `Bei ${active} von ${total} Personen aktiv`;
+                })()
+              : "Identität wählen, um Teilnahmen zu setzen"
           }
+          hint="Tippen zum Bearbeiten"
         >
           {!me ? (
             <div className="px-3.5 py-3 text-[13px] text-stone-500 dark:text-stone-400 leading-snug">
@@ -692,12 +695,16 @@ function Group({
   collapsible,
   defaultOpen = true,
   hint,
+  collapsedSummary,
 }: {
   title: string;
   children: ReactNode;
   collapsible?: boolean;
   defaultOpen?: boolean;
   hint?: string;
+  /** Text, der in der einzelnen Zeile innerhalb der Karte angezeigt wird,
+   *  wenn die Gruppe zugeklappt ist. Wirkt zusammen mit `collapsible`. */
+  collapsedSummary?: string;
 }) {
   const [open, setOpen] = useState(defaultOpen);
   if (!collapsible) {
@@ -710,28 +717,43 @@ function Group({
       </div>
     );
   }
+  // Collapsible mit sichtbarer Karte — Header bleibt einheitlich zu den
+  // anderen Settings-Gruppen, die erste Zeile der Karte ist klickbar
+  // (Aufklapp-Toggle) und zeigt im zugeklappten Zustand eine knappe
+  // Zusammenfassung.
   return (
     <div className="mb-4">
-      <button
-        onClick={() => setOpen((v) => !v)}
-        className="w-full flex items-center justify-between gap-2 px-3.5 pt-1.5 pb-1.5 text-left"
-      >
-        <div className="flex items-baseline gap-2 min-w-0">
-          <span className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400">
-            {title}
-          </span>
-          {hint && (
-            <span className="text-[11px] font-medium text-stone-400 truncate">
-              {hint}
-            </span>
-          )}
-        </div>
-        <Icon.chev
-          size={14}
-          className={`text-stone-400 transition-transform ${open ? "rotate-90" : ""}`}
-        />
-      </button>
-      {open && <Card className="p-0 overflow-hidden">{children}</Card>}
+      <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 px-3.5 pt-1.5 pb-1.5">
+        {title}
+      </div>
+      <Card className="p-0 overflow-hidden">
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="w-full px-3.5 py-3 flex items-center gap-3 text-left hover:bg-stone-50 dark:hover:bg-stone-700/40 transition-colors"
+        >
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
+              {open ? "Zuklappen" : (collapsedSummary ?? "Aufklappen")}
+            </div>
+            {!open && hint && (
+              <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
+                {hint}
+              </div>
+            )}
+          </div>
+          <Icon.chev
+            size={16}
+            className={`text-stone-400 transition-transform shrink-0 ${
+              open ? "rotate-[270deg]" : "rotate-90"
+            }`}
+          />
+        </button>
+        {open && (
+          <div className="border-t border-[#F5F1ED] dark:border-stone-700">
+            {children}
+          </div>
+        )}
+      </Card>
     </div>
   );
 }

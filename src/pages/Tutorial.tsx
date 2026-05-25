@@ -341,6 +341,16 @@ export default function Tutorial() {
                 Stack-Termin vom Person-Geburtstag entkoppeln.
               </p>
               <p>
+                <strong>🔗 Teilen</strong> — oben rechts im Geschenk-Detail ist ein
+                kleines Teilen-Symbol. Tipp drauf → Dialog mit dem direkten Link.{" "}
+                <em>„Link kopieren"</em> legt ihn in die Zwischenablage; auf
+                Mobilgeräten gibt es zusätzlich <em>„Teilen..."</em> fürs
+                System-Sheet (AirDrop, WhatsApp & Co.). Wer den Link öffnet und noch
+                nicht in der Gruppe ist, sieht die Gruppen-ID schon vorausgefüllt —
+                nur Passwort eingeben, fertig. Beim ersten Beitritt fragt die App
+                ausserdem direkt, wer du bist.
+              </p>
+              <p>
                 <strong>📐 Lifecycle: offen → bestätigt → erhalten.</strong>{" "}
                 Im <em>offenen</em> Status sammelt ihr Vorschläge, stimmt ab und
                 trefft eure Auswahl. Mit <strong>„✓ Auswahl bestätigen"</strong>{" "}

@@ -7,7 +7,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: "prompt",
+      registerType: "autoUpdate",
       injectRegister: false,
       includeAssets: [
         "favicon.ico",
@@ -53,6 +53,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,svg,png,ico,webp,woff,woff2}"],
         // Den FCM-Worker NICHT in den Workbox-Precache mitnehmen — er hat
         // einen eigenen Lebenszyklus an /firebase-cloud-messaging-push-scope.

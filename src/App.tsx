@@ -16,6 +16,7 @@ import PastGifts from "@/pages/PastGifts";
 import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
 import MagicLink from "@/pages/MagicLink";
+import ShareGift from "@/pages/ShareGift";
 import {
   addKnownGroup,
   getGroupId,
@@ -218,6 +219,7 @@ function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/login/new" element={<CreateGroup />} />
       <Route path="/m/:token" element={<MagicLink />} />
+      <Route path="/g/:groupId/gift/:giftId" element={<ShareGift />} />
       <Route
         path="/*"
         element={

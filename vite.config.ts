@@ -53,11 +53,6 @@ export default defineConfig({
         ],
       },
       workbox: {
-        navigateFallback: "/index.html",
-        navigateFallbackDenylist: [
-          /^\/__\/auth\//,
-          /^\/__\/firebase\//,
-        ],
         globPatterns: ["**/*.{js,css,html,svg,png,ico,webp,woff,woff2}"],
         // Den FCM-Worker NICHT in den Workbox-Precache mitnehmen — er hat
         // einen eigenen Lebenszyklus an /firebase-cloud-messaging-push-scope.

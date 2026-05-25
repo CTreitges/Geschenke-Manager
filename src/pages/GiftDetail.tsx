@@ -20,7 +20,7 @@ import {
 } from "@/lib/storage";
 import { ageOnNextBirthday, daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import { pickColor } from "@/lib/colors";
-import { useIdentity } from "@/lib/auth";
+import { getGroupId, useIdentity } from "@/lib/auth";
 import { formatRelativeDate } from "@/lib/dates";
 import { toast } from "sonner";
 import type { Gift, GiftStatus, Suggestion, Poll, Person, WishlistItem } from "@/lib/types";
@@ -32,6 +32,7 @@ export default function GiftDetail() {
   const myId = useIdentity();
   const [pollDetailsOpen, setPollDetailsOpen] = useState(false);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   // Wird gesetzt, wenn der Dialog im Zuge von "Geschenk erhalten" geöffnet
   // wurde — dann soll das Schließen zurück auf die Startseite. Bei reinem
   // "Bearbeiten" aus der Übersicht bleibt der User auf der Geschenk-Seite.
@@ -108,21 +109,30 @@ export default function GiftDetail() {
         title={`Geschenk für ${person.name}`}
         subtitle={`🎁 Jahr ${gift.year} · in ${daysUntilBirthday(person)} Tagen`}
         right={
-          <Chip
-            variant={
-              gift.status === "open"
-                ? "info"
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShareOpen(true)}
+              className="w-9 h-9 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 flex items-center justify-center text-stone-600 dark:text-stone-300 shrink-0"
+              title="Geschenk teilen"
+            >
+              <Icon.share size={16} />
+            </button>
+            <Chip
+              variant={
+                gift.status === "open"
+                  ? "info"
+                  : gift.status === "confirmed"
+                    ? "accent"
+                    : "success"
+              }
+            >
+              {gift.status === "open"
+                ? "offen"
                 : gift.status === "confirmed"
-                  ? "accent"
-                  : "success"
-            }
-          >
-            {gift.status === "open"
-              ? "offen"
-              : gift.status === "confirmed"
-                ? "bestätigt"
-                : "erhalten"}
-          </Chip>
+                  ? "bestätigt"
+                  : "erhalten"}
+            </Chip>
+          </div>
         }
       />
 
@@ -565,7 +575,92 @@ export default function GiftDetail() {
           .filter((p): p is Person => !!p)}
         onSetPaidBy={(sid, pid) => updateSuggestion(sid, { paidBy: pid })}
       />
+
+      {/* ── Share-Dialog ─────────────────────────────────────── */}
+      <ShareDialog
+        open={shareOpen}
+        onClose={() => setShareOpen(false)}
+        giftId={gift.id}
+        personName={person.name}
+      />
     </div>
+  );
+}
+
+// ── Share-Dialog ──────────────────────────────────────────────
+function ShareDialog({
+  open,
+  onClose,
+  giftId,
+  personName,
+}: {
+  open: boolean;
+  onClose: () => void;
+  giftId: string;
+  personName: string;
+}) {
+  const groupId = getGroupId();
+  const shareUrl = groupId
+    ? `${window.location.origin}/g/${groupId}/gift/${giftId}`
+    : null;
+  const [copied, setCopied] = useState(false);
+
+  async function copyLink() {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Clipboard nicht verfügbar");
+    }
+  }
+
+  async function nativeShare() {
+    if (!shareUrl) return;
+    try {
+      await navigator.share({
+        title: `Geschenk für ${personName}`,
+        text: "Schau dir das Geschenk an und mach mit!",
+        url: shareUrl,
+      });
+    } catch {
+      // user cancelled or not supported
+    }
+  }
+
+  return (
+    <Dialog open={open} onClose={onClose} title="Geschenk teilen">
+      <div className="space-y-4">
+        <p className="text-[13px] text-stone-500 dark:text-stone-400 leading-[1.5]">
+          Schick diesen Link an Personen, die beim Geschenk mitmachen sollen. Sie werden direkt
+          zum Geschenk weitergeleitet — nach Login falls nötig.
+        </p>
+        {shareUrl ? (
+          <>
+            <div
+              className="flex items-center gap-2 px-3.5 py-3 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 cursor-pointer"
+              onClick={copyLink}
+            >
+              <Icon.link size={14} className="text-stone-400 shrink-0" />
+              <span className="flex-1 text-[13px] font-mono text-stone-600 dark:text-stone-300 truncate">
+                {shareUrl}
+              </span>
+            </div>
+            <Button onClick={copyLink} className="w-full" variant={copied ? "secondary" : "primary"}>
+              {copied ? <><Icon.check size={16} /> Kopiert!</> : <><Icon.copy size={16} /> Link kopieren</>}
+            </Button>
+            {typeof navigator.share === "function" && (
+              <Button onClick={nativeShare} variant="secondary" className="w-full">
+                <Icon.share size={16} /> Teilen...
+              </Button>
+            )}
+          </>
+        ) : (
+          <p className="text-[13px] text-red-500">Kein aktiver Gruppenkontext.</p>
+        )}
+      </div>
+    </Dialog>
   );
 }
 

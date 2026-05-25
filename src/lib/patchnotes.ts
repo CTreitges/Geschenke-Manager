@@ -11,6 +11,15 @@ export interface PatchNote {
  */
 export const PATCH_NOTES: PatchNote[] = [
   {
+    version: "v1.7.3",
+    date: "2026-05-25",
+    highlights: [
+      "🔗 Teilen-Knopf pro Geschenk — Link kopieren und direkt an Mitmachende schicken (Symbol oben rechts im Geschenk-Detail)",
+      "Der Link leitet direkt ins Geschenk weiter — Gruppen-ID ist vorausgefuellt, nur Passwort eingeben",
+      "Beim ersten Beitritt via Link: Personen-Picker fragt sofort wer du bist, dann direkt im Geschenk",
+    ],
+  },
+  {
     version: "v1.7.2",
     date: "2026-05-14",
     highlights: [

@@ -4,7 +4,7 @@ import { Button, Dialog } from "./ui";
 import { isAuthed } from "@/lib/auth";
 
 const TIP_KEY = "gm:test-mail-tip-seen:v1";
-const TUTORIAL_KEY = "gm:tutorial-seen:v4";
+const TUTORIAL_KEY = "gm:tutorial-seen:v5";
 const PWA_TIP_KEY = "gm:pwa-install-tip-seen:v1";
 
 /**

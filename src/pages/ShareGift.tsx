@@ -39,7 +39,7 @@ export default function ShareGift() {
       const current = getGroupId();
       if (current === groupId) {
         if (getIdentity()) {
-          nav(`/gift/${giftId}`, { replace: true });
+          nav(`/gift/${giftId}`, { replace: true, state: { fromShareLink: true } });
         } else {
           setPhase("identity");
         }
@@ -50,7 +50,7 @@ export default function ShareGift() {
         setGroupId(groupId);
         setActiveGroup(groupId);
         if (getIdentity()) {
-          nav(`/gift/${giftId}`, { replace: true });
+          nav(`/gift/${giftId}`, { replace: true, state: { fromShareLink: true } });
         } else {
           setPhase("identity");
         }
@@ -71,7 +71,7 @@ export default function ShareGift() {
       setAuthed(true);
       setActiveGroup(groupId);
       if (getIdentity()) {
-        nav(`/gift/${giftId}`, { replace: true });
+        nav(`/gift/${giftId}`, { replace: true, state: { fromShareLink: true } });
       } else {
         setPhase("identity");
       }
@@ -90,7 +90,7 @@ export default function ShareGift() {
 
   function handlePickIdentity(personId: string) {
     setIdentity(personId);
-    nav(`/gift/${giftId}`, { replace: true });
+    nav(`/gift/${giftId}`, { replace: true, state: { fromShareLink: true } });
   }
 
   if (phase === "checking") {
@@ -105,7 +105,7 @@ export default function ShareGift() {
   }
 
   if (phase === "done") {
-    nav(`/gift/${giftId}`, { replace: true });
+    nav(`/gift/${giftId}`, { replace: true, state: { fromShareLink: true } });
     return null;
   }
 
@@ -202,7 +202,7 @@ export default function ShareGift() {
       )}
 
       <button
-        onClick={() => nav(`/gift/${giftId}`, { replace: true })}
+        onClick={() => nav(`/gift/${giftId}`, { replace: true, state: { fromShareLink: true } })}
         className="mt-6 text-center text-[13px] text-stone-400 dark:text-stone-500 underline w-full"
       >
         Lieber nicht festlegen

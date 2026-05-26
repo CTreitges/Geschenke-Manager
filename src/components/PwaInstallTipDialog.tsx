@@ -11,7 +11,7 @@ import {
 } from "@/lib/pwa";
 
 const TIP_KEY = "gm:pwa-install-tip-seen:v1";
-const TUTORIAL_KEY = "gm:tutorial-seen:v4";
+const TUTORIAL_KEY = "gm:tutorial-seen:v5";
 const TIP_CLOSED_EVENT = "gm:pwa-install-tip-closed";
 
 type Platform = "chromium-prompt" | "chromium-manual" | "ios" | "firefox" | "other";
@@ -46,6 +46,7 @@ export function PwaInstallTipDialog() {
       loc.pathname.startsWith("/m/")
     )
       return;
+    if ((loc.state as Record<string, unknown>)?.fromShareLink) return;
     if (!isAuthed()) return;
     if (localStorage.getItem(TIP_KEY) === "yes") return;
     if (localStorage.getItem(TUTORIAL_KEY) !== "yes") return;

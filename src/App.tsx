@@ -126,6 +126,7 @@ function FirstRunTutorial() {
   const location = useLocation();
   useEffect(() => {
     if (location.pathname === "/tutorial") return;
+    if ((location.state as Record<string, unknown>)?.fromShareLink) return;
     if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "yes") return;
     localStorage.setItem(TUTORIAL_SEEN_KEY, "yes");
     nav("/tutorial");

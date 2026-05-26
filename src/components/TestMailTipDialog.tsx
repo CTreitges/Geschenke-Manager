@@ -29,6 +29,7 @@ export function TestMailTipDialog() {
   useEffect(() => {
     // Don't surface on the tutorial itself or while still on auth pages.
     if (loc.pathname === "/tutorial" || loc.pathname.startsWith("/login") || loc.pathname.startsWith("/m/")) return;
+    if ((loc.state as Record<string, unknown>)?.fromShareLink) return;
     if (!isAuthed()) return;
     if (localStorage.getItem(TIP_KEY) === "yes") return;
     // Only after the tutorial has been auto-opened (and presumably read).

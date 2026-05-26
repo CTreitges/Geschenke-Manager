@@ -453,8 +453,9 @@ export default function Settings() {
           <Row label="Abmelden" icon={<Icon.x />} onClick={logout} danger />
         </Group>
 
-        <div className="text-center py-5 pb-1.5 text-[11px] text-stone-400">
-          Geschenke-Manager · {CURRENT_VERSION} · {formatPatchDate(CURRENT_DATE)}
+        <div className="text-center py-5 pb-1.5 text-[11px] text-stone-400 space-y-0.5">
+          <div>Geschenke-Manager · {CURRENT_VERSION} · {formatPatchDate(CURRENT_DATE)}</div>
+          <div className="text-stone-300 dark:text-stone-600">Build {new Date(__BUILD_TIME__).toLocaleString("de-DE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div>
         </div>
       </div>
 

@@ -2,6 +2,8 @@
 /// <reference types="vite-plugin-pwa/react" />
 /// <reference types="vite-plugin-pwa/info" />
 
+declare const __BUILD_TIME__: string;
+
 interface ImportMetaEnv {
   readonly VITE_FIREBASE_API_KEY: string;
   readonly VITE_FIREBASE_AUTH_DOMAIN: string;

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
+import { CURRENT_VERSION, CURRENT_DATE, formatPatchDate } from "@/lib/patchnotes";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import {
@@ -453,7 +454,7 @@ export default function Settings() {
         </Group>
 
         <div className="text-center py-5 pb-1.5 text-[11px] text-stone-400">
-          Geschenke-Manager · v0.4 · trust-based
+          Geschenke-Manager · {CURRENT_VERSION} · {formatPatchDate(CURRENT_DATE)}
         </div>
       </div>
 

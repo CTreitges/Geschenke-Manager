@@ -38,26 +38,28 @@ export default function GiftDetail() {
   // "Bearbeiten" aus der Übersicht bleibt der User auf der Geschenk-Seite.
   const [navHomeAfterPayment, setNavHomeAfterPayment] = useState(false);
 
+  // WICHTIG: Alle Hooks müssen VOR den Early-Returns laufen. Sonst ändert
+  // sich die Hook-Reihenfolge zwischen zwei Renders (gift erst undefined →
+  // Early-Return ohne useMemo, dann vorhanden → useMemo läuft), z.B. beim
+  // Direkt-Aufruf einer /gift/:id-URL mit noch kaltem Firestore-Cache. React
+  // wirft dann "rendered more hooks than during the previous render".
   const gift = gifts.find((g) => g.id === id);
-  if (!gift) return <p className="px-4 py-8">Geschenk nicht gefunden.</p>;
-  const person = persons.find((p) => p.id === gift.personId);
-  if (!person) return <p className="px-4 py-8">Person nicht gefunden.</p>;
+  const person = persons.find((p) => p.id === gift?.personId);
+  const poll = polls.find((p) => p.giftId === gift?.id);
 
-  const giftId = gift.id;
-  const giftSuggestions = suggestions.filter((s) => s.giftId === giftId);
+  const giftSuggestions = useMemo(
+    () => (gift ? suggestions.filter((s) => s.giftId === gift.id) : []),
+    [suggestions, gift?.id],
+  );
   const personWishes = useMemo(
     () =>
-      [...wishlist.filter((w) => w.personId === gift.personId)].sort(
-        (a, b) => b.createdAt - a.createdAt,
-      ),
-    [wishlist, gift.personId],
+      gift
+        ? [...wishlist.filter((w) => w.personId === gift.personId)].sort(
+            (a, b) => b.createdAt - a.createdAt,
+          )
+        : [],
+    [wishlist, gift?.personId],
   );
-  const poll = polls.find((p) => p.giftId === gift.id);
-  const pollStatus = poll?.status ?? "none";
-  const me = persons.find((p) => p.id === myId);
-  const totalBudget = gift.participantIds.length * gift.budgetPerPerson;
-  const selectedIds = gift.selectedSuggestionIds ?? [];
-
   // ── Vote tally ────────────────────────────────────────────────
   // Multi-Vote: pro Person kann es mehrere suggestionIds geben. Im Tally
   // taucht eine Person mehrfach auf — einmal pro Vorschlag den sie wählt.
@@ -73,6 +75,16 @@ export default function GiftDetail() {
     }
     return tally;
   }, [giftSuggestions, poll]);
+
+  // Erst NACH allen Hooks die Guards — Hook-Reihenfolge bleibt konstant.
+  if (!gift) return <p className="px-4 py-8">Geschenk nicht gefunden.</p>;
+  if (!person) return <p className="px-4 py-8">Person nicht gefunden.</p>;
+
+  const giftId = gift.id;
+  const pollStatus = poll?.status ?? "none";
+  const me = persons.find((p) => p.id === myId);
+  const totalBudget = gift.participantIds.length * gift.budgetPerPerson;
+  const selectedIds = gift.selectedSuggestionIds ?? [];
 
   const myVotes = (myId && poll?.votes[myId]) || [];
 

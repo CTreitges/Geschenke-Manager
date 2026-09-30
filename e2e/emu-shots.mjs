@@ -167,6 +167,25 @@ async function sheetShot(page, name) {
   console.log(`[emu-shots] ${file} (${pngWidth(file)}px)`);
 }
 
+/** Hilfe-Sheet über den „?“-Knopf im Header (Viewport-Shot, das Sheet klebt unten). */
+async function helpShot(page, theme) {
+  await open(page, "/", "Christof");
+  await page.getByRole("button", { name: /^Hilfe/ }).click();
+  await page.getByRole("dialog", { name: "Hilfe" }).waitFor();
+  await sheetShot(page, `18-hilfe-${theme}`);
+  await page.keyboard.press("Escape");
+}
+
+/** Tutorial Seite 1 und Seite 4 (Abstimmung), beides Viewport-Shots. */
+async function tutorialShots(page, theme) {
+  await open(page, "/tutorial");
+  await sheetShot(page, `13-tutorial-${theme}`);
+  await page.getByRole("button", { name: "Seite 4: Gemeinsam abstimmen" }).click();
+  await page.locator("p[aria-live]").filter({ hasText: "Seite 4 von" }).waitFor();
+  await wait(600); // Scroll-Snap setzt sich
+  await sheetShot(page, `13b-tutorial-seite4-${theme}`);
+}
+
 /** Abstimmungs-Sheets (Start, Abstimmen, Ergebnis mit Sieger bzw. Gleichstand) in beiden Themes. */
 async function pollShots(page, g) {
   const HOUR = 3_600_000;
@@ -298,8 +317,7 @@ export async function runShots({ giftIds } = {}) {
     await setIdentity(page, "anna");
     await open(page, "/settings", "Anna");
     await shot(page, "12-settings-dark");
-    await open(page, "/tutorial");
-    await shot(page, "13-tutorial-dark");
+    await tutorialShots(page, "dark");
     await open(page, "/feedback");
     await shot(page, "14-feedback-dark");
     await open(page, "/past", "Max");
@@ -314,20 +332,27 @@ export async function runShots({ giftIds } = {}) {
     await wait(900);
     await shot(page, "17-share-dialog-dark");
 
-    // 18 Klick auf "?" im Header
+    // 18 Hilfe-Sheet („?“ im Header)
     await setIdentity(page, "anna");
-    await open(page, "/", "Christof");
-    await page.locator("header").getByText("?", { exact: true }).first().click();
-    await wait(1200);
-    await shot(page, "18-hilfe-dark");
+    await helpShot(page, "dark");
 
-    // 19 First-Run: frischer Kontext ohne gesetzte Keys, erste Seite nach Login
+    // 19 First-Run: frischer Kontext ohne Keys und ohne Identität → Tutorial,
+    // nach „Überspringen“ das IdentitySheet (Onboarding-Schritt „Wer bist du?“).
     const fresh = await newPage(browser, { suppress: false, label: "first-run" });
     await login(fresh);
-    await fresh.waitForLoadState("load");
-    await wait(2000);
-    await shot(fresh, "19-first-run-dark");
+    await fresh.waitForURL(/\/tutorial$/);
+    await wait(1200);
+    await sheetShot(fresh, "19-first-run-dark");
+    await fresh.getByRole("button", { name: "Überspringen" }).click();
+    await fresh.getByRole("dialog", { name: "Wer bist du?" }).waitFor();
+    await sheetShot(fresh, "19b-first-run-identitaet-dark");
     await fresh.context().close();
+
+    // 25 Home ohne Identität (Header mit „Wer bist du?“-Chip, „?“ und Gruppe)
+    const noId = await newPage(browser, { label: "ohne-identitaet" });
+    await login(noId);
+    await open(noId, "/", "Christof");
+    await shot(noId, "25-home-ohne-identitaet-dark");
 
     // ── Light-Mode (Gruppen-Einstellung per Admin) ──
     await setDarkMode(false);
@@ -342,6 +367,11 @@ export async function runShots({ giftIds } = {}) {
     await shot(page, "07-gift-ben-offen-light");
     await open(page, "/settings", "Anna");
     await shot(page, "12-settings-light");
+    await tutorialShots(page, "light");
+    await helpShot(page, "light");
+    await open(noId, "/", "Christof");
+    await shot(noId, "25-home-ohne-identitaet-light");
+    await noId.context().close();
     await setDarkMode(true);
 
     // ── Abstimmung (F1): Sheets in beiden Themes ──

@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Download, Play, Sparkles } from "lucide-react";
 import { toast } from "sonner";
@@ -106,6 +106,32 @@ export function HelpEntries({ go, onInstall }: { go: (to: string) => void; onIns
   );
 }
 
+/**
+ * „App installieren“ aus Hilfe-Sheet und Einstellungen: erst der native
+ * Prompt, sonst die Anleitung (PwaInstallTipDialog, `guide` mitrendern).
+ * `close` schließt vorher ein offenes Sheet (im selben Render wie das Öffnen
+ * der Anleitung, damit die History-Einträge der Sheets sauber bleiben).
+ */
+export function useInstallApp() {
+  const canInstall = useCanInstall();
+  const [guideOpen, setGuideOpen] = useState(false);
+  const install = useCallback(async (close?: () => void) => {
+    if (getCachedInstallPrompt()) {
+      const outcome = await tryInstallPwa();
+      if (outcome === "accepted") {
+        toast.success("App installiert 🎉");
+        close?.();
+        return;
+      }
+      if (outcome === "dismissed") return;
+    }
+    close?.();
+    setGuideOpen(true);
+  }, []);
+  const guide = <PwaInstallTipDialog open={guideOpen} onClose={() => setGuideOpen(false)} />;
+  return { canInstall, install, guide };
+}
+
 function buildLabel(): string {
   try {
     return new Date(__BUILD_TIME__).toLocaleString("de-DE", {
@@ -124,9 +150,8 @@ function buildLabel(): string {
 export function HelpMenu() {
   const nav = useNavigate();
   const unseen = useUnseenVersion();
-  const canInstall = useCanInstall();
+  const { canInstall, install, guide } = useInstallApp();
   const [open, setOpen] = useState(false);
-  const [installOpen, setInstallOpen] = useState(false);
   const [pendingNav, setPendingNav] = useState<string | null>(null);
 
   // Erst navigieren, wenn das Sheet zu ist und sein History-Eintrag
@@ -141,20 +166,6 @@ export function HelpMenu() {
   function go(to: string) {
     setPendingNav(to);
     setOpen(false);
-  }
-
-  async function install() {
-    if (getCachedInstallPrompt()) {
-      const outcome = await tryInstallPwa();
-      if (outcome === "accepted") {
-        toast.success("App installiert 🎉");
-        setOpen(false);
-        return;
-      }
-      if (outcome === "dismissed") return;
-    }
-    setOpen(false);
-    setInstallOpen(true);
   }
 
   const build = buildLabel();
@@ -180,14 +191,14 @@ export function HelpMenu() {
       </span>
 
       <Sheet open={open} onClose={() => setOpen(false)} title="Hilfe">
-        <HelpEntries go={go} onInstall={canInstall ? () => void install() : undefined} />
+        <HelpEntries go={go} onInstall={canInstall ? () => void install(() => setOpen(false)) : undefined} />
         <p className="m-0 mt-4 text-center text-2xs text-fg-muted">
           Geschenke-Manager · {CURRENT_VERSION}
           {build && ` · Build ${build}`}
         </p>
       </Sheet>
 
-      <PwaInstallTipDialog open={installOpen} onClose={() => setInstallOpen(false)} />
+      {guide}
     </>
   );
 }

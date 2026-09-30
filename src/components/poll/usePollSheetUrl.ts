@@ -13,6 +13,17 @@ const PARAM = "vote";
 
 type VoteState = { voteSheet?: boolean } | null;
 
+/**
+ * Steht der Browser gerade auf einem eigenen Sheet-Eintrag? Liest die echte
+ * History statt eines Render-Stands – Aufrufer mit veralteter Closure (z. B.
+ * „Mitmachen & abstimmen“ nach dem Server-Ack) sehen so das schon offene Sheet.
+ * react-router legt `state` unter history.state.usr ab.
+ */
+function onSheetEntry(): boolean {
+  const usr = (window.history.state as { usr?: VoteState } | null)?.usr;
+  return new URLSearchParams(window.location.search).get(PARAM) === "1" && usr?.voteSheet === true;
+}
+
 export interface PollSheetUrl {
   /** Sheet ist offen (eigener History-Eintrag). */
   open: boolean;
@@ -42,12 +53,17 @@ export function usePollSheetUrl(): PollSheetUrl {
   }, [params]);
 
   // Schutz gegen doppeltes navigate(-1), z. B. „Verwerfen“ + Aufräum-Effekt.
+  // Gilt nur für den aktuellen History-Eintrag: Nach jedem Wechsel (auch
+  // Zurück auf einen weiteren Sheet-Eintrag) muss Schließen wieder gehen.
   const closingRef = useRef(false);
   useEffect(() => {
-    if (!open) closingRef.current = false;
-  }, [open]);
+    closingRef.current = false;
+  }, [location.key]);
 
+  // Idempotent: Ist das Sheet schon offen (Auto-Öffnen kam zuvor), kein
+  // zweiter `?vote=1`-Eintrag – sonst hinge „Fertig“ auf dem ersten fest.
   const openSheet = useCallback(() => {
+    if (onSheetEntry()) return;
     navigate({ search: withParam }, { state: { voteSheet: true } });
   }, [navigate, withParam]);
 

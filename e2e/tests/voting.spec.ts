@@ -237,7 +237,7 @@ test("Wer noch nicht abgestimmt hat, bekommt das VoteSheet einmal pro Runde von 
   await expect(sheet).toBeHidden();
 });
 
-test("Nicht-Teilnehmerin sieht die Wahl nur lesend und kann mitmachen", async ({ page }) => {
+test("Nicht-Teilnehmerin sieht die Wahl nur lesend und kann mitmachen (KOR-01)", async ({ page }) => {
   const giftId = giftIds.anna;
   await loginAs(page, "Sophie");
   await page.goto(`/gift/${giftId}`);
@@ -254,4 +254,20 @@ test("Nicht-Teilnehmerin sieht die Wahl nur lesend und kann mitmachen", async ({
   await expect(picnic).toHaveAttribute("aria-pressed", "true");
   await expect.poll(async () => (await giftRef(giftId).get()).data()?.participantIds).toContain("sophie");
   await expect.poll(async () => (await pollData(giftId))?.votes?.sophie).toEqual(["s-anna-2"]);
+
+  // Regression KOR-01: Auto-Öffnen + Öffnen nach dem Server-Ack ergaben zwei
+  // `?vote=1`-Einträge – danach hing das Sheet. Fertig, ✕ und Hintergrund schließen.
+  await sheet.getByRole("button", { name: "Fertig · 1 gewählt" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/gift/${giftId}$`));
+  await nowCard(page).getByRole("button", { name: "Stimmen ändern" }).click();
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Schließen" }).click();
+  await expect(sheet).toBeHidden();
+  await nowCard(page).getByRole("button", { name: "Stimmen ändern" }).click();
+  await expect(sheet).toBeVisible();
+  await page.mouse.click(195, 40); // Hintergrund über dem Sheet
+  await expect(sheet).toBeHidden();
+  await expect(page).toHaveURL(new RegExp(`/gift/${giftId}$`));
+  await expect(page.getByRole("heading", { name: "Anna · Geburtstag" })).toBeVisible();
 });

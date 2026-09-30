@@ -9,7 +9,7 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
     return (
       <div className="w-full">
         {label && (
-          <label htmlFor={inputId} className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5 pl-0.5">
+          <label htmlFor={inputId} className="mb-1.5 block pl-0.5 text-meta font-semibold text-fg-muted">
             {label}
           </label>
         )}
@@ -17,11 +17,12 @@ export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputE
           ref={ref}
           id={inputId}
           className={cn(
-            "w-full px-3.5 py-3 text-[15px] rounded-xl outline-none font-[inherit]",
-            "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50",
-            "border border-stone-200 dark:border-stone-700",
-            "focus:border-accent",
-            "placeholder:text-stone-400",
+            "w-full px-3.5 py-3 text-body rounded-xl outline-none font-[inherit]",
+            "bg-surface text-fg",
+            // Rand ≥ 3:1 (WCAG 1.4.11), Fokus als Akzent-Rand + Ring
+            "border border-line-control",
+            "focus:border-accent focus:ring-2 focus:ring-accent/30",
+            "placeholder:text-fg-muted",
             className,
           )}
           {...props}

@@ -4,7 +4,8 @@ export function Confetti({ active }: { active: boolean }) {
   const dots = Array.from({ length: 18 }, (_, i) => ({
     left: `${(i * 7 + 5) % 100}%`,
     delay: (i * 0.18) % 3,
-    color: ["#6366F1", "#7C3AED", "#EC4899", "#8B5CF6", "#06B6D4"][i % 5],
+    // Farben aus den Illustrations-Tokens (index.css)
+    color: ["var(--ill-grad-from)", "var(--ill-spark-1)", "var(--ill-spark-2)", "var(--ill-spark-3)", "var(--ill-p-ben)"][i % 5],
     size: 4 + (i % 3) * 2,
   }));
   return (

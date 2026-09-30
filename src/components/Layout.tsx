@@ -1,15 +1,22 @@
 import { Link, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
+import { Gift } from "lucide-react";
 import { IdentityChip } from "./IdentityChip";
 import { GroupSwitcher } from "./GroupSwitcher";
 import { HelpMenu } from "./HelpMenu";
 import { Icon } from "./ui";
+import { useIdentity } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { useStore } from "@/lib/hooks";
 import { activeTab, type TabKey } from "@/lib/nav";
 
 export function Layout({ children }: { children: ReactNode }) {
   const loc = useLocation();
   const current = activeTab(loc.pathname);
+  // Ohne Identität ist der Chip („Wer bist du?“) breit – dann zeigt das Logo
+  // erst ab 400 px den Schriftzug, damit der Header bei 360/390 px nicht umbricht.
+  const myId = useIdentity();
+  const hasMe = useStore().persons.some((p) => p.id === myId);
   const tabs: { key: TabKey; to: string; label: string; Icon: (typeof Icon)["home"] }[] = [
     { key: "home", to: "/", label: "Übersicht", Icon: Icon.home },
     { key: "people", to: "/people", label: "Personen", Icon: Icon.users },
@@ -18,28 +25,35 @@ export function Layout({ children }: { children: ReactNode }) {
     { key: "feedback", to: "/feedback", label: "Feedback", Icon: Icon.mail },
   ];
   return (
-    <div
-      className="min-h-screen text-stone-900 dark:text-stone-50 pb-[calc(7rem+env(safe-area-inset-bottom))]"
-      style={{ background: "var(--gm-bg)" }}
-    >
-      <header className="sticky top-0 z-30 backdrop-blur border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-900/80">
-        <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="shrink-0 whitespace-nowrap text-base font-semibold tracking-tight">
-            🎁 Geschenke
+    <div className="min-h-screen bg-canvas pb-[calc(7rem+env(safe-area-inset-bottom))] text-fg">
+      <header className="sticky top-0 z-30 border-b border-line bg-canvas/85 backdrop-blur">
+        <div className="mx-auto flex h-14 max-w-2xl items-center justify-between gap-2 px-4">
+          <Link
+            to="/"
+            aria-label="Geschenke – Startseite"
+            className="flex shrink-0 items-center gap-2 whitespace-nowrap text-base font-semibold tracking-tight text-fg"
+          >
+            <span aria-hidden className="flex h-7 w-7 items-center justify-center rounded-tile bg-grad-primary text-white shadow-primary">
+              <Gift size={16} strokeWidth={2.2} />
+            </span>
+            <span aria-hidden className={cn("hidden", hasMe ? "min-[340px]:inline" : "min-[400px]:inline")}>
+              Geschenke
+            </span>
           </Link>
-          <div className="flex items-center gap-1.5">
+          <div className="flex min-w-0 items-center gap-1">
             <GroupSwitcher />
             <HelpMenu />
             <IdentityChip />
           </div>
         </div>
       </header>
-      <main className="max-w-2xl mx-auto pb-8">{children}</main>
+      <main className="mx-auto max-w-2xl pb-8">{children}</main>
       <nav
-        className="fixed bottom-0 inset-x-0 z-30 bg-white/95 dark:bg-stone-900/95 backdrop-blur border-t border-stone-200 dark:border-stone-800"
+        aria-label="Hauptnavigation"
+        className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <div className="max-w-2xl mx-auto px-2 h-16 flex">
+        <div className="mx-auto flex h-16 max-w-2xl px-2">
           {tabs.map((t) => {
             const active = t.key === current;
             const I = t.Icon;
@@ -49,8 +63,8 @@ export function Layout({ children }: { children: ReactNode }) {
                 to={t.to}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold",
-                  active ? "text-indigo-600 dark:text-indigo-400" : "text-stone-500",
+                  "flex flex-1 flex-col items-center justify-center gap-1 text-2xs font-semibold",
+                  active ? "text-accent-text" : "text-fg-muted",
                 )}
               >
                 <I size={20} />

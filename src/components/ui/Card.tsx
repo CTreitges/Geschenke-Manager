@@ -22,10 +22,10 @@ export function Card({ className, children, onClick, style }: { className?: stri
 type ChipVariant = "neutral" | "accent" | "success" | "info";
 export function Chip({ children, variant = "neutral", className, onClick, style }: { children: ReactNode; variant?: ChipVariant; className?: string; onClick?: () => void; style?: CSSProperties }) {
   const variants: Record<ChipVariant, string> = {
-    neutral: "bg-[#F5F1ED] dark:bg-[#3A3633] text-stone-600 dark:text-stone-200",
-    accent: "bg-violet-100 dark:bg-[#2E1065] text-violet-800 dark:text-violet-300",
-    success: "bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300",
-    info: "bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300",
+    neutral: "bg-surface-2 text-fg-soft",
+    accent: "bg-accent-soft text-accent-text",
+    success: "bg-status-received-soft text-status-received",
+    info: "bg-status-open-soft text-status-open",
   };
   return (
     <span

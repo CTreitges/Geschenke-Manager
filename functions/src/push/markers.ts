@@ -1,4 +1,5 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 
 /**
  * Idempotenz-Marker unter groups/{gid}/_push/{key}: create() schlägt mit
@@ -22,6 +23,20 @@ export async function claimPushMarker(
   } catch (err) {
     if (isAlreadyExists(err)) return false;
     throw err;
+  }
+}
+
+/**
+ * Gibt einen geclaimten Marker wieder frei, wenn nach dem Claim etwas
+ * geworfen hat (Reads, FCM-Auth/Netz) — sonst wäre das Ereignis endgültig
+ * verloren, obwohl der nächste Lauf es nachholen könnte. Best-effort: ein
+ * Fehler hier wird nur geloggt, der ursprüngliche Fehler zählt.
+ */
+export async function releasePushMarker(db: Firestore, groupId: string, key: string): Promise<void> {
+  try {
+    await db.doc(`groups/${groupId}/_push/${key}`).delete();
+  } catch (err) {
+    logger.warn(`Push-Marker ${groupId}/${key} nicht freigegeben`, err);
   }
 }
 

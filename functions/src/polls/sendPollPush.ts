@@ -2,7 +2,7 @@
 // den Trigger onPollWritten und den Scheduler sweepPolls.
 
 import type { Firestore } from "firebase-admin/firestore";
-import { claimPushMarker } from "../push/markers";
+import { claimPushMarker, releasePushMarker } from "../push/markers";
 import { loadPushMembers } from "../push/members";
 import { selectRecipients } from "../push/recipients";
 import { sendAndCleanup, type Transport } from "../push/send";
@@ -49,29 +49,43 @@ async function personName(db: Firestore, groupId: string, personId: string | und
  * gültige Stimme. Geräte der beschenkten Person und von Mitgliedern ohne
  * Identität sind immer gesperrt, auch unter fremden UIDs (recipients.ts).
  */
-export async function sendPollPush(
-  deps: PollPushDeps,
-  input: {
-    groupId: string;
-    giftId: string;
-    gift: GiftLike;
-    poll: PollDoc;
-    kind: PollPushKind;
-    now: number;
-  },
-): Promise<PollPushResult> {
+interface PollPushInput {
+  groupId: string;
+  giftId: string;
+  gift: GiftLike;
+  poll: PollDoc;
+  kind: PollPushKind;
+  now: number;
+}
+
+export async function sendPollPush(deps: PollPushDeps, input: PollPushInput): Promise<PollPushResult> {
   const { db } = deps;
-  const { groupId, giftId, gift, poll, kind, now } = input;
+  const { groupId, giftId, gift, poll, kind } = input;
   if (typeof poll.startedAt !== "number") return { sent: 0, skipped: "no-round" };
   const eligible = eligibleVoters(gift);
   if (eligible.length === 0) return { sent: 0, skipped: "no-voters" };
 
   // Marker VOR dem Laden: Doppel-Läufe (at-least-once) sparen sich alle Reads.
   // Die Erinnerung ist damit einmalig, auch wenn gerade niemand sie braucht.
-  if (!(await claimPushMarker(db, groupId, pollMarkerId(kind, giftId, poll.startedAt), kind))) {
+  const markerId = pollMarkerId(kind, giftId, poll.startedAt);
+  if (!(await claimPushMarker(db, groupId, markerId, kind))) {
     return { sent: 0, skipped: "duplicate" };
   }
+  try {
+    return await loadAndSend(deps, input, eligible);
+  } catch (err) {
+    // Wirft Laden oder Versand, Marker freigeben: sweepPolls holt die
+    // Erinnerung im nächsten Lauf nach, eine erneut zugestellte
+    // Trigger-Ausführung den Start-Push.
+    await releasePushMarker(db, groupId, markerId);
+    throw err;
+  }
+}
 
+/** Empfänger laden und senden (nach dem Claim des Markers). */
+async function loadAndSend(deps: PollPushDeps, input: PollPushInput, eligible: string[]): Promise<PollPushResult> {
+  const { db } = deps;
+  const { groupId, giftId, gift, poll, kind, now } = input;
   const suggestionsSnap = await db
     .collection(`groups/${groupId}/suggestions`)
     .where("giftId", "==", giftId)

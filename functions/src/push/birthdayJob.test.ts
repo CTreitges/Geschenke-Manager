@@ -10,6 +10,9 @@ import { runBirthdayPush } from "./birthdayJob";
 function memoryDb(initial: Record<string, Record<string, unknown>>) {
   const docs = new Map<string, Record<string, unknown>>(Object.entries(initial));
   let autoId = 0;
+  let adds = 0;
+  /** Versand-Fehler simulieren: true für den n-ten Versand (1-basiert) → wirft. */
+  let failAdd: (n: number) => boolean = () => false;
   const childrenOf = (path: string) =>
     [...docs.keys()].filter((k) => k.startsWith(`${path}/`) && k.split("/").length === path.split("/").length + 1);
   const snap = (path: string) => ({
@@ -27,6 +30,7 @@ function memoryDb(initial: Record<string, Record<string, unknown>>) {
       },
       get: async () => ({ docs: childrenOf(path).map(snap) }),
       add: async (data: Record<string, unknown>) => {
+        if (failAdd(++adds)) throw Object.assign(new Error("FCM nicht erreichbar"), { code: 14 });
         docs.set(`${path}/auto${++autoId}`, data);
       },
     }),
@@ -37,12 +41,16 @@ function memoryDb(initial: Record<string, Record<string, unknown>>) {
         docs.set(path, data);
       },
       update: async () => undefined,
+      delete: async () => void docs.delete(path),
     }),
     getAll: async (...refs: { path: string }[]) => refs.map((r) => snap(r.path)),
   };
   const debugPushes = (gid: string) =>
     childrenOf(`groups/${gid}/_debugPush`).map((k) => docs.get(k) as { tokens: string[]; data: Record<string, string> });
-  return { db: db as unknown as Firestore, docs, debugPushes };
+  const failSends = (fn: (n: number) => boolean) => {
+    failAdd = fn;
+  };
+  return { db: db as unknown as Firestore, docs, debugPushes, failSends };
 }
 
 describe("runBirthdayPush", () => {
@@ -96,6 +104,31 @@ describe("runBirthdayPush", () => {
     const res = await runBirthdayPush(db, new Date(now.getTime() + 86_400_000));
     expect(res.sent).toBe(0);
     expect(debugPushes("g1")).toHaveLength(2);
+  });
+
+  // Regression PUSH-04: Fehler nach dem Claim darf das Ereignis nicht verschlucken.
+  it("gibt den Marker frei, wenn der Versand scheitert, und holt am nächsten Tag nach", async () => {
+    const { db, docs, debugPushes, failSends } = seed();
+    failSends((n) => n === 1);
+    const res = await runBirthdayPush(db, now);
+    expect(res.sent).toBe(0);
+    expect(docs.has("groups/g1/_push/birthday-p-anna-2026")).toBe(false);
+
+    const next = await runBirthdayPush(db, new Date(now.getTime() + 86_400_000));
+    expect(next.sent).toBe(3);
+    expect(debugPushes("g1").map((p) => p.data.title)).toContain("🎂 Anna hat in 29 Tagen Geburtstag");
+    expect(docs.has("groups/g1/_push/birthday-p-anna-2026")).toBe(true);
+  });
+
+  it("ging ein Teil schon raus, bleibt der Marker (keine doppelte Meldung)", async () => {
+    const { db, docs, debugPushes, failSends } = seed();
+    failSends((n) => n === 2); // „andere“ raus, Selbst-Push scheitert
+    await runBirthdayPush(db, now);
+    expect(docs.has("groups/g1/_push/birthday-p-anna-2026")).toBe(true);
+    failSends(() => false);
+    const next = await runBirthdayPush(db, new Date(now.getTime() + 86_400_000));
+    expect(next.sent).toBe(0);
+    expect(debugPushes("g1").map((p) => p.data.type)).toEqual(["birthday_stack"]);
   });
 
   it("holt einen ausgefallenen Lauf innerhalb des Fensters nach", async () => {

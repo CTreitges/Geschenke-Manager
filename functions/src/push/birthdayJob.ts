@@ -6,7 +6,7 @@ import {
   viennaToday,
   type BirthdayPerson,
 } from "./birthday";
-import { claimPushMarker } from "./markers";
+import { claimPushMarker, releasePushMarker } from "./markers";
 import { loadPushMembers } from "./members";
 import { sendAndCleanup } from "./send";
 import { loadTokensByUid } from "./tokens";
@@ -51,17 +51,27 @@ export async function runBirthdayPush(
 
       for (const plan of plans) {
         if (!(await claimPushMarker(db, groupId, plan.markerId, "birthday"))) continue;
-        for (const push of [plan.others, plan.self]) {
-          if (push.tokens.length === 0) continue;
-          const res = await sendAndCleanup(db, {
-            groupId,
-            tokens: push.tokens,
-            tokensByUid,
-            data: push.data,
-            urgency: "normal",
-            ttlSeconds: BIRTHDAY_PUSH_TTL_SECONDS,
-          });
-          sent += res.sent;
+        let delivered = false;
+        try {
+          for (const push of [plan.others, plan.self]) {
+            if (push.tokens.length === 0) continue;
+            const res = await sendAndCleanup(db, {
+              groupId,
+              tokens: push.tokens,
+              tokensByUid,
+              data: push.data,
+              urgency: "normal",
+              ttlSeconds: BIRTHDAY_PUSH_TTL_SECONDS,
+            });
+            sent += res.sent;
+            delivered = true;
+          }
+        } catch (err) {
+          // Noch nichts raus → Marker freigeben, der nächste Lauf im
+          // 28–30-Tage-Fenster holt nach. Ging ein Teil schon raus, bleibt er
+          // (lieber eine fehlende als eine doppelte Meldung).
+          if (!delivered) await releasePushMarker(db, groupId, plan.markerId);
+          throw err;
         }
       }
     } catch (err) {

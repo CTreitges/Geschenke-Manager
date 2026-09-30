@@ -12,7 +12,10 @@ import {
 } from "@firebase/rules-unit-testing";
 import {
   collection,
+  deleteDoc,
+  deleteField,
   doc,
+  FieldPath,
   getDoc,
   getDocs,
   setDoc,
@@ -97,6 +100,70 @@ describe("groups/{g}/members/{uid}", () => {
     await assertFails(
       setDoc(doc(dbAs("bob"), `groups/${G}/members/bob`), { uid: "bob", joinedAt: 3 }),
     );
+  });
+
+  it("eigener Eintrag: notifyPolls darf geändert werden, auch zusammen mit notifyStack", async () => {
+    const ref = doc(dbAs("alice"), `groups/${G}/members/alice`);
+    await assertSucceeds(updateDoc(ref, { notifyPolls: false }));
+    await assertSucceeds(updateDoc(ref, { notifyStack: true, notifyPolls: true }));
+    await assertSucceeds(setDoc(ref, { identityPersonId: "p1", notifyPolls: true }, { merge: true }));
+  });
+
+  it("eigener Eintrag: fremde Felder bleiben verboten, auch neben notifyPolls", async () => {
+    const ref = doc(dbAs("alice"), `groups/${G}/members/alice`);
+    await assertFails(updateDoc(ref, { notifyPolls: true, viaMagicLink: true }));
+    await assertFails(updateDoc(ref, { notifyPollsX: true }));
+    await assertFails(updateDoc(ref, { role: "admin" }));
+  });
+
+  it("fremder Eintrag: notifyPolls darf nicht geändert werden", async () => {
+    await assertFails(
+      updateDoc(doc(dbAs("alice"), `groups/${G}/members/carol`), { notifyPolls: false }),
+    );
+  });
+});
+
+describe("pushTokens/{uid}", () => {
+  const TOKEN = "fcm:APA91b-test_token";
+
+  it("eigenes Token-Doc: Upsert eines Tokens und Löschen per Feldpfad", async () => {
+    const db = dbAs("alice");
+    const ref = doc(db, "pushTokens/alice");
+    await assertSucceeds(setDoc(ref, { [TOKEN]: { ua: "x", addedAt: 1 } }, { merge: true }));
+    await assertSucceeds(updateDoc(ref, new FieldPath(TOKEN), deleteField()));
+    await assertSucceeds(getDoc(ref));
+  });
+
+  it("fremdes Token-Doc ist weder lesbar noch schreibbar", async () => {
+    const ref = doc(dbAs("alice"), "pushTokens/carol");
+    await assertFails(getDoc(ref));
+    await assertFails(setDoc(ref, { [TOKEN]: { ua: "x" } }, { merge: true }));
+  });
+});
+
+describe("groups/{g}/_push und _debugPush", () => {
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `groups/${G}/_push/birthday-p1-2026`), { kind: "birthday", at: 1 });
+      await setDoc(doc(db, `groups/${G}/_debugPush/d1`), { tokens: ["t"] });
+    });
+  });
+
+  it("Mitglieder dürfen Push-Marker weder lesen, anlegen, ändern noch löschen", async () => {
+    const db = dbAs("alice");
+    const marker = doc(db, `groups/${G}/_push/birthday-p1-2026`);
+    await assertFails(getDoc(marker));
+    await assertFails(getDocs(collection(db, `groups/${G}/_push`)));
+    await assertFails(setDoc(doc(db, `groups/${G}/_push/poll_started-x`), { kind: "poll" }));
+    await assertFails(updateDoc(marker, { at: 2 }));
+    await assertFails(deleteDoc(marker));
+  });
+
+  it("Emulator-Versandprotokoll ist für Clients gesperrt", async () => {
+    const db = dbAs("alice");
+    await assertFails(getDoc(doc(db, `groups/${G}/_debugPush/d1`)));
+    await assertFails(setDoc(doc(db, `groups/${G}/_debugPush/d2`), { tokens: [] }));
   });
 });
 

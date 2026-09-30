@@ -61,7 +61,8 @@ export function PhaseStepper({ current, className }: { current: PhaseKey; classN
             <span
               aria-hidden
               className={cn(
-                "relative flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold",
+                // z-10: über der Verbindungslinie des nächsten Schritts (die liegt im DOM dahinter).
+                "relative z-10 flex h-6 w-6 items-center justify-center rounded-full text-2xs font-bold",
                 done && "bg-accent text-surface",
                 active && "bg-grad-primary text-white ring-4 ring-accent-soft",
                 !done && !active && "border-2 border-line-control bg-surface text-fg-muted",

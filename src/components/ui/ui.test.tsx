@@ -142,6 +142,8 @@ describe("StatusBadge / PhaseStepper", () => {
     expect(out).toMatch(/aria-current="step".*?Entschieden/);
     expect(out.match(/\(erledigt\)/g)).toHaveLength(2); // Ideen, Abstimmung
     for (const label of ["Ideen", "Abstimmung", "Entschieden", "Erhalten"]) expect(out).toContain(label);
+    // Regression: Kreise liegen über der Verbindungslinie des nächsten Schritts.
+    expect(out.match(/relative z-10 flex h-6 w-6/g)).toHaveLength(4);
   });
 
   it("erste Phase: nichts erledigt", () => {

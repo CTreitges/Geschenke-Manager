@@ -48,6 +48,9 @@ export interface Gift {
   customDate?: string;
   /** Shared WhatsApp / chat group invite link for participants of this gift. */
   whatsappLink?: string;
+  /** „Diesmal aussetzen“ (Zeitpunkt): Karte verschwindet aus der Übersicht, das
+   *  Dokument bleibt – ensureAutoGift legt für dieses Jahr kein neues an. */
+  skippedAt?: number;
 }
 
 export interface Suggestion {

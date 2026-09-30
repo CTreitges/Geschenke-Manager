@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { daysUntilBirthday, giftDate, giftDateLine, isInStackWindow, sortStack } from "./birthdays";
+import {
+  daysUntilBirthday,
+  formatDaysShort,
+  formatShortDate,
+  giftDate,
+  giftDateLine,
+  isInStackWindow,
+  sortStack,
+} from "./birthdays";
 import type { Gift, Person } from "./types";
 
 // Fester Referenztag (lokale Zeit): Sonntag, 20. Dezember 2026, 9 Uhr.
@@ -93,6 +101,18 @@ describe("sortStack", () => {
     expect(sorted.map((g) => g.id)).toEqual(["g1"]);
   });
 
+  it("blendet ausgesetzte Geschenke aus (skippedAt), auch bestätigte", () => {
+    const sorted = sortStack(
+      [
+        gift("g1", "neujahr", { skippedAt: 1 }),
+        gift("g2", "weihnachten"),
+        gift("g3", "silvester", { status: "confirmed", skippedAt: 2 }),
+      ],
+      persons,
+    );
+    expect(sorted.map((g) => g.id)).toEqual(["g2"]);
+  });
+
   it("nutzt bei gleichem Termin die Reihenfolge des Eintritts in den Stack", () => {
     const sorted = sortStack(
       [
@@ -139,5 +159,15 @@ describe("giftDate / giftDateLine", () => {
     expect(giftDate(gift("g", "anna", { customDate: "kaputt" }), p, REF)).toEqual(new Date(2026, 11, 20));
     expect(giftDate(gift("g", "x"), undefined, REF)).toBeNull();
     expect(giftDateLine(gift("g", "x"), undefined, REF)).toBe("");
+  });
+});
+
+describe("formatShortDate / formatDaysShort", () => {
+  it("formatiert Datum und Frist knapp für Karten", () => {
+    expect(formatShortDate(new Date(2026, 9, 15))).toBe("15. Okt");
+    expect(formatDaysShort(0)).toBe("heute 🎂");
+    expect(formatDaysShort(1)).toBe("morgen");
+    expect(formatDaysShort(12)).toBe("in 12 T.");
+    expect(formatDaysShort(-2)).toBe("vor 2 T.");
   });
 });

@@ -676,6 +676,12 @@ export async function updateGift(id: ID, patch: Partial<Gift>) {
   await updateDoc(gdoc("gifts", id), clean(patch as Record<string, unknown>));
 }
 
+/** „Diesmal aussetzen“ (on) bzw. „Wieder aufnehmen“ (off). Das Dokument bleibt,
+ *  damit ensureAutoGift für dieses Jahr kein neues, leeres anlegt. */
+export async function setGiftSkipped(id: ID, on: boolean) {
+  await updateDoc(gdoc("gifts", id), { skippedAt: on ? Date.now() : deleteField() });
+}
+
 export async function reorderGifts(orderedIds: ID[]) {
   const batch = writeBatch(db);
   orderedIds.forEach((id, i) => {

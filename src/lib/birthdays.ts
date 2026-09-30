@@ -99,6 +99,19 @@ export function giftDate(g: Gift, p: Person | undefined, ref: Date = new Date())
 const WEEKDAYS_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
 const MONTHS_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
 
+/** Kurzes Datum „15. Okt“. */
+export function formatShortDate(date: Date): string {
+  return `${date.getDate()}. ${MONTHS_SHORT[date.getMonth()]}`;
+}
+
+/** Knappe Frist für Karten: „heute 🎂“, „morgen“, „in 5 T.“ */
+export function formatDaysShort(days: number): string {
+  if (days === 0) return "heute 🎂";
+  if (days === 1) return "morgen";
+  if (days < 0) return `vor ${-days} T.`;
+  return `in ${days} T.`;
+}
+
 /** Datumszeile unter dem Geschenk-Titel: „Mi, 15. Okt · in 15 Tagen“ (customDate beachtet). */
 export function giftDateLine(g: Gift, p: Person | undefined, ref: Date = new Date()): string {
   const date = giftDate(g, p, ref);
@@ -109,11 +122,12 @@ export function giftDateLine(g: Gift, p: Person | undefined, ref: Date = new Dat
 
 /** Sort gifts in the stack (open + confirmed) by upcoming relevant date
  *  (nearest first). Bestätigte Geschenke bleiben im Stack — sie verschwinden
- *  erst, wenn der Status auf "received" gewechselt wird. */
+ *  erst, wenn der Status auf "received" gewechselt wird. Ausgesetzte
+ *  („Diesmal aussetzen“, skippedAt) fehlen. */
 export function sortStack(gifts: Gift[], persons: Person[]): Gift[] {
   const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
   return [...gifts]
-    .filter((g) => g.status === "open" || g.status === "confirmed")
+    .filter((g) => (g.status === "open" || g.status === "confirmed") && g.skippedAt === undefined)
     .sort((a, b) => {
       const da = daysUntilForGift(a, personById[a.personId]);
       const db = daysUntilForGift(b, personById[b.personId]);

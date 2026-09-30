@@ -7,9 +7,7 @@ export function Card({ className, children, onClick, style }: { className?: stri
     <div
       onClick={onClick}
       className={cn(
-        "bg-white dark:bg-stone-800 rounded-[20px] border border-[#F0EBE6] dark:border-[#3A3633]",
-        "shadow-[0_1px_2px_rgba(28,25,23,0.04),0_4px_14px_-8px_rgba(28,25,23,0.08)]",
-        "dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        "bg-surface rounded-card border border-line-subtle shadow-card", // gleiche Werte wie zuvor, jetzt als Tokens
         onClick && "cursor-pointer",
         className,
       )}

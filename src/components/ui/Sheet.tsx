@@ -1,39 +1,128 @@
-import type { ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode, type RefObject } from "react";
 import { createPortal } from "react-dom";
+import { cn } from "@/lib/cn";
+import { IconButton } from "./Button";
 import { Icon } from "./icons";
+import { registerSheet } from "./sheetStack";
 
-// ── Bottom-sheet Dialog ────────────────────────────────────────
-// Rendered via portal into document.body so it is NEVER trapped inside
-// an ancestor stacking context (e.g. the sticky header uses
-// backdrop-blur, which scopes `position: fixed` to the header otherwise).
-export function Dialog({ open, onClose, title, children, footer }: { open: boolean; onClose: () => void; title?: string; children: ReactNode; footer?: ReactNode }) {
-  if (!open) return null;
-  if (typeof document === "undefined") return null;
-  return createPortal(
+export type SheetProps = {
+  open: boolean;
+  onClose: () => void;
+  title?: ReactNode;
+  description?: ReactNode;
+  children?: ReactNode;
+  footer?: ReactNode;
+  /** Bekommt beim Öffnen den Fokus. Sonst: ein per autoFocus fokussiertes Feld, sonst das Sheet selbst. */
+  initialFocusRef?: RefObject<HTMLElement>;
+};
+
+// ── Bottom-Sheet ───────────────────────────────────────────────
+// Per Portal in document.body gerendert, damit es NIE in einem Stacking-
+// Context eines Vorfahren hängt (der Sticky-Header nutzt backdrop-blur,
+// das `position: fixed` sonst auf den Header begrenzt).
+// Schließen: ✕, Backdrop, Esc, Android-Zurück (siehe sheetStack.ts).
+export function Sheet({ open, ...rest }: SheetProps) {
+  if (!open || typeof document === "undefined") return null;
+  return createPortal(<SheetPanel {...rest} />, document.body);
+}
+
+/** Kompatibler Alias: alle bisherigen Dialog-Aufrufer bekommen das Sheet. */
+export const Dialog = Sheet;
+
+const FOCUSABLE =
+  'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function trapFocus(e: KeyboardEvent, panel: HTMLElement) {
+  const items = Array.from(panel.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(
+    (el) => el.offsetParent !== null || el === document.activeElement,
+  );
+  if (items.length === 0) {
+    e.preventDefault();
+    panel.focus();
+    return;
+  }
+  const first = items[0];
+  const last = items[items.length - 1];
+  const active = document.activeElement;
+  if (!panel.contains(active)) {
+    e.preventDefault();
+    first.focus();
+  } else if (e.shiftKey && (active === first || active === panel)) {
+    e.preventDefault();
+    last.focus();
+  } else if (!e.shiftKey && active === last) {
+    e.preventDefault();
+    first.focus();
+  }
+}
+
+function SheetPanel({ onClose, title, description, children, footer, initialFocusRef }: Omit<SheetProps, "open">) {
+  const titleId = useId();
+  const descId = useId();
+  const panelRef = useRef<HTMLDivElement>(null);
+  // Aufrufer übergeben meist eine Inline-Funktion → über Ref, damit die
+  // Effekte nicht bei jedem Render neu laufen (History-Eintrag!).
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  // Auslöser merken, bevor autoFocus im Sheet den Fokus verschiebt.
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
+
+  useEffect(() => {
+    const panel = panelRef.current;
+    const handle = registerSheet(() => onCloseRef.current());
+
+    const target = initialFocusRef?.current ?? (panel && !panel.contains(document.activeElement) ? panel : null);
+    target?.focus({ preventScroll: true });
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || !handle.isTop()) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onCloseRef.current();
+      } else if (e.key === "Tab" && panel) {
+        trapFocus(e, panel);
+      }
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      handle.release();
+      if (opener?.isConnected) opener.focus({ preventScroll: true });
+    };
+    // Bewusst nur beim Öffnen/Schließen: Fokus und History-Eintrag gehören zum Mount.
+  }, []);
+
+  const safeBottom = "pb-[max(16px,env(safe-area-inset-bottom))]";
+  return (
     <div className="fixed inset-0 z-50 flex items-end justify-center animate-fadeIn">
-      <div onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      <div aria-hidden onClick={() => onCloseRef.current()} className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-2xl bg-stone-50 dark:bg-stone-900 rounded-t-[24px] flex flex-col max-h-[85vh] pb-[env(safe-area-inset-bottom,24px)] animate-slideUp"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={title ? titleId : undefined}
+        aria-describedby={description ? descId : undefined}
+        tabIndex={-1}
+        className="relative w-full max-w-2xl bg-canvas text-fg rounded-t-sheet flex flex-col max-h-[85dvh] outline-none animate-slideUp"
       >
-        <div className="pt-3 pb-2 flex justify-center">
-          <div className="w-9 h-[5px] rounded-full bg-stone-300 dark:bg-stone-700" />
-        </div>
         {title && (
-          <div className="px-5 pb-3 pt-1 flex items-center justify-between">
-            <h3 className="m-0 text-lg font-bold text-stone-900 dark:text-stone-50">{title}</h3>
-            <button
-              onClick={onClose}
-              className="bg-stone-100 dark:bg-stone-800 text-stone-500 dark:text-stone-400 w-8 h-8 rounded-full flex items-center justify-center"
-            >
+          <div className="pl-5 pr-3 pt-3 pb-2 flex items-center justify-between gap-2">
+            <h2 id={titleId} className="m-0 text-lg font-bold text-fg">
+              {title}
+            </h2>
+            <IconButton label="Schließen" variant="soft" size="sm" onClick={() => onCloseRef.current()}>
               <Icon.x />
-            </button>
+            </IconButton>
           </div>
         )}
-        <div className="px-5 pb-4 flex-1 overflow-auto">{children}</div>
-        {footer && <div className="px-5 pt-2.5 border-t border-stone-200 dark:border-stone-800">{footer}</div>}
+        {description && (
+          <p id={descId} className="m-0 px-5 pb-3 text-meta text-fg-muted">
+            {description}
+          </p>
+        )}
+        <div className={cn("px-5 flex-1 overflow-auto overscroll-contain", footer ? "pb-4" : safeBottom)}>{children}</div>
+        {footer && <div className={cn("px-5 pt-2.5 border-t border-line", safeBottom)}>{footer}</div>}
       </div>
-    </div>,
-    document.body,
+    </div>
   );
 }

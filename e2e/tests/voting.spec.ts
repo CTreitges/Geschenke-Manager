@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
-import { GROUP_ID, getDb, seed } from "../emu-seed.mjs";
-import { formatA11y, loginAs, seriousA11yViolations } from "./helpers";
+import { GROUP_ID, GROUP_PASSWORD, getDb, seed } from "../emu-seed.mjs";
+import { SUPPRESS_KEYS, formatA11y, loginAs, personId, seriousA11yViolations } from "./helpers";
 
 // Abstimmung als PopUp (VoteSheet) mit Frist, Sperre und Entscheidungs-Sheet.
 // Jeder Test startet mit frisch geseedeter Gruppe (e2e/emu-seed.mjs):
@@ -167,6 +167,42 @@ test("Deep-Link ?vote=1 öffnet das VoteSheet, Zurück schließt es", async ({ p
   await expect(sheet).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`/gift/${giftId}$`));
   await expect(page.getByRole("heading", { name: "Anna · Geburtstag" })).toBeVisible();
+});
+
+test("Push-Deeplink führt über den Geschenk-Link bis zum VoteSheet", async ({ page, browser }, testInfo) => {
+  const giftId = giftIds.anna;
+  // Format wie pollPushUrl() in functions/src/polls/pollPush.ts (dort per
+  // Unit-Test gepinnt; functions/ ist CommonJS und hier nicht importierbar).
+  const url = `/g/${GROUP_ID}/gift/${giftId}?vote=1`;
+
+  // Offene App: der Push-Worker schickt GM_NAVIGATE, die App navigiert selbst
+  // (usePushNavigation). Christof hat schon gewählt → nur der Link öffnet das Sheet.
+  await loginAs(page, "Christof");
+  await expect(page.getByRole("heading", { name: /Hallo, Christof/ })).toBeVisible();
+  await page.evaluate(
+    (u) => navigator.serviceWorker.dispatchEvent(new MessageEvent("message", { data: { type: "GM_NAVIGATE", url: u } })),
+    url,
+  );
+  await expect(voteSheet(page, "Anna")).toBeVisible();
+  await expect(page).toHaveURL(new RegExp(`/gift/${giftId}\\?vote=1$`));
+
+  // Kalter Start ohne Anmeldung (Tipp auf die Meldung öffnet ein neues Fenster).
+  const { baseURL, viewport, locale } = testInfo.project.use;
+  const context = await browser.newContext({ baseURL, viewport, locale });
+  await context.addInitScript(
+    ({ keys, identityKey, identity }) => {
+      for (const [k, v] of Object.entries(keys)) localStorage.setItem(k, v);
+      localStorage.setItem(identityKey, identity);
+    },
+    { keys: SUPPRESS_KEYS, identityKey: `gm:identity:v1:${GROUP_ID}`, identity: personId("Christof") },
+  );
+  const cold = await context.newPage();
+  await cold.goto(url);
+  await cold.getByPlaceholder("Gruppenpasswort").fill(GROUP_PASSWORD);
+  await cold.locator('form button[type="submit"]').click();
+  await expect(voteSheet(cold, "Anna")).toBeVisible({ timeout: 60_000 });
+  await expect(cold).toHaveURL(new RegExp(`/gift/${giftId}\\?vote=1$`));
+  await context.close();
 });
 
 test("Wer noch nicht abgestimmt hat, bekommt das VoteSheet einmal pro Runde von selbst", async ({ page }) => {

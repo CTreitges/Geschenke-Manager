@@ -13,11 +13,12 @@ import {
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import {
   enablePushForGroup,
-  isPushSupported,
+  sendTestPush,
   setPushPrefs,
   unregisterPushOnLogout,
   usePushState,
 } from "@/lib/messaging";
+import { pushPlatform, type PushPlatform } from "@/lib/pushState";
 import {
   getCachedInstallPrompt,
   isStandalonePWA,
@@ -425,7 +426,7 @@ export default function Settings() {
         <PwaInstallGroup />
 
         <Group title="Mitteilungen">
-          <PushNotificationsRow groupId={groupId} />
+          <NotificationsBlock groupId={groupId} />
         </Group>
 
         <Group title="Sicherheit">
@@ -518,102 +519,135 @@ export default function Settings() {
   );
 }
 
-function PushNotificationsRow({ groupId }: { groupId: string | null }) {
-  const push = usePushState(groupId);
-  const enabled = push.state === "on" && push.prefs.stack;
-  const [supported, setSupported] = useState<boolean | null>(null);
-  const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
-    typeof Notification !== "undefined" ? Notification.permission : "unsupported",
-  );
-  const [busy, setBusy] = useState(false);
+/** Anleitung, wie man blockierte Mitteilungen wieder erlaubt. */
+function deniedHelp(platform: PushPlatform): string {
+  if (platform === "ios") {
+    return "Blockiert – so geht's: iPhone-Einstellungen → Mitteilungen → Geschenke → „Mitteilungen erlauben“.";
+  }
+  if (platform === "android") {
+    return "Blockiert – so geht's: App-Symbol lange drücken → App-Info → Benachrichtigungen → erlauben (im Browser: Schloss-Symbol → Berechtigungen).";
+  }
+  return "Blockiert – so geht's: Schloss-Symbol links neben der Adresse → Benachrichtigungen → Zulassen, dann Seite neu laden.";
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    isPushSupported().then((s) => {
-      if (!cancelled) setSupported(s);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+function NotificationsBlock({ groupId }: { groupId: string | null }) {
+  const { state, prefs } = usePushState(groupId);
+  const [busy, setBusy] = useState<null | "setup" | "stack" | "polls" | "test">(null);
+  const platform = pushPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
+  const ready = state === "on" && !!groupId;
 
-  async function toggle() {
+  // Direkt aus dem Tap: enablePushForGroup fragt als Erstes die Berechtigung an.
+  async function setup() {
     if (!groupId || busy) return;
-    setBusy(true);
+    setBusy("setup");
     try {
-      if (enabled) {
-        await setPushPrefs(groupId, { notifyStack: false });
-        toast.success("Benachrichtigungen aus");
-      } else {
-        await enablePushForGroup(groupId);
-        setPermission(Notification.permission);
-        toast.success("Benachrichtigungen aktiv 🔔");
-      }
+      await enablePushForGroup(groupId);
+      toast.success("Mitteilungen aktiv 🔔");
     } catch (err) {
       console.error(err);
-      const msg = (err as Error)?.message ?? "Fehlgeschlagen";
-      toast.error(msg);
+      toast.error((err as Error)?.message ?? "Einrichten fehlgeschlagen");
     } finally {
-      setBusy(false);
+      setBusy(null);
     }
   }
 
-  if (supported === null) {
-    return (
-      <Row
-        label="Push-Benachrichtigungen"
-        hint="Wenn jemand in den 30-Tage-Stack rutscht"
-        icon={<Icon.mail />}
-      >
-        <Chip variant="neutral">prüfe…</Chip>
-      </Row>
-    );
+  async function togglePref(kind: "stack" | "polls") {
+    if (!groupId || busy) return;
+    setBusy(kind);
+    try {
+      // Beide Werte explizit schreiben: sonst würde „Geburtstage aus“ über
+      // notifyPolls ?? notifyStack auch die Abstimmungen abschalten.
+      await setPushPrefs(groupId, {
+        notifyStack: kind === "stack" ? !prefs.stack : prefs.stack,
+        notifyPolls: kind === "polls" ? !prefs.polls : prefs.polls,
+      });
+    } catch (err) {
+      console.error(err);
+      toast.error("Speichern fehlgeschlagen");
+    } finally {
+      setBusy(null);
+    }
   }
 
-  if (!supported) {
-    return (
-      <Row
-        label="Push-Benachrichtigungen"
-        hint="Auf diesem Gerät / Browser nicht unterstützt"
-        icon={<Icon.mail />}
-      >
-        <Chip variant="neutral">nicht verfügbar</Chip>
-      </Row>
-    );
+  async function testPush() {
+    if (!groupId || busy) return;
+    setBusy("test");
+    try {
+      const sent = await sendTestPush(groupId);
+      if (sent > 0) toast.success(sent === 1 ? "An 1 Gerät verschickt" : `An ${sent} Geräte verschickt`);
+      else toast.error("Kein Gerät erreicht – richte Mitteilungen auf diesem Gerät neu ein");
+    } catch (err) {
+      console.error(err);
+      toast.error("Test-Push fehlgeschlagen");
+    } finally {
+      setBusy(null);
+    }
   }
 
-  if (permission === "denied") {
-    return (
-      <Row
-        label="Push-Benachrichtigungen"
-        hint="Im Browser blockiert — Berechtigung in den Browser-Settings freigeben"
-        icon={<Icon.mail />}
-      >
-        <Chip variant="neutral">blockiert</Chip>
-      </Row>
-    );
-  }
-
+  let deviceHint: string;
+  let deviceAction: ReactNode;
   if (!groupId) {
-    return (
-      <Row
-        label="Push-Benachrichtigungen"
-        hint="Erst einer Gruppe beitreten"
-        icon={<Icon.mail />}
-      >
-        <Chip variant="neutral">—</Chip>
-      </Row>
+    deviceHint = "Erst einer Gruppe beitreten";
+    deviceAction = <Chip variant="neutral">—</Chip>;
+  } else if (state === null) {
+    deviceHint = "Prüfe dieses Gerät …";
+    deviceAction = <Chip variant="neutral">prüfe…</Chip>;
+  } else if (state === "on") {
+    deviceHint = `Mitteilungen für die Gruppe „${groupId}“ kommen auf dieses Gerät.`;
+    deviceAction = <Chip variant="success">✓ aktiv</Chip>;
+  } else if (state === "off") {
+    deviceHint = "Einmal erlauben, dann kommen Mitteilungen auf dieses Gerät.";
+    deviceAction = (
+      <Button size="sm" onClick={setup} disabled={busy !== null}>
+        {busy === "setup" ? "…" : "Einrichten"}
+      </Button>
     );
+  } else if (state === "denied") {
+    deviceHint = deniedHelp(platform);
+    deviceAction = <Chip variant="neutral">blockiert</Chip>;
+  } else if (state === "needs-install") {
+    deviceHint =
+      "Auf dem iPhone kommen Mitteilungen nur, wenn die App auf dem Home-Bildschirm liegt: Safari → Teilen → „Zum Home-Bildschirm“, dann von dort öffnen.";
+    deviceAction = <Chip variant="info">erst installieren</Chip>;
+  } else {
+    deviceHint = "Dieser Browser unterstützt keine Mitteilungen.";
+    deviceAction = <Chip variant="neutral">nicht verfügbar</Chip>;
   }
 
   return (
-    <Row
-      label="Push-Benachrichtigungen"
-      hint="Sobald jemand in den 30-Tage-Stack rutscht, kommt eine Push-Nachricht."
-      icon={<Icon.mail />}
-    >
-      <Toggle on={!!enabled} onChange={toggle} disabled={busy} />
-    </Row>
+    <>
+      <Row label="Dieses Gerät" hint={deviceHint} icon={<span aria-hidden="true">🔔</span>}>
+        {deviceAction}
+      </Row>
+      <Row
+        label="Geburtstage"
+        hint="30 Tage vorher, wenn jemand in den Stack rutscht"
+        icon={<span aria-hidden="true">🎂</span>}
+      >
+        <label className="contents">
+          <span className="sr-only">Geburtstage</span>
+          <Toggle on={ready && prefs.stack} onChange={() => togglePref("stack")} disabled={!ready || busy !== null} />
+        </label>
+      </Row>
+      <Row
+        label="Abstimmungen"
+        hint="Start und Erinnerung – nie für dein eigenes Geschenk"
+        icon={<span aria-hidden="true">🗳️</span>}
+      >
+        <label className="contents">
+          <span className="sr-only">Abstimmungen</span>
+          <Toggle on={ready && prefs.polls} onChange={() => togglePref("polls")} disabled={!ready || busy !== null} />
+        </label>
+      </Row>
+      <Row label="Test-Push senden" hint="Prüft, ob Mitteilungen ankommen" icon={<span aria-hidden="true">📨</span>}>
+        <Button variant="secondary" size="sm" onClick={testPush} disabled={!ready || busy !== null}>
+          {busy === "test" ? "…" : "Senden"}
+        </Button>
+      </Row>
+      <div className="px-3.5 pb-3 pt-1 text-xs text-stone-500 dark:text-stone-400">
+        ℹ️ Ohne „Wer bin ich?“ keine Abstimmungs-Pushes (Spoiler-Schutz).
+      </div>
+    </>
   );
 }
 

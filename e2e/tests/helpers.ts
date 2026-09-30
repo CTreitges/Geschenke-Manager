@@ -1,6 +1,7 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { GROUP_ID, GROUP_PASSWORD } from "../emu-seed.mjs";
+import { settle } from "../emu-session.mjs";
 import { ONBOARDING_KEYS, TUTORIAL_VERSION } from "../../src/lib/onboarding";
 
 // Onboarding unterdrücken (Tutorial gesehen, Identität gefragt, Install-Tipp
@@ -57,9 +58,17 @@ export interface A11yViolation {
 // @playwright/test bringt eine eigene Version mit – zur Laufzeit dieselbe Page.
 type AxePage = ConstructorParameters<typeof AxeBuilder>[0]["page"];
 
-/** axe-Scan der aktuellen Seite; liefert nur Verstöße der Stufe serious/critical. */
-export async function seriousA11yViolations(page: Page): Promise<A11yViolation[]> {
-  const { violations } = await new AxeBuilder({ page: page as unknown as AxePage }).analyze();
+/**
+ * axe-Scan der aktuellen Seite; liefert nur Verstöße der Stufe serious/critical.
+ * Wartet vorher, bis Einblend-Animationen (Sheets, Toasts) durch sind: mitten
+ * in der Opacity-Animation misst axe sonst den halb transparenten Zwischenstand
+ * als Kontrastfehler.
+ */
+export async function seriousA11yViolations(page: Page, include?: string): Promise<A11yViolation[]> {
+  await settle(page);
+  const builder = new AxeBuilder({ page: page as unknown as AxePage });
+  if (include) builder.include(include);
+  const { violations } = await builder.analyze();
   return violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
     .map((v) => ({

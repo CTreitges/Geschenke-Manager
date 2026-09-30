@@ -4,6 +4,7 @@ import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { Avatar, Chip, EmptyState, Icon, PageHeader } from "@/components/ui";
 import { useIdentity } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
+import { formatEuro } from "@/lib/money";
 import { isRecipient } from "@/lib/spoiler";
 
 /**
@@ -92,7 +93,7 @@ export default function PastGifts() {
                       </div>
                     ) : (
                       <div className="text-[14px] font-bold tabular-nums text-violet-700 dark:text-violet-300">
-                        {total} €
+                        {formatEuro(total)}
                       </div>
                     )}
                     <Chip variant="success" className="mt-0.5">erhalten</Chip>

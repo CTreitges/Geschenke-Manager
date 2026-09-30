@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button, useConfirm } from "@/components/ui";
 import { SurpriseStackCard } from "@/components/surprise/SurpriseStackCard";
 import { useStore } from "@/lib/hooks";
+import { formatEuro } from "@/lib/money";
 import {
   ageOnNextBirthday,
   birthdayYearForPerson,
@@ -272,7 +273,7 @@ function StackCard({
             <Icon.users size={12} className="-mr-px" />
             {participants}
           </Chip>
-          <Chip variant="accent">{budget} €</Chip>
+          <Chip variant="accent">{formatEuro(budget)}</Chip>
         </div>
         <button
           onClick={onRemove}

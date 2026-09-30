@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { formatEuro } from "@/lib/money";
 import { updateGift } from "@/lib/storage";
 import type { Gift } from "@/lib/types";
 
@@ -35,14 +36,14 @@ export function BudgetEditor({ gift, totalBudget }: { gift: Gift; totalBudget: n
               className="cursor-pointer"
               style={{ borderBottom: "1px dashed #7C3AED" }}
             >
-              {gift.budgetPerPerson} €
+              {formatEuro(gift.budgetPerPerson)}
             </span>
           )}
         </span>
         <span className="mx-1.5">=</span>
       </div>
       <div className="text-[22px] font-extrabold tracking-tight text-violet-700 dark:text-violet-300">
-        {totalBudget} €
+        {formatEuro(totalBudget)}
       </div>
     </div>
   );

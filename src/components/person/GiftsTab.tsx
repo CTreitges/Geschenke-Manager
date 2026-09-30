@@ -5,6 +5,7 @@ import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { Button, Chip, EmptyState, Icon, Input, useConfirm } from "@/components/ui";
 import { birthdayYearForPerson } from "@/lib/birthdays";
 import { useStore } from "@/lib/hooks";
+import { formatEuro } from "@/lib/money";
 import { addGift, deleteGift } from "@/lib/storage";
 import type { Gift, Person } from "@/lib/types";
 
@@ -119,7 +120,7 @@ export function GiftsTab({ person, stack, past, isMe }: { person: Person; stack:
                           {secret
                             ? "🤫 Überraschung in Planung"
                             : g.status !== "received"
-                              ? `${g.participantIds.length} Personen · ${g.participantIds.length * g.budgetPerPerson} €`
+                              ? `${g.participantIds.length} Personen · ${formatEuro(g.participantIds.length * g.budgetPerPerson)}`
                               : "erhalten"}
                         </div>
                       </div>

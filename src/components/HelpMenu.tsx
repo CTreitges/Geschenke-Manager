@@ -82,13 +82,16 @@ function NewBadge() {
  */
 export function HelpEntries({ go, onInstall }: { go: (to: string) => void; onInstall?: () => void }) {
   const unseen = useUnseenVersion();
+  // onInstall kommt genau dann, wenn das Tutorial auch die Install-Seite zeigt
+  // (Browser, nie installiert – wie tutorialPages({ showInstall })).
+  const pages = onInstall ? 6 : 5;
   return (
     <div className="flex flex-col gap-1">
       <Entry
         primary
         icon={<Play size={18} fill="currentColor" />}
         title="Tutorial ansehen"
-        hint="5 kurze Seiten · ca. 1 Minute"
+        hint={`${pages} kurze Seiten · ca. 1 Minute`}
         onClick={() => go("/tutorial")}
       />
       <Entry

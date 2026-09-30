@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { HelpEntries } from "./HelpMenu";
+import { tutorialPages } from "./tutorial/pages";
 
 const noop = () => {};
 const titles = (html: string) => [...html.matchAll(/<button[^>]*>.*?<\/button>/g)].map((m) => m[0].replace(/<[^>]+>/g, ""));
@@ -20,6 +21,15 @@ describe("HelpEntries", () => {
     const list = titles(renderToStaticMarkup(<HelpEntries go={noop} onInstall={noop} />));
     expect(list).toHaveLength(5);
     expect(list[4]).toMatch(/^App installieren/);
+  });
+
+  it("Seitenzahl des Tutorials passt zur Install-Seite (Regression: stand fest auf 5)", () => {
+    const withInstall = titles(renderToStaticMarkup(<HelpEntries go={noop} onInstall={noop} />))[0];
+    const without = titles(renderToStaticMarkup(<HelpEntries go={noop} />))[0];
+    const count = (showInstall: boolean) => tutorialPages({ showInstall, hasIdentity: true }).length;
+    expect(withInstall).toContain(`${count(true)} kurze Seiten`);
+    expect(without).toContain(`${count(false)} kurze Seiten`);
+    expect(count(true)).toBe(6);
   });
 
   it("Tutorial-Eintrag ist visuell primär (Verlaufs-Kachel)", () => {

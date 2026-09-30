@@ -18,7 +18,8 @@
     "posttest:rules": "node e2e/emu-cleanup.mjs",
     "pree2e": "node e2e/emu-cleanup.mjs && npm --prefix functions run build",
     "e2e": "node e2e/run-emulators.mjs --only auth,firestore,functions --project demo-geschenke \"npx playwright test -c e2e/playwright.config.ts\"",
-    "poste2e": "node e2e/emu-cleanup.mjs"
+    "poste2e": "node e2e/emu-cleanup.mjs",
+    "check:design": "node e2e/check-design.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

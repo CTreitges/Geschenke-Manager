@@ -31,6 +31,30 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
     }
 
+    // Läuft die Abstimmung zum Geschenk `giftId`? Wie pollPhase() in
+    // functions/src/shared/poll.ts: aktiv und Frist offen. Eine Frist gilt
+    // nur, wenn endsAt > startedAt (alte Clients lassen beim Neustart ein
+    // altes endsAt stehen) – ohne gültige Frist läuft die Wahl.
+    function pollRunning(groupId, giftId) {
+      let path = /databases/$(database)/documents/groups/$(groupId)/polls/$(giftId);
+      return exists(path) && isRunningPoll(get(path).data);
+    }
+
+    function isRunningPoll(poll) {
+      return poll.status == 'active'
+        && (!('endsAt' in poll)
+          || !('startedAt' in poll)
+          || poll.endsAt <= poll.startedAt
+          || poll.endsAt > request.time.toMillis());
+    }
+
+    // Poll-Doc: Status nur active/closed, endsAt (falls gesetzt) ganzzahlig.
+    // Verwerfen = Doc löschen (kein Status "none" mehr).
+    function validPoll(data) {
+      return data.status in ['active', 'closed']
+        && (!('endsAt' in data) || data.endsAt is int);
+    }
+
     function isFeedbackOwner() {
       return request.auth != null
         && request.auth.token.email != null
@@ -91,9 +115,20 @@ service cloud.firestore {
       // Group data — only members.
       match /persons/{doc}      { allow read, write: if isMember(groupId); }
       match /gifts/{doc}        { allow read, write: if isMember(groupId); }
-      match /suggestions/{doc}  { allow read, write: if isMember(groupId); }
+      // Ideen: Anlegen ist gesperrt, solange die Abstimmung des Geschenks
+      // läuft – damit alle über dasselbe abstimmen (greift auch bei alten,
+      // gecachten App-Versionen). Nur create: der Batch von deleteGift
+      // (Ideen + Poll löschen) bleibt möglich.
+      match /suggestions/{doc}  {
+        allow read, update, delete: if isMember(groupId);
+        allow create: if isMember(groupId)
+          && !pollRunning(groupId, request.resource.data.giftId);
+      }
       match /wishlist/{doc}     { allow read, write: if isMember(groupId); }
-      match /polls/{doc}        { allow read, write: if isMember(groupId); }
+      match /polls/{doc}        {
+        allow read, delete: if isMember(groupId);
+        allow create, update: if isMember(groupId) && validPoll(request.resource.data);
+      }
 
       // Archiv-Verlauf für Restore. Schreibt die archiveGroupDocChange-
       // Cloud-Function via Admin-SDK (bypasst Rules). Members dürfen

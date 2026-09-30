@@ -18,9 +18,11 @@ import {
   FieldPath,
   getDoc,
   getDocs,
+  arrayUnion,
   setDoc,
   setLogLevel,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
 
@@ -172,5 +174,117 @@ describe("groups/{g}/_meta", () => {
     const ref = doc(dbAs("alice"), `groups/${G}/_meta/auth`);
     await assertFails(getDoc(ref));
     await assertFails(setDoc(ref, { salt: "x", hash: "y", version: 1 }));
+  });
+});
+
+describe("groups/{g}/suggestions – Sperre während der Abstimmung", () => {
+  const HOUR = 3_600_000;
+  const idea = { giftId: "gift1", title: "Buch", suggestedBy: "p2", createdAt: 1 };
+  const addIdea = (uid = "alice", data: Record<string, unknown> = idea) =>
+    setDoc(doc(dbAs(uid), `groups/${G}/suggestions/new-idea`), data);
+
+  async function seedPoll(data: Record<string, unknown>, giftId = "gift1") {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `groups/${G}/polls/${giftId}`), { votes: {}, ...data });
+    });
+  }
+
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `groups/${G}/gifts/gift2`), { personId: "p3", status: "open" });
+      await setDoc(doc(db, `groups/${G}/suggestions/s1`), { ...idea, title: "Alt" });
+    });
+  });
+
+  it("ohne Abstimmung darf eine Idee angelegt werden", async () => {
+    await assertSucceeds(addIdea());
+  });
+
+  it("laufende Abstimmung (Frist in der Zukunft) sperrt neue Ideen", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - HOUR, endsAt: now + HOUR });
+    await assertFails(addIdea());
+  });
+
+  it("Alt-Abstimmung ohne endsAt gilt als laufend", async () => {
+    await seedPoll({ status: "active", startedAt: Date.now() - HOUR });
+    await assertFails(addIdea());
+  });
+
+  it("endsAt ≤ startedAt (Rest einer Vorrunde) gilt nicht als Frist → läuft", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - HOUR, endsAt: now - 2 * HOUR });
+    await assertFails(addIdea());
+  });
+
+  it("abgelaufene Frist gibt Ideen frei, auch bevor der Server schließt", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - 3 * HOUR, endsAt: now - HOUR });
+    await assertSucceeds(addIdea());
+  });
+
+  it("beendete Abstimmung sperrt nicht", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "closed", startedAt: now - HOUR, endsAt: now + HOUR, closedAt: now });
+    await assertSucceeds(addIdea());
+  });
+
+  it("die Abstimmung eines anderen Geschenks sperrt nicht", async () => {
+    await seedPoll({ status: "active", startedAt: Date.now() - HOUR }, "gift2");
+    await assertSucceeds(addIdea());
+  });
+
+  it("nur Anlegen ist gesperrt: Ändern und Löschen bleiben erlaubt", async () => {
+    await seedPoll({ status: "active", startedAt: Date.now() - HOUR });
+    const ref = doc(dbAs("alice"), `groups/${G}/suggestions/s1`);
+    await assertSucceeds(updateDoc(ref, { paidBy: "p2" }));
+    await assertSucceeds(deleteDoc(ref));
+  });
+
+  it("Geschenk löschen (Batch aus Geschenk, Ideen und Poll) geht auch während der Wahl", async () => {
+    await seedPoll({ status: "active", startedAt: Date.now() - HOUR });
+    const db = dbAs("alice");
+    const batch = writeBatch(db);
+    batch.delete(doc(db, `groups/${G}/gifts/gift1`));
+    batch.delete(doc(db, `groups/${G}/suggestions/s1`));
+    batch.delete(doc(db, `groups/${G}/polls/gift1`));
+    await assertSucceeds(batch.commit());
+  });
+
+  it("Nicht-Mitglieder dürfen auch ohne Abstimmung nichts anlegen", async () => {
+    await assertFails(addIdea("bob"));
+  });
+});
+
+describe("groups/{g}/polls – Validierung", () => {
+  const pollRef = (uid = "alice") => doc(dbAs(uid), `groups/${G}/polls/gift1`);
+  const now = Date.now();
+  const fresh = { giftId: "gift1", status: "active", startedAt: now, startedBy: "p2", endsAt: now + 3_600_000, votes: {} };
+
+  it("neue Runde mit ganzzahliger Frist ist erlaubt", async () => {
+    await assertSucceeds(setDoc(pollRef(), fresh));
+  });
+
+  it("Status außerhalb von active/closed ist verboten (Verwerfen = löschen)", async () => {
+    await assertFails(setDoc(pollRef(), { ...fresh, status: "none" }));
+    await assertFails(setDoc(pollRef(), { ...fresh, status: "paused" }));
+  });
+
+  it("endsAt muss eine ganze Zahl sein", async () => {
+    await assertFails(setDoc(pollRef(), { ...fresh, endsAt: "morgen" }));
+    await assertFails(setDoc(pollRef(), { ...fresh, endsAt: 1.5 }));
+  });
+
+  it("Stimme setzen, beenden und löschen", async () => {
+    await assertSucceeds(setDoc(pollRef(), fresh));
+    await assertSucceeds(updateDoc(pollRef(), new FieldPath("votes", "p2"), arrayUnion("s1")));
+    await assertSucceeds(updateDoc(pollRef(), new FieldPath("votes", "p2"), deleteField()));
+    await assertSucceeds(updateDoc(pollRef(), { status: "closed", closedAt: now, closedReason: "manual" }));
+    await assertSucceeds(deleteDoc(pollRef()));
+  });
+
+  it("Nicht-Mitglieder dürfen keine Abstimmung starten", async () => {
+    await assertFails(setDoc(pollRef("bob"), fresh));
   });
 });

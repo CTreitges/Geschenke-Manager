@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { daysUntilBirthday, isInStackWindow, sortStack } from "./birthdays";
+import { daysUntilBirthday, giftDate, giftDateLine, isInStackWindow, sortStack } from "./birthdays";
 import type { Gift, Person } from "./types";
 
 // Fester Referenztag (lokale Zeit): Sonntag, 20. Dezember 2026, 9 Uhr.
@@ -116,5 +116,28 @@ describe("sortStack", () => {
     const input = [gift("g1", "neujahr"), gift("g2", "weihnachten")];
     sortStack(input, persons);
     expect(input.map((g) => g.id)).toEqual(["g1", "g2"]);
+  });
+});
+
+describe("giftDate / giftDateLine", () => {
+  it("Geburtstag: nächster Termin mit Wochentag und Abstand", () => {
+    const p = person("anna", "1990-12-25");
+    expect(giftDate(gift("g", "anna"), p, REF)).toEqual(new Date(2026, 11, 25));
+    expect(giftDateLine(gift("g", "anna"), p, REF)).toBe("Fr, 25. Dez · in 5 Tagen");
+  });
+
+  it("eigener Anlass: customDate statt Geburtstag (B29)", () => {
+    const p = person("anna", "12-25");
+    const g = gift("g", "anna", { customDate: "2027-01-02", occasion: "Hochzeit" });
+    expect(giftDate(g, p, REF)).toEqual(new Date(2027, 0, 2));
+    expect(giftDateLine(g, p, REF)).toBe("Sa, 2. Jan · in 13 Tagen");
+  });
+
+  it("heute und ungültiges customDate", () => {
+    const p = person("anna", "12-20");
+    expect(giftDateLine(gift("g", "anna"), p, REF)).toBe("So, 20. Dez · heute! 🎉");
+    expect(giftDate(gift("g", "anna", { customDate: "kaputt" }), p, REF)).toEqual(new Date(2026, 11, 20));
+    expect(giftDate(gift("g", "x"), undefined, REF)).toBeNull();
+    expect(giftDateLine(gift("g", "x"), undefined, REF)).toBe("");
   });
 });

@@ -46,6 +46,34 @@ afterEach(() => {
 });
 
 describe("registerSheet", () => {
+  it("history: false legt keinen Eintrag an und springt beim Schließen nicht zurück", async () => {
+    const close = vi.fn();
+    const h = mod.registerSheet(close, { history: false });
+    await tick();
+    expect(hist.index).toBe(0);
+    expect(rootStyle.overflow).toBe("hidden"); // Scroll-Sperre gilt trotzdem
+
+    h.release();
+    await tick();
+    expect(hist.index).toBe(0);
+    expect(hist.backCalls).toBe(0);
+    expect(rootStyle.overflow).toBe("auto");
+  });
+
+  it("Zurück-Taste überspringt ein Sheet ohne eigenen Eintrag und schließt das darunter", async () => {
+    const closeA = vi.fn();
+    const closeB = vi.fn();
+    mod.registerSheet(closeA);
+    mod.registerSheet(closeB, { history: false });
+    await tick();
+    expect(hist.index).toBe(1);
+
+    hist.back();
+    await tick();
+    expect(closeA).toHaveBeenCalledTimes(1);
+    expect(closeB).not.toHaveBeenCalled();
+  });
+
   it("legt beim Öffnen einen History-Eintrag an und räumt ihn beim Schließen ab", async () => {
     const close = vi.fn();
     const h = mod.registerSheet(close);

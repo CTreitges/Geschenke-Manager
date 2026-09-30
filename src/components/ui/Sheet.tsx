@@ -14,6 +14,8 @@ export type SheetProps = {
   footer?: ReactNode;
   /** Bekommt beim Öffnen den Fokus. Sonst: ein per autoFocus fokussiertes Feld, sonst das Sheet selbst. */
   initialFocusRef?: RefObject<HTMLElement>;
+  /** false = kein eigener History-Eintrag, weil der Offen-Zustand in der URL steht (Zurück schließt über den Router). */
+  history?: boolean;
 };
 
 // ── Bottom-Sheet ───────────────────────────────────────────────
@@ -56,7 +58,7 @@ function trapFocus(e: KeyboardEvent, panel: HTMLElement) {
   }
 }
 
-function SheetPanel({ onClose, title, description, children, footer, initialFocusRef }: Omit<SheetProps, "open">) {
+function SheetPanel({ onClose, title, description, children, footer, initialFocusRef, history = true }: Omit<SheetProps, "open">) {
   const titleId = useId();
   const descId = useId();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -69,7 +71,7 @@ function SheetPanel({ onClose, title, description, children, footer, initialFocu
 
   useEffect(() => {
     const panel = panelRef.current;
-    const handle = registerSheet(() => onCloseRef.current());
+    const handle = registerSheet(() => onCloseRef.current(), { history });
 
     const target = initialFocusRef?.current ?? (panel && !panel.contains(document.activeElement) ? panel : null);
     target?.focus({ preventScroll: true });

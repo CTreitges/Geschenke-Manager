@@ -76,8 +76,13 @@ function unlockScroll() {
 
 export type SheetHandle = { isTop: () => boolean; release: () => void };
 
-/** Meldet ein geöffnetes Sheet an. `close` wird bei Android-Zurück aufgerufen. */
-export function registerSheet(close: () => void): SheetHandle {
+/**
+ * Meldet ein geöffnetes Sheet an. `close` wird bei Android-Zurück aufgerufen.
+ * `history: false` = kein eigener History-Eintrag: Der Aufrufer hält den
+ * Offen-Zustand selbst in der URL (z. B. `?vote=1`), Zurück schließt dann
+ * über den Router.
+ */
+export function registerSheet(close: () => void, opts: { history?: boolean } = {}): SheetHandle {
   const entry: Entry = { id: ++seq, close, pushed: false, released: false };
   if (stack.length === 0) lockScroll();
   stack.push(entry);
@@ -88,7 +93,7 @@ export function registerSheet(close: () => void): SheetHandle {
   // Verzögert: StrictMode meldet in der Entwicklung sofort wieder ab, und ein
   // noch laufendes history.back() eines anderen Sheets muss erst durch sein.
   void whenHistorySettled().then(() => {
-    if (entry.released) return;
+    if (entry.released || opts.history === false) return;
     const state: unknown = history.state;
     const base = state && typeof state === "object" ? state : {};
     history.pushState({ ...base, gmSheet: entry.id }, "");

@@ -84,6 +84,29 @@ export function daysUntilForGift(g: Gift, p: Person | undefined, ref: Date = new
   return p ? daysUntilBirthday(p, ref) : 9999;
 }
 
+/** Datum des Anlasses: customDate (falls gültig), sonst der nächste Geburtstag; null ohne beides. */
+export function giftDate(g: Gift, p: Person | undefined, ref: Date = new Date()): Date | null {
+  if (g.customDate) {
+    const parts = g.customDate.split("-").map(Number);
+    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+      const [y, m, d] = parts;
+      return new Date(y, m - 1, d);
+    }
+  }
+  return p ? nextBirthday(p, ref) : null;
+}
+
+const WEEKDAYS_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+/** Datumszeile unter dem Geschenk-Titel: „Mi, 15. Okt · in 15 Tagen“ (customDate beachtet). */
+export function giftDateLine(g: Gift, p: Person | undefined, ref: Date = new Date()): string {
+  const date = giftDate(g, p, ref);
+  if (!date) return "";
+  const day = `${WEEKDAYS_SHORT[date.getDay()]}, ${date.getDate()}. ${MONTHS_SHORT[date.getMonth()]}`;
+  return `${day} · ${formatDaysUntil(daysUntilForGift(g, p, ref))}`;
+}
+
 /** Sort gifts in the stack (open + confirmed) by upcoming relevant date
  *  (nearest first). Bestätigte Geschenke bleiben im Stack — sie verschwinden
  *  erst, wenn der Status auf "received" gewechselt wird. */

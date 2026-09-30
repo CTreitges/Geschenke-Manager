@@ -21,6 +21,7 @@ import { VoteSheet } from "@/components/poll/VoteSheet";
 import { GiftWishlist } from "@/components/wishlist/WishAdoptSheet";
 import { useGroupId, useIdentity } from "@/lib/auth";
 import { giftDate, giftDateLine } from "@/lib/birthdays";
+import { withLiveParticipants } from "@/lib/cascade";
 import { useStore } from "@/lib/hooks";
 import { isIdentitySkipped, skipIdentity } from "@/lib/identity";
 import { useBack } from "@/lib/nav";
@@ -45,7 +46,9 @@ export default function GiftDetail() {
   const myId = useIdentity();
   const groupId = useGroupId();
   const [skippedNow, setSkippedNow] = useState(false);
-  const gift = store.gifts.find((g) => g.id === id);
+  const found = store.gifts.find((g) => g.id === id);
+  // Gezählt wird nur, wer noch existiert (verwaiste Teilnehmer aus Altbeständen).
+  const gift = found && withLiveParticipants(found, new Set(store.persons.map((p) => p.id)));
   const person = store.persons.find((p) => p.id === gift?.personId);
   const hydrated = store.giftsHydrated && store.personsHydrated && store.suggestionsHydrated && store.pollsHydrated;
 

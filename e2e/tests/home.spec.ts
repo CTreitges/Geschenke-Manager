@@ -89,7 +89,7 @@ test("Laufende Abstimmung sperrt „Diesmal aussetzen“ mit Grund", async ({ pa
   await expect(menu).toContainText("Erst die Abstimmung beenden");
 });
 
-test("Person löschen führt zurück – nie auf „nicht gefunden“", async ({ page }) => {
+test("Person löschen führt zurück, trägt sie überall aus (KOR-05)", async ({ page }) => {
   await loginAs(page, "Anna");
   await page.getByRole("link", { name: "Personen" }).click();
   await page.getByRole("button", { name: "Person hinzufügen" }).click();
@@ -98,6 +98,17 @@ test("Person löschen führt zurück – nie auf „nicht gefunden“", async ({
   await add.locator("select").first().selectOption("3");
   await add.locator("select").nth(1).selectOption("5");
   await add.getByRole("button", { name: "Speichern" }).click();
+
+  // Testperson macht bei Annas Geschenk mit und ist Christofs Standard-Teilnehmerin.
+  const db = getDb();
+  const findTest = async () =>
+    (await db.collection(`groups/${GROUP_ID}/persons`).where("name", "==", "Testperson").get()).docs[0]?.id;
+  await expect.poll(findTest).toBeTruthy();
+  const testId = (await findTest())!;
+  const annaGift = db.doc(`groups/${GROUP_ID}/gifts/${giftIds.anna}`);
+  const christof = db.doc(`groups/${GROUP_ID}/persons/christof`);
+  await annaGift.update({ participantIds: [...(await annaGift.get()).get("participantIds"), testId] });
+  await christof.update({ defaultParticipantIds: [...((await christof.get()).get("defaultParticipantIds") ?? []), testId] });
 
   await page.getByRole("button", { name: /Testperson/ }).click();
   await expect(page.getByRole("heading", { name: "Testperson" })).toBeVisible();
@@ -109,6 +120,9 @@ test("Person löschen führt zurück – nie auf „nicht gefunden“", async ({
   await expect(page.getByText("Testperson gelöscht")).toBeVisible();
   await expect(page.getByRole("button", { name: /Testperson/ })).toHaveCount(0);
   await expect(page.getByText("Person nicht gefunden")).toHaveCount(0);
+  // Kein „Geist“: aus fremden Geschenken und Standard-Teilnehmern ausgetragen (KOR-05).
+  expect((await annaGift.get()).get("participantIds")).not.toContain(testId);
+  expect((await christof.get()).get("defaultParticipantIds") ?? []).not.toContain(testId);
   // Zurück landet nicht wieder auf der gelöschten Person.
   await page.goBack();
   await expect(page).not.toHaveURL(/\/person\//);

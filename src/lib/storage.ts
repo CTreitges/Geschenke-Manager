@@ -23,7 +23,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { getIdentity } from "./auth";
 import { auth, authReady, db, functions } from "./firebase";
-import { dedupPlan, personDeletion } from "./cascade";
+import { dedupPlan, personDeletion, withLiveParticipants } from "./cascade";
 import { isFeedbackOwner } from "./feedback-owner";
 import { toUpdate } from "./patch";
 import { assertNotRecipient } from "./spoiler";
@@ -527,7 +527,11 @@ export async function updatePerson(id: ID, patch: Partial<Person>) {
   await updateDoc(gdoc("persons", id), clean(patch as Record<string, unknown>));
 }
 
-/** Löscht die Person samt ihrer Geschenke, deren Ideen und Abstimmungen und ihrer Wünsche (B30). */
+/**
+ * Löscht die Person samt ihrer Geschenke, deren Ideen und Abstimmungen und
+ * ihrer Wünsche (B30) und trägt sie im selben Batch aus fremden Geschenken
+ * und Standard-Teilnehmern aus (KOR-05).
+ */
 export async function deletePerson(id: ID) {
   if (!state.activeGroupId) throw new Error("No active group");
   const plan = personDeletion(id, state);
@@ -537,19 +541,26 @@ export async function deletePerson(id: ID) {
   plan.suggestions.forEach((sid) => batch.delete(gdoc("suggestions", sid)));
   plan.polls.forEach((pid) => batch.delete(gdoc("polls", pid)));
   plan.wishlist.forEach((wid) => batch.delete(gdoc("wishlist", wid)));
+  plan.participantOf.forEach((gid) => batch.update(gdoc("gifts", gid), { participantIds: arrayRemove(id) }));
+  plan.defaultParticipantOf.forEach((pid) =>
+    batch.update(gdoc("persons", pid), { defaultParticipantIds: arrayRemove(id) }),
+  );
   await batch.commit();
 }
 
 /**
- * Deduplicate open gifts: same (personId, year) → keep richest, drop rest.
- * Ideen der Doppel wandern zum behaltenen Geschenk, ihre Polls fallen weg (B30).
+ * Doppelte offene Auto-Geschenke (gleiche Person, Jahr, Anlass) aufräumen:
+ * das reichste bleibt; Ideen der Doppel wandern mit, ihre Polls fallen weg
+ * (B30). Manuelle, ausgesetzte und laufend abgestimmte bleiben (KOR-11).
  */
 let dedupRunning = false;
 export async function deduplicateOpenGifts(): Promise<number> {
   if (dedupRunning) return 0;
   dedupRunning = true;
   try {
-    const plan = dedupPlan(state.gifts, state.suggestions);
+    const now = Date.now();
+    const running = new Set(state.polls.filter((p) => pollPhase(p, now) === "running").map((p) => p.giftId));
+    const plan = dedupPlan(state.gifts, state.suggestions, running);
     if (plan.gifts.length === 0) return 0;
     const batch = writeBatch(db);
     plan.gifts.forEach((id) => {
@@ -905,7 +916,8 @@ export async function startPoll(
   const gift = state.gifts.find((g) => g.id === giftId);
   if (gift) {
     const ideas = state.suggestions.filter((s) => s.giftId === giftId).length;
-    const blocker = startPollBlocker(gift, ideas, opts.startedBy);
+    const live = withLiveParticipants(gift, new Set(state.persons.map((p) => p.id)));
+    const blocker = startPollBlocker(live, ideas, opts.startedBy);
     if (blocker) throw new Error(blocker);
   }
   const ref = gdoc("polls", giftId);

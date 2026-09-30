@@ -20,6 +20,7 @@ import {
   isInStackWindow,
   sortStack,
 } from "@/lib/birthdays";
+import { withLiveParticipants } from "@/lib/cascade";
 import { cn } from "@/lib/cn";
 import { giftPhase, type GiftPhase, type GiftPhaseInfo } from "@/lib/giftPhase";
 import { addGift, deduplicateOpenGifts, ensureAutoGift } from "@/lib/storage";
@@ -64,7 +65,11 @@ export default function Home() {
     });
   }, [giftsHydrated, personsHydrated]);
 
-  const stack = useMemo(() => sortStack(gifts, persons), [gifts, persons]);
+  // Gezählt wird nur, wer noch existiert (verwaiste Teilnehmer aus Altbeständen).
+  const stack = useMemo(() => {
+    const ids = new Set(persons.map((p) => p.id));
+    return sortStack(gifts, persons).map((g) => withLiveParticipants(g, ids));
+  }, [gifts, persons]);
   const hero = useMemo(() => findHero(persons), [persons]);
 
   const myId = useIdentity();

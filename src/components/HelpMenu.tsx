@@ -61,7 +61,8 @@ function Entry({ icon, title, hint, badge, primary = false, onClick }: EntryProp
           {title}
           {badge}
         </span>
-        {hint && <span className="mt-0.5 block text-meta text-fg-muted">{hint}</span>}
+        {/* Auf accent-soft reicht fg-muted nicht (hell 4,3:1) → fg-soft */}
+        {hint && <span className={cn("mt-0.5 block text-meta", primary ? "text-fg-soft" : "text-fg-muted")}>{hint}</span>}
       </span>
       <Icon.chev size={16} className="shrink-0 text-fg-muted" />
     </button>

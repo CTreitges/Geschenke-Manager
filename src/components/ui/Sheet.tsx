@@ -89,7 +89,10 @@ function SheetPanel({ onClose, title, description, children, footer, initialFocu
     return () => {
       document.removeEventListener("keydown", onKeyDown);
       handle.release();
-      if (opener?.isConnected) opener.focus({ preventScroll: true });
+      // Fokus nur zurückgeben, wenn das Sheet wirklich weg ist. Beim Doppel-
+      // Aufruf der Effekte (StrictMode, Entwicklung) hängt das Panel noch im
+      // DOM – sonst verlöre ein autoFocus-Feld im Sheet seinen Fokus.
+      if (!panel?.isConnected && opener?.isConnected) opener.focus({ preventScroll: true });
     };
     // Bewusst nur beim Öffnen/Schließen: Fokus und History-Eintrag gehören zum Mount.
   }, []);

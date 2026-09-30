@@ -15,11 +15,13 @@ import { WishlistAdoptSection } from "@/components/gift/WishlistAdoptSection";
 import { DecisionSheet } from "@/components/poll/DecisionSheet";
 import { NowCard } from "@/components/poll/NowCard";
 import { StartSheet } from "@/components/poll/StartSheet";
+import { IdentityGate } from "@/components/surprise/IdentityGate";
 import { usePollSheets } from "@/components/poll/usePollSheets";
 import { VoteSheet } from "@/components/poll/VoteSheet";
 import { useGroupId, useIdentity } from "@/lib/auth";
 import { giftDate, giftDateLine } from "@/lib/birthdays";
 import { useStore } from "@/lib/hooks";
+import { isIdentitySkipped, skipIdentity } from "@/lib/identity";
 import { useBack } from "@/lib/nav";
 import { pollModel } from "@/lib/pollModel";
 import { lockMessage, startPollBlocker } from "@/lib/pollOps";
@@ -38,6 +40,9 @@ export default function GiftDetail() {
   const store = useStore();
   const back = useBack("/");
   const nav = useNavigate();
+  const myId = useIdentity();
+  const groupId = useGroupId();
+  const [skippedNow, setSkippedNow] = useState(false);
   const gift = store.gifts.find((g) => g.id === id);
   const person = store.persons.find((p) => p.id === gift?.personId);
   const hydrated = store.giftsHydrated && store.personsHydrated && store.suggestionsHydrated && store.pollsHydrated;
@@ -55,6 +60,21 @@ export default function GiftDetail() {
           action={<Button onClick={() => nav("/", { replace: true })}>Zur Übersicht</Button>}
         />
       </div>
+    );
+  }
+  // Ab hier keine Hooks mehr (Early-Returns). Ohne Identität zuerst fragen –
+  // außer „nur ansehen“ wurde in dieser Sitzung gewählt oder es ist vorbei.
+  const skipped = skippedNow || isIdentitySkipped(groupId);
+  if (!myId && !skipped && gift.status !== "received") {
+    return (
+      <IdentityGate
+        recipientId={gift.personId}
+        onBack={back}
+        onSkip={() => {
+          skipIdentity(groupId);
+          setSkippedNow(true);
+        }}
+      />
     );
   }
   return <GiftView key={gift.id} gift={gift} person={person} onBack={back} />;
@@ -125,11 +145,7 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
   const participants = gift.participantIds.map((pid) => personsById[pid]).filter((p): p is Person => !!p);
   const occasion = gift.occasion || "Geburtstag";
   const startBlocker = startPollBlocker(gift, ideas.length, myId);
-  const adoptBlocked = model.locks.adoptWish.locked
-    ? lockMessage("adoptWish")
-    : !myId
-      ? "Wähle erst, wer du bist – dann kannst du Wünsche übernehmen."
-      : null;
+  const adoptBlocked = model.locks.adoptWish.locked ? lockMessage("adoptWish") : null;
   const step: PhaseKey =
     gift.status === "received" ? "received" : gift.status === "confirmed" ? "decided" : model.phase === "none" ? "ideas" : "voting";
 

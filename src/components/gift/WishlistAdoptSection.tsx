@@ -1,5 +1,6 @@
 import { Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRequireIdentity } from "@/components/IdentitySheet";
 import { Section } from "@/components/ui";
 import { PollLockedError } from "@/lib/pollOps";
 import { addSuggestion } from "@/lib/storage";
@@ -7,8 +8,8 @@ import type { Gift, Person, Suggestion, WishlistItem } from "@/lib/types";
 import { WishlistRow } from "./WishlistRow";
 
 // ── Wunschliste der Person (mit Übernehmen) ───────────────────
-// `blockedReason` gesetzt → Übernehmen gesperrt (laufende Abstimmung oder
-// keine Identität); Lesen bleibt erlaubt.
+// `blockedReason` gesetzt → Übernehmen gesperrt (laufende Abstimmung);
+// Lesen bleibt erlaubt. Ohne Identität fragt das IdentitySheet zuerst.
 export function WishlistAdoptSection({
   gift,
   person,
@@ -24,15 +25,20 @@ export function WishlistAdoptSection({
   myId: string | null;
   blockedReason: string | null;
 }) {
-  function adopt(w: WishlistItem) {
+  const requireIdentity = useRequireIdentity();
+
+  async function adopt(w: WishlistItem) {
+    if (blockedReason) return;
     // Nur mit Identität – sonst stünde die beschenkte Person als Autorin da (B21).
-    if (!myId || blockedReason) return;
+    const author =
+      myId ?? (await requireIdentity({ recipientId: gift.personId, reason: "Damit die Übernahme dir zugeordnet wird." }));
+    if (!author) return;
     addSuggestion({
       giftId: gift.id,
       title: w.title,
       url: w.url,
       price: w.price,
-      suggestedBy: myId,
+      suggestedBy: author,
       fromWishItemId: w.id,
     })
       .then(() => toast.success("In die Ideen übernommen"))
@@ -65,7 +71,7 @@ export function WishlistAdoptSection({
                 wish={w}
                 taken={giftSuggestions.some((s) => s.fromWishItemId === w.id)}
                 disabled={!!blockedReason}
-                onAdopt={() => adopt(w)}
+                onAdopt={() => void adopt(w)}
               />
             ))}
           </div>

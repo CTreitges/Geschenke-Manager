@@ -507,8 +507,10 @@ export async function setMyIdentityCloud(personId: ID | null): Promise<void> {
 }
 
 // ─── Persons ────────────────────────────────────────────
-export async function addPerson(p: Omit<Person, "id" | "createdAt">) {
-  await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));
+/** Legt eine Person an und liefert ihre neue ID (z. B. „Ich bin noch nicht dabei“). */
+export async function addPerson(p: Omit<Person, "id" | "createdAt">): Promise<ID> {
+  const ref = await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));
+  return ref.id;
 }
 
 export async function updatePerson(id: ID, patch: Partial<Person>) {

@@ -1,12 +1,13 @@
 import type { ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { Lock } from "lucide-react";
 import { toast } from "sonner";
+import { useRequireIdentity } from "@/components/IdentitySheet";
 import { Button, Confetti, Icon, useConfirm, type PhaseKey } from "@/components/ui";
 import { PayerChips } from "@/components/gift/PayerChips";
 import { PayerTotalsLine } from "@/components/gift/PayerTotalsLine";
 import { cn } from "@/lib/cn";
 import type { PollModel } from "@/lib/pollModel";
+import { startPollBlocker } from "@/lib/pollOps";
 import { countdown, endedLine, resultHeadline, selectionSummary, votersLine } from "@/lib/pollView";
 import { addParticipant, discardPoll, extendPoll, unconfirmGift } from "@/lib/storage";
 import type { Gift, Person, Poll, Suggestion } from "@/lib/types";
@@ -93,15 +94,28 @@ export function NowCard(props: NowCardProps) {
   return <IdeasNow {...props} />;
 }
 
-function IdeasNow({ ideas, myId, startBlocker, onStart, onDirectDecide }: NowCardProps) {
+function IdeasNow({ gift, ideas, myId, startBlocker, onStart, onDirectDecide }: NowCardProps) {
   const n = ideas.length;
+  const requireIdentity = useRequireIdentity();
+  // Ohne Identität erst „Wer bist du?“ – danach geht es direkt weiter.
+  const blocked = !!myId && !!startBlocker;
+
+  async function start() {
+    if (myId) return onStart();
+    const id = await requireIdentity({ recipientId: gift.personId, reason: "Damit alle sehen, wer die Abstimmung startet." });
+    if (!id) return;
+    const blocker = startPollBlocker(gift, n, id);
+    if (blocker) toast.message(blocker);
+    else onStart();
+  }
+
   return (
     <Shell tone="ideas" title={n === 0 ? "💡 Noch keine Ideen" : `💡 ${n} ${n === 1 ? "Idee" : "Ideen"} gesammelt`}>
       <p className="m-0 text-meta text-fg-soft">Sammelt Ideen und stimmt dann gemeinsam ab – oder entscheidet direkt.</p>
-      <Button size="lg" className="w-full" disabled={!!startBlocker} onClick={onStart}>
+      <Button size="lg" className="w-full" disabled={blocked} onClick={() => void start()}>
         <Icon.vote /> Abstimmung starten
       </Button>
-      {startBlocker && <Reason>{startBlocker}</Reason>}
+      {blocked && <Reason>{startBlocker}</Reason>}
       {n > 0 && myId && (
         <Button variant="ghost" size="sm" className="w-full" onClick={onDirectDecide}>
           Direkt entscheiden
@@ -119,6 +133,12 @@ function VotingNow({ gift, poll, model, personsById, myId, now, onOpenVote }: No
   const starter = poll.startedBy ? personsById[poll.startedBy] : undefined;
   const startedBy = starter ? ` · gestartet von ${starter.name}` : "";
   const mine = model.myVotes.length;
+  const requireIdentity = useRequireIdentity();
+
+  async function chooseIdentity() {
+    const id = await requireIdentity({ recipientId: gift.personId, reason: "Damit deine Stimme dir zugeordnet wird." });
+    if (id && gift.participantIds.includes(id)) onOpenVote();
+  }
 
   async function join() {
     if (!myId) return;
@@ -166,9 +186,9 @@ function VotingNow({ gift, poll, model, personsById, myId, now, onOpenVote }: No
       ) : (
         <>
           <p className="m-0 text-meta text-fg-muted">Wähle erst, wer du bist, um mitzustimmen{startedBy}.</p>
-          <Link to="/settings" className="inline-flex min-h-tap items-center text-meta font-semibold text-accent-text">
-            Wer bist du? →
-          </Link>
+          <Button size="lg" variant="secondary" className="w-full" aria-haspopup="dialog" onClick={() => void chooseIdentity()}>
+            Wer bist du?
+          </Button>
         </>
       )}
     </Shell>
@@ -180,6 +200,13 @@ function ResultNow({ gift, poll, model, ideas, personsById, myId, now, onOpenDec
   const result = model.result ?? { kind: "empty" as const };
   const titleOf = (id: string) => ideas.find((s) => s.id === id)?.title ?? "?";
   const nameOf = (id: string) => personsById[id]?.name;
+  const requireIdentity = useRequireIdentity();
+
+  async function decide() {
+    if (myId) return onOpenDecision();
+    const id = await requireIdentity({ recipientId: gift.personId, reason: "Damit alle sehen, wer entschieden hat." });
+    if (id) onOpenDecision();
+  }
 
   async function extend() {
     try {
@@ -208,10 +235,9 @@ function ResultNow({ gift, poll, model, ideas, personsById, myId, now, onOpenDec
       <p className="m-0 text-meta text-fg-muted">
         {endedLine(poll, now, nameOf)} · {model.voters.voted} von {model.voters.total} haben abgestimmt
       </p>
-      <Button size="lg" className="w-full" disabled={!myId} onClick={onOpenDecision}>
+      <Button size="lg" className="w-full" onClick={() => void decide()}>
         <Icon.check /> Entscheidung festlegen
       </Button>
-      {!myId && <Reason>Wähle erst, wer du bist.</Reason>}
       <div className="flex justify-center gap-1">
         <Button variant="ghost" size="sm" onClick={extend}>
           Verlängern

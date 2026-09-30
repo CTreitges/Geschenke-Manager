@@ -1,23 +1,26 @@
 import { Link } from "react-router-dom";
 import { useStore } from "@/lib/hooks";
 import { useIdentity } from "@/lib/auth";
+import { useIdentityPrompt } from "./IdentitySheet";
 import { Avatar } from "./ui";
 
 export function IdentityChip() {
   const { persons } = useStore();
   const id = useIdentity();
+  const { open } = useIdentityPrompt();
   const me = persons.find((p) => p.id === id);
   if (!me) {
+    // Ohne Identität auch auf dem Handy mit Text – öffnet das IdentitySheet.
     return (
-      <Link
-        to="/settings"
-        className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full px-2.5 py-1.5 inline-flex items-center gap-1.5 text-xs font-semibold text-violet-700 dark:text-violet-400"
-        aria-label="Wer bist du?"
-        title="Wer bist du?"
+      <button
+        type="button"
+        onClick={() => void open()}
+        aria-haspopup="dialog"
+        className="min-h-tap inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-accent-text"
       >
-        <span className="text-sm leading-none">👋</span>
-        <span className="hidden sm:inline">Wer bist du?</span>
-      </Link>
+        <span aria-hidden className="text-sm leading-none">👋</span>
+        Wer bist du?
+      </button>
     );
   }
   return (

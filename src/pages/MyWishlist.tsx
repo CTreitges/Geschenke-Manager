@@ -1,18 +1,21 @@
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { useStore } from "@/lib/hooks";
 import { useIdentity } from "@/lib/auth";
-import { setIdentity } from "@/lib/auth";
-import { Avatar, Button, Card, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
+import { Avatar, Button, Card, EmptyState, Icon, Input, PageHeader, useConfirm } from "@/components/ui";
 import { addWishItem, deleteWishItem } from "@/lib/storage";
 import { formatRelativeDate } from "@/lib/dates";
+import { nextSurprise, surpriseBanner } from "@/lib/spoiler";
 import { useState } from "react";
 import { toast } from "sonner";
 
 export default function MyWishlist() {
   const id = useIdentity();
-  const { persons, wishlist } = useStore();
+  const { persons, wishlist, gifts } = useStore();
   const me = persons.find((p) => p.id === id);
   const nav = useNavigate();
+  const identity = useIdentityPrompt();
+  const confirm = useConfirm();
 
   if (!me) {
     return (
@@ -38,23 +41,15 @@ export default function MyWishlist() {
                 }
               />
             ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {persons.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => {
-                      setIdentity(p.id);
-                      toast.success(`Hallo ${p.name}!`);
-                    }}
-                    className="inline-flex items-center gap-2 pl-1 pr-3 py-1.5 rounded-full bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 hover:border-violet-400 dark:hover:border-violet-500 active:scale-[0.98] transition-[transform,border-color]"
-                  >
-                    <Avatar person={p} size={26} />
-                    <span className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">
-                      {p.name}
-                    </span>
-                  </button>
-                ))}
-              </div>
+              <Button
+                className="w-full"
+                aria-haspopup="dialog"
+                onClick={() =>
+                  void identity.open({ reason: "Dann kannst du deine Wünsche pflegen – alle anderen sehen sie sofort." })
+                }
+              >
+                Ich wähle mich aus
+              </Button>
             )}
             <div className="text-[11px] text-stone-400 mt-3">
               Du kannst die Identität jederzeit in den Einstellungen wechseln.
@@ -68,20 +63,26 @@ export default function MyWishlist() {
   const items = [...wishlist.filter((w) => w.personId === me.id)].sort(
     (a, b) => b.createdAt - a.createdAt,
   );
+  // Spoiler-Schutz: nur „es wird geplant“, nie Details oder „übernommen“.
+  const surprise = nextSurprise(gifts, persons, me.id);
+
+  async function remove(itemId: string, title: string) {
+    const ok = await confirm({ title: `„${title}“ löschen?`, confirmLabel: "Löschen", tone: "danger" });
+    if (!ok) return;
+    deleteWishItem(itemId)
+      .then(() => toast.success("Gelöscht"))
+      .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal"));
+  }
 
   return (
     <>
-      <PageHeader
-        title="Meine Wunschliste"
-        right={
-          <Link
-            to={`/person/${me.id}`}
-            className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-2 py-1 rounded-md"
-          >
-            Profil →
-          </Link>
-        }
-      />
+      <PageHeader title="Meine Wunschliste" />
+
+      {surprise && (
+        <p role="status" className="m-0 mx-4 mb-3 rounded-card border border-accent/30 bg-accent-soft px-3.5 py-3 text-meta font-medium text-fg">
+          {surpriseBanner(surprise.gift.occasion, surprise.date)}
+        </p>
+      )}
 
       <div className="px-5 pb-3 flex items-center gap-3">
         <Avatar person={me} size={44} />
@@ -134,12 +135,8 @@ export default function MyWishlist() {
                   </div>
                 </div>
                 <button
-                  onClick={() => {
-                    if (confirm(`„${it.title}" löschen?`)) {
-                      deleteWishItem(it.id);
-                      toast.success("Gelöscht");
-                    }
-                  }}
+                  onClick={() => void remove(it.id, it.title)}
+                  aria-label={`„${it.title}“ löschen`}
                   className="text-stone-400 hover:text-red-500 p-1"
                 >
                   <Icon.trash />

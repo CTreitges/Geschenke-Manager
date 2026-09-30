@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useRequireIdentity } from "@/components/IdentitySheet";
 import { Button, Input } from "@/components/ui";
 import { parsePrice } from "@/lib/money";
 import { PollLockedError } from "@/lib/pollOps";
@@ -6,18 +7,26 @@ import { addSuggestion } from "@/lib/storage";
 import { toast } from "sonner";
 
 // ── Suggestion adder with optional link + price ──────────────
-export function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string | null }) {
+export function SuggestionAdder({
+  giftId,
+  recipientId,
+  myId,
+}: {
+  giftId: string;
+  recipientId: string;
+  myId: string | null;
+}) {
   const [text, setText] = useState("");
   const [url, setUrl] = useState("");
   const [price, setPrice] = useState("");
   const [showExtra, setShowExtra] = useState(false);
+  const requireIdentity = useRequireIdentity();
 
-  function add() {
+  async function add() {
     if (!text.trim()) return;
-    if (!myId) {
-      toast.error("Wähle erst in den Einstellungen, wer du bist");
-      return;
-    }
+    // Ohne Identität erst fragen – danach wird die Idee gespeichert.
+    const author = myId ?? (await requireIdentity({ recipientId, reason: "Damit deine Idee dir zugeordnet wird." }));
+    if (!author) return;
     // Felder sofort leeren (die Idee erscheint gleich in der Liste, kein
     // Erfolgs-Toast); scheitert das Speichern, kommt der Text zurück.
     const draft = { text, url, price };
@@ -26,7 +35,7 @@ export function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string
       title: text.trim(),
       url: url.trim() || undefined,
       price: parsePrice(price),
-      suggestedBy: myId,
+      suggestedBy: author,
     }).catch((e) => {
       setText(draft.text);
       setUrl(draft.url);
@@ -46,13 +55,13 @@ export function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && add()}
+          onKeyDown={(e) => e.key === "Enter" && void add()}
           placeholder="Idee teilen…"
           className="flex-1 min-w-0 outline-none bg-transparent px-1 py-1.5 text-stone-900 dark:text-stone-50"
         />
         <Button
           size="sm"
-          onClick={add}
+          onClick={() => void add()}
           disabled={!text.trim()}
           className="shrink-0"
           style={{ minHeight: 32, padding: "6px 12px" }}

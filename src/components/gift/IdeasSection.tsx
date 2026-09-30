@@ -94,7 +94,7 @@ export function IdeasSection({
             )}
           </div>
         ) : (
-          <SuggestionAdder giftId={gift.id} myId={myId} />
+          <SuggestionAdder giftId={gift.id} recipientId={gift.personId} myId={myId} />
         ))}
     </Section>
   );

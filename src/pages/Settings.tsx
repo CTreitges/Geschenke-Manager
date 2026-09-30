@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { CURRENT_VERSION, CURRENT_DATE, formatPatchDate } from "@/lib/patchnotes";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
 import {
   changePasswordCF,
   deleteGroupCF,
@@ -26,28 +27,20 @@ import {
   tryInstallPwa,
   wasPwaInstalledEver,
 } from "@/lib/pwa";
-import { pickColor } from "@/lib/colors";
 import { daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
 import {
   getKnownGroups,
   removeKnownGroup,
   setAuthed,
   setGroupId,
-  setIdentity,
   useGroupId,
   useIdentity,
 } from "@/lib/auth";
 import { toast } from "sonner";
 
 export default function Settings() {
-  const { persons, settings, members } = useStore();
-  // Welche Personen sind aktuell von irgendeinem User als „Wer bin ich"
-  // ausgewählt? Wird über members.identityPersonId synchronisiert.
-  const claimedPersonIds = new Set(
-    members
-      .map((m) => m.identityPersonId)
-      .filter((x): x is string => !!x),
-  );
+  const { persons, settings } = useStore();
+  const identityPrompt = useIdentityPrompt();
   const nav = useNavigate();
   const identity = useIdentity() ?? "";
   const groupId = useGroupId();
@@ -64,10 +57,11 @@ export default function Settings() {
     setBudget(settings.defaultBudget);
   }, [settings.defaultBudget]);
 
-  function pickIdentity(id: string) {
-    setIdentity(id || null);
-    const p = persons.find((x) => x.id === id);
-    if (p) toast.success(`Du bist jetzt ${p.name}`);
+  async function chooseIdentity() {
+    const result = await identityPrompt.open();
+    if (result.kind !== "picked") return;
+    const p = persons.find((x) => x.id === result.personId);
+    toast.success(p ? `Du bist jetzt ${p.name}` : "Willkommen in der Gruppe!");
   }
 
   function toggleDark() {
@@ -259,60 +253,28 @@ export default function Settings() {
 
         <Group title="Wer bin ich?">
           <div className="p-3.5">
-            <p className="text-xs text-stone-500 dark:text-stone-400 mb-2 leading-snug">
-              Beeinflusst, wem deine Stimmen, Vorschläge und Wünsche zugeordnet werden.
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {persons.length === 0 && (
-                <p className="text-sm text-stone-400">Lege erst eine Person an.</p>
+            <button
+              type="button"
+              onClick={() => void chooseIdentity()}
+              aria-haspopup="dialog"
+              className="flex min-h-14 w-full items-center gap-3 text-left"
+            >
+              {me ? (
+                <Avatar person={me} size={40} />
+              ) : (
+                <span aria-hidden className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-2 text-lg">
+                  👋
+                </span>
               )}
-              {persons.map((p) => {
-                const active = identity === p.id;
-                // Grüne Umrandung = irgendein User in der Gruppe hat sich
-                // schon als diese Person identifiziert (über Cloud-Sync,
-                // gerätübergreifend).
-                const claimed = claimedPersonIds.has(p.id);
-                const baseColor = p.color || pickColor(p.id);
-                return (
-                  <button
-                    key={p.id}
-                    onClick={() => pickIdentity(p.id)}
-                    className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-[13px] font-semibold transition-colors"
-                    style={
-                      active
-                        ? {
-                            background: `linear-gradient(135deg, ${baseColor}, ${baseColor}dd)`,
-                            color: "#fff",
-                            border: claimed
-                              ? "2px solid #10B981"
-                              : "1px solid transparent",
-                          }
-                        : {
-                            background: "transparent",
-                            border: claimed
-                              ? "2px solid #10B981"
-                              : "1px solid rgb(214 211 209 / 1)",
-                          }
-                    }
-                    title={claimed ? "Wird aktiv von einem User benutzt" : undefined}
-                  >
-                    <Avatar person={p} size={22} />
-                    {p.name}
-                    {claimed && (
-                      <span
-                        className="ml-0.5 text-[10px] leading-none"
-                        style={{
-                          color: active ? "#10B981" : "#10B981",
-                        }}
-                        aria-label="aktiv benutzt"
-                      >
-                        ●
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-body font-semibold text-fg">{me ? me.name : "Noch nicht gewählt"}</span>
+                <span className="block text-meta text-fg-muted">Deine Stimmen, Ideen und Wünsche laufen unter diesem Namen.</span>
+              </span>
+              <span className="shrink-0 text-meta font-semibold text-accent-text">{me ? "Ändern" : "Auswählen"}</span>
+            </button>
+            <p className="m-0 mt-2 text-xs text-fg-muted">
+              🤫 Deine Wahl schützt auch vor Spoilern: Geschenke für dich siehst du nicht.
+            </p>
           </div>
         </Group>
 

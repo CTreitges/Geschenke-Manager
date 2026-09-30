@@ -29,12 +29,15 @@ import { toUpdate } from "./patch";
 import { assertNotRecipient } from "./spoiler";
 import { adoptedSuggestionId, fulfilledWishIds } from "./wishlist";
 import {
+  assertCanStartPoll,
   closeFields,
   extendedEndsAt,
   isPaidByOnlyPatch,
+  legacyVoterIds,
   newPollDoc,
   PollLockedError,
   startPollBlocker,
+  toggledVotes,
   type LockedAction,
 } from "./pollOps";
 import type {
@@ -99,6 +102,9 @@ const emptyState = (): State => ({
 });
 
 let state: State = emptyState();
+
+/** giftId → Personen, deren Stimme im Doc noch als String steht (siehe setMyVote). */
+let legacyVoters = new Map<ID, Set<ID>>();
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -328,6 +334,7 @@ export function setActiveGroup(groupId: string | null) {
           (snap) => {
             // Doc-ID = giftId; normalizePoll liest auch Alt-Formate (Stimme als String).
             state.polls = snap.docs.map((d) => ({ ...normalizePoll(d.data()), giftId: d.id }));
+            legacyVoters = new Map(snap.docs.map((d) => [d.id, new Set(legacyVoterIds(d.data().votes))]));
             state.pollsHydrated = true;
             notify();
           },
@@ -843,10 +850,10 @@ export async function restoreWishItem(w: WishlistItem) {
 
 /**
  * Wunsch als Idee ins Geschenk übernehmen. Deterministische ID
- * wish_{giftId}_{wishId}: Doppeltipp oder zwei Leute gleichzeitig ergeben
- * keine Duplikate (created = false, wenn schon übernommen). Wirft
- * PollLockedError während der Abstimmung; ohne Identität bzw. als
- * beschenkte Person geht es nicht.
+ * wish_{giftId}_{wishId} und Transaktion mit Existenzprüfung: Doppeltipp
+ * oder zwei Leute gleichzeitig ergeben keine Duplikate und überschreiben
+ * nichts (created = false, wenn schon übernommen). Wirft PollLockedError
+ * während der Abstimmung; ohne Identität bzw. als beschenkte Person geht es nicht.
  */
 export async function adoptWish(
   giftId: ID,
@@ -858,27 +865,32 @@ export async function adoptWish(
   assertUnlocked(giftId, "adoptWish");
   const id = adoptedSuggestionId(giftId, wish.id);
   if (state.suggestions.some((s) => s.id === id)) return { id, created: false };
-  await setDoc(
-    gdoc("suggestions", id),
-    clean({
-      giftId,
-      title: wish.title,
-      url: wish.url,
-      price: wish.price,
-      suggestedBy: by,
-      fromWishItemId: wish.id,
-      createdAt: Date.now(),
-    }),
-  );
-  return { id, created: true };
+  const ref = gdoc("suggestions", id);
+  return runTransaction(db, async (tx) => {
+    if ((await tx.get(ref)).exists()) return { id, created: false };
+    tx.set(
+      ref,
+      clean({
+        giftId,
+        title: wish.title,
+        url: wish.url,
+        price: wish.price,
+        suggestedBy: by,
+        fromWishItemId: wish.id,
+        createdAt: Date.now(),
+      }),
+    );
+    return { id, created: true };
+  });
 }
 
 // ─── Polls ──────────────────────────────────────────────
 // Doc-Pfad: groups/{gid}/polls/{giftId}. Kein Doc = keine Abstimmung.
 
 /**
- * Neue Runde: setDoc OHNE merge (alte Stimmen und Ende-Felder sind weg).
- * Liefert startedAt = Runden-Schlüssel.
+ * Neue Runde: set OHNE merge (alte Stimmen und Ende-Felder sind weg) – in
+ * einer Transaktion, die abbricht, wenn laut Server schon eine Runde läuft
+ * (gleichzeitiger Start, veralteter Snapshot). Liefert startedAt = Runden-Schlüssel.
  */
 export async function startPoll(
   giftId: ID,
@@ -890,25 +902,32 @@ export async function startPoll(
     const blocker = startPollBlocker(gift, ideas, opts.startedBy);
     if (blocker) throw new Error(blocker);
   }
-  const now = Date.now();
-  await setDoc(gdoc("polls", giftId), newPollDoc(giftId, { now, ...opts }));
-  return now;
+  const ref = gdoc("polls", giftId);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Date.now();
+    assertCanStartPoll(snap.exists() ? normalizePoll(snap.data()) : null, now);
+    tx.set(ref, newPollDoc(giftId, { now, ...opts }));
+    return now;
+  });
 }
 
 /**
  * Setzt genau eine eigene Stimme auf den gewünschten Zustand – atomar über
  * den Feldpfad votes.{personId}, fremde Stimmen bleiben unberührt; ein
- * Doppeltipp hebt sich nicht auf.
+ * Doppeltipp hebt sich nicht auf. Steht die eigene Stimme noch im Alt-Format
+ * (String), wird die ganze normalisierte Liste geschrieben.
  */
 export async function setMyVote(giftId: ID, personId: ID, suggestionId: ID, on: boolean) {
   assertNotRecipient(state.gifts.find((g) => g.id === giftId), personId);
   const poll = state.polls.find((p) => p.giftId === giftId);
   if (pollPhase(poll, Date.now()) !== "running") throw new Error("Die Abstimmung ist schon beendet.");
-  await updateDoc(
-    gdoc("polls", giftId),
-    new FieldPath("votes", personId),
-    on ? arrayUnion(suggestionId) : arrayRemove(suggestionId),
-  );
+  const value = legacyVoters.get(giftId)?.has(personId)
+    ? toggledVotes(poll?.votes?.[personId] ?? [], suggestionId, on)
+    : on
+      ? arrayUnion(suggestionId)
+      : arrayRemove(suggestionId);
+  await updateDoc(gdoc("polls", giftId), new FieldPath("votes", personId), value);
 }
 
 /** Nimmt alle eigenen Stimmen zurück (nur der eigene Eintrag). */

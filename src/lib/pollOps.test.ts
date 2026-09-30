@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
 import type { PollDoc } from "@shared/poll";
 import {
+  assertCanStartPoll,
   closeFields,
   extendedEndsAt,
   isPaidByOnlyPatch,
+  legacyVoterIds,
   lockMessage,
   newPollDoc,
+  POLL_ALREADY_RUNNING,
   PollLockedError,
   startPollBlocker,
+  toggledVotes,
 } from "./pollOps";
 
 const H = 3_600_000;
@@ -76,6 +80,11 @@ describe("extendedEndsAt", () => {
     expect(extendedEndsAt(running, H, T0 + 60 * H)).toEqual({ endsAt: T0 + 61 * H, reopen: false });
   });
 
+  it("vorzeitig beendet: Verlängern rechnet ab jetzt, nicht ab der alten Frist (Regression KOR-07)", () => {
+    const manual: PollDoc = { ...running, endsAt: T0 + 168 * H, status: "closed", closedReason: "manual" };
+    expect(extendedEndsAt(manual, 24 * H, T0 + 24 * H)).toEqual({ endsAt: T0 + 48 * H, reopen: true });
+  });
+
   it("vom Timer geschlossen: wieder aktiv", () => {
     const closed: PollDoc = { ...running, status: "closed", closedReason: "timeout" };
     expect(extendedEndsAt(closed, 24 * H, T0 + 60 * H)).toEqual({ endsAt: T0 + 84 * H, reopen: true });
@@ -85,6 +94,34 @@ describe("extendedEndsAt", () => {
     const legacy: PollDoc = { status: "active", startedAt: T0, votes: {} };
     expect(extendedEndsAt(legacy, H, T0 + 5 * H).endsAt).toBe(T0 + 49 * H);
     expect(extendedEndsAt(legacy, H, T0 + 50 * H).endsAt).toBe(T0 + 51 * H);
+  });
+});
+
+describe("assertCanStartPoll (Regression KOR-04)", () => {
+  it("laufende Runde wird nie überschrieben", () => {
+    expect(() => assertCanStartPoll(running, T0 + H)).toThrow(POLL_ALREADY_RUNNING);
+  });
+
+  it("ohne Runde, abgelaufen, beendet oder verworfen darf neu gestartet werden", () => {
+    expect(() => assertCanStartPoll(undefined, T0)).not.toThrow();
+    expect(() => assertCanStartPoll(running, T0 + 48 * H)).not.toThrow();
+    expect(() => assertCanStartPoll({ ...running, status: "closed" }, T0 + H)).not.toThrow();
+    expect(() => assertCanStartPoll({ ...running, status: "none" }, T0 + H)).not.toThrow();
+  });
+});
+
+describe("Stimmen im Alt-Format (Regression KOR-09)", () => {
+  it("findet Stimmen, die noch als String stehen", () => {
+    expect(legacyVoterIds({ ben: "s1", lena: ["s2"], max: [] })).toEqual(["ben"]);
+    expect(legacyVoterIds(undefined)).toEqual([]);
+    expect(legacyVoterIds("kaputt")).toEqual([]);
+  });
+
+  it("zweite Stimme ergänzt die alte statt sie zu ersetzen", () => {
+    expect(toggledVotes(["s1"], "s2", true)).toEqual(["s1", "s2"]);
+    expect(toggledVotes(["s1", "s2"], "s1", false)).toEqual(["s2"]);
+    expect(toggledVotes(["s1"], "s1", true)).toEqual(["s1"]);
+    expect(toggledVotes([], "s1", false)).toEqual([]);
   });
 });
 

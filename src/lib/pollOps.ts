@@ -83,16 +83,47 @@ export function closeFields(
 }
 
 /**
- * Neue Frist beim Verlängern: ab der bisherigen Frist, mindestens ab jetzt.
- * `reopen` = die Runde war beendet und wird wieder aktiv (Stimmen bleiben).
+ * Neue Frist beim Verlängern: eine laufende Runde ab der bisherigen Frist
+ * (mindestens ab jetzt). `reopen` = die Runde war beendet und wird wieder
+ * aktiv (Stimmen bleiben) – dann immer ab jetzt, auch wenn sie vorzeitig
+ * beendet wurde und die alte Frist noch in der Zukunft läge.
  */
 export function extendedEndsAt(
   poll: Pick<PollDoc, "status" | "startedAt" | "endsAt">,
   addMs: number,
   now: number,
 ): { endsAt: number; reopen: boolean } {
-  const end = effectiveEndsAt(poll);
-  return { endsAt: Math.max(end ?? now, now) + addMs, reopen: poll.status !== "active" };
+  const reopen = poll.status !== "active";
+  const base = reopen ? now : Math.max(effectiveEndsAt(poll) ?? now, now);
+  return { endsAt: base + addMs, reopen };
+}
+
+export const POLL_ALREADY_RUNNING = "Hier läuft schon eine Abstimmung – stimm einfach mit ab.";
+
+/**
+ * Prüfung in der Start-Transaktion: eine laufende Runde (frisch vom Server
+ * gelesen) wird nie überschrieben – sonst wären ihre Stimmen weg.
+ */
+export function assertCanStartPoll(poll: PollDoc | null | undefined, now: number): void {
+  if (pollPhase(poll, now) === "running") throw new Error(POLL_ALREADY_RUNNING);
+}
+
+/**
+ * Personen, deren Stimme im Doc noch im Alt-Format steht (String statt
+ * Liste). Für sie schreibt setMyVote die ganze Liste – arrayUnion auf einen
+ * String würde die alte Stimme überschreiben.
+ */
+export function legacyVoterIds(rawVotes: unknown): string[] {
+  if (!rawVotes || typeof rawVotes !== "object") return [];
+  return Object.entries(rawVotes as Record<string, unknown>)
+    .filter(([, v]) => !Array.isArray(v))
+    .map(([pid]) => pid);
+}
+
+/** Eigene Stimmen nach einem Tipp: `sid` an bzw. aus, ohne Doppelte. */
+export function toggledVotes(current: readonly string[], sid: string, on: boolean): string[] {
+  const rest = [...new Set(current)].filter((x) => x !== sid);
+  return on ? [...rest, sid] : rest;
 }
 
 /**

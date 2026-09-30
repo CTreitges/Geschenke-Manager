@@ -30,6 +30,7 @@ import { consumeGoogleRedirectResult } from "@/lib/firebase";
 import { useStore } from "@/lib/hooks";
 import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
+import { syncPushToken, usePushNavigation } from "@/lib/messaging";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -115,6 +116,19 @@ function GoogleRedirectHandler() {
   return null;
 }
 
+/**
+ * Push: Klicks auf Meldungen (GM_NAVIGATE vom Push-Worker) im Router
+ * ausführen und den FCM-Token beim Start frisch halten (höchstens 1×/Tag,
+ * nur mit erteilter Berechtigung, nur angemeldet).
+ */
+function PushBridge({ groupId }: { groupId: string | null }) {
+  usePushNavigation();
+  useEffect(() => {
+    if (groupId && isAuthed()) void syncPushToken();
+  }, [groupId]);
+  return null;
+}
+
 const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v5";
 
 /**
@@ -197,6 +211,7 @@ export default function App() {
   return (
     <>
       <GoogleRedirectHandler />
+      <PushBridge groupId={groupId} />
       {!bootDone ? (
         <div
           className="min-h-screen flex items-center justify-center text-stone-500 dark:text-stone-400 text-sm"

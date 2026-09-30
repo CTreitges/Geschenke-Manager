@@ -12,10 +12,11 @@ import {
 } from "@/lib/storage";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import {
-  disablePushForGroup,
   enablePushForGroup,
   isPushSupported,
-  usePushEnabled,
+  setPushPrefs,
+  unregisterPushOnLogout,
+  usePushState,
 } from "@/lib/messaging";
 import {
   getCachedInstallPrompt,
@@ -94,6 +95,8 @@ export default function Settings() {
   }
 
   function logout() {
+    // Push-Token dieses Geräts abmelden (liest den Merker sofort, der Rest läuft im Hintergrund).
+    void unregisterPushOnLogout();
     setActiveGroup(null);
     setAuthed(false);
     nav("/login");
@@ -516,7 +519,8 @@ export default function Settings() {
 }
 
 function PushNotificationsRow({ groupId }: { groupId: string | null }) {
-  const enabled = usePushEnabled(groupId);
+  const push = usePushState(groupId);
+  const enabled = push.state === "on" && push.prefs.stack;
   const [supported, setSupported] = useState<boolean | null>(null);
   const [permission, setPermission] = useState<NotificationPermission | "unsupported">(
     typeof Notification !== "undefined" ? Notification.permission : "unsupported",
@@ -538,7 +542,7 @@ function PushNotificationsRow({ groupId }: { groupId: string | null }) {
     setBusy(true);
     try {
       if (enabled) {
-        await disablePushForGroup(groupId);
+        await setPushPrefs(groupId, { notifyStack: false });
         toast.success("Benachrichtigungen aus");
       } else {
         await enablePushForGroup(groupId);

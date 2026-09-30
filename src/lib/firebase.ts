@@ -294,6 +294,11 @@ export async function consumeGoogleRedirectResult(): Promise<GoogleRedirectOutco
  *  immediately spins up a fresh anonymous session so the app keeps
  *  functioning. The caller should also reset group state + nav to login. */
 export async function signOutAndReanon(): Promise<void> {
+  // Push-Token dieses Geräts entfernen, solange die alte UID noch angemeldet
+  // ist (sonst bekäme das Gerät weiter Pushes der alten Mitgliedschaften).
+  // Dynamischer Import: messaging.ts importiert selbst aus dieser Datei.
+  const { unregisterPushOnLogout } = await import("./messaging");
+  await unregisterPushOnLogout();
   try {
     await signOut(auth);
   } finally {

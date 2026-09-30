@@ -111,6 +111,8 @@ export interface Member {
   uid: ID;
   joinedAt?: number;
   notifyStack?: boolean;
+  /** Abstimmungs-Pushes. Effektiv: notifyPolls ?? (notifyStack === true). */
+  notifyPolls?: boolean;
   /** Welche Person dieser User in der Gruppe als „Wer bin ich" gesetzt
    *  hat. Wird vom Client synchronisiert (siehe storage.setMyIdentityCloud). */
   identityPersonId?: ID;

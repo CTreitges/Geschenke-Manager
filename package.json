@@ -11,13 +11,13 @@
     "lint": "eslint .",
     "generate-pwa-assets": "pwa-assets-generator",
     "preemu:shots": "node e2e/emu-cleanup.mjs",
-    "emu:shots": "firebase emulators:exec --only auth,firestore,functions --project demo-geschenke \"node e2e/emu-run.mjs\"",
+    "emu:shots": "node e2e/run-emulators.mjs --only auth,firestore,functions --project demo-geschenke \"node e2e/emu-run.mjs\"",
     "postemu:shots": "node e2e/emu-cleanup.mjs",
     "pretest:rules": "node e2e/emu-cleanup.mjs",
-    "test:rules": "firebase emulators:exec --only firestore --project demo-geschenke \"vitest run --config vitest.rules.config.ts\"",
+    "test:rules": "node e2e/run-emulators.mjs --only firestore --project demo-geschenke \"vitest run --config vitest.rules.config.ts\"",
     "posttest:rules": "node e2e/emu-cleanup.mjs",
     "pree2e": "node e2e/emu-cleanup.mjs && npm --prefix functions run build",
-    "e2e": "firebase emulators:exec --only auth,firestore,functions --project demo-geschenke \"npx playwright test -c e2e/playwright.config.ts\"",
+    "e2e": "node e2e/run-emulators.mjs --only auth,firestore,functions --project demo-geschenke \"npx playwright test -c e2e/playwright.config.ts\"",
     "poste2e": "node e2e/emu-cleanup.mjs"
   },
   "dependencies": {

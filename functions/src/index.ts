@@ -845,3 +845,8 @@ export const archiveGroupDocChange = onDocumentWritten(
     }
   },
 );
+
+// ───── Abstimmungs-Push ─────────────────────────────────────────
+// onPollWritten: Start-Push an die Wahlberechtigten (ohne Starter, nie an die
+// beschenkte Person). Kein Ergebnis-Push. Logik: polls/*.
+export { onPollWritten } from "./polls/onPollWritten";

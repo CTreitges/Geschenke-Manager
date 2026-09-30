@@ -1,872 +1,270 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
-import { Avatar, Button, Chip, Icon, PageHeader } from "@/components/ui";
-import { pickColor } from "@/lib/colors";
-import {
-  CURRENT_DATE,
-  CURRENT_VERSION,
-  PATCH_NOTES,
-  formatPatchDate,
-} from "@/lib/patchnotes";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { toast } from "sonner";
+import { Button, Icon } from "@/components/ui";
+import { PwaInstallTipDialog } from "@/components/PwaInstallTipDialog";
+import { IllDefs } from "@/components/tutorial/primitives";
+import { tutorialPages } from "@/components/tutorial/pages";
+import { indexFromScroll, keyAction, pageAnnouncement, settleIndex } from "@/components/tutorial/pager";
+import { useIdentity } from "@/lib/auth";
+import { cn } from "@/lib/cn";
+import { useBack } from "@/lib/nav";
+import { markInstallTipSeen, markTutorialSeen } from "@/lib/onboarding";
+import { CURRENT_VERSION } from "@/lib/patchnotes";
+import { getCachedInstallPrompt, isStandalonePWA, onInstallPromptChange, tryInstallPwa, wasPwaInstalledEver } from "@/lib/pwa";
 
-const PATCH_PAGE = 3;
+type TutorialState = { firstRun?: boolean } | null;
 
+function prefersReducedMotion(): boolean {
+  return typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Grafisches Tutorial: Pager mit CSS-Scroll-Snap (Swipe), Tastatur und
+ * Punkten. Liegt außerhalb von Layout (kein Header, keine Tab-Bar).
+ * Das Gesehen-Flag wird erst beim Verlassen gesetzt – auch bei Zurück-Geste.
+ */
 export default function Tutorial() {
-  const [visibleNotes, setVisibleNotes] = useState(PATCH_PAGE);
-  const shownNotes = PATCH_NOTES.slice(0, visibleNotes);
-  const remaining = Math.max(0, PATCH_NOTES.length - shownNotes.length);
-  const nextChunk = Math.min(PATCH_PAGE, remaining);
+  const nav = useNavigate();
+  const location = useLocation();
+  const back = useBack("/");
+  const firstRun = (location.state as TutorialState)?.firstRun === true;
+  const hasIdentity = !!useIdentity();
+  // Beim Öffnen einmal festlegen, damit sich die Seitenzahl nicht mittendrin ändert.
+  const [showInstall] = useState(() => !isStandalonePWA() && !wasPwaInstalledEver());
+  const pages = useMemo(() => tutorialPages({ showInstall, hasIdentity }), [showInstall, hasIdentity]);
+  const count = pages.length;
+  const last = count - 1;
+
+  const [index, setIndex] = useState(0);
+  const [installOpen, setInstallOpen] = useState(false);
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  const firstHeadingRef = useRef<HTMLHeadingElement>(null);
+  const rafRef = useRef(0);
+  const pendingRef = useRef<number | null>(null);
+
+  // ── Verlassen: Flag setzen (genau einmal) ───────────────────
+  const doneRef = useRef(false);
+  const reachedInstallRef = useRef(false);
+  const markDone = useCallback(() => {
+    if (doneRef.current) return;
+    doneRef.current = true;
+    markTutorialSeen(CURRENT_VERSION);
+    // Wer die Install-Seite gesehen hat, bekommt den Install-Tipp nicht noch einmal.
+    if (reachedInstallRef.current) markInstallTipSeen();
+  }, []);
+
+  const leave = useCallback(() => {
+    markDone();
+    if (firstRun) nav("/", { replace: true, state: { fromTutorial: true } });
+    else back();
+  }, [markDone, firstRun, nav, back]);
+
+  // Zurück-Geste/Unmount zählt als Verlassen. Verzögert geprüft, damit das
+  // Test-Unmount von StrictMode (Entwicklung) das Flag nicht vorzeitig setzt.
+  const mountedRef = useRef(false);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      setTimeout(() => {
+        if (!mountedRef.current) markDone();
+      }, 0);
+    };
+  }, [markDone]);
+
+  useEffect(() => {
+    if (pages[index]?.id === "install") reachedInstallRef.current = true;
+  }, [index, pages]);
+
+  // ── Blättern ────────────────────────────────────────────────
+  const goTo = useCallback(
+    (i: number) => {
+      const el = scrollerRef.current;
+      const target = Math.min(Math.max(i, 0), last);
+      pendingRef.current = target;
+      setIndex(target);
+      el?.scrollTo({ left: target * el.clientWidth, behavior: prefersReducedMotion() ? "auto" : "smooth" });
+    },
+    [last],
+  );
+
+  function onScroll() {
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      if (!el) return;
+      const next = settleIndex(indexFromScroll(el.scrollLeft, el.clientWidth, count), pendingRef.current);
+      pendingRef.current = next.pending;
+      setIndex(next.index);
+    });
+  }
+
+  /** Wischt jemand selbst, gilt wieder die Scroll-Position. */
+  function onUserScroll() {
+    pendingRef.current = null;
+  }
+
+  useEffect(() => () => cancelAnimationFrame(rafRef.current), []);
+
+  // Bei Größenänderung (Drehen) auf der aktuellen Seite bleiben.
+  useEffect(() => {
+    const onResize = () => {
+      const el = scrollerRef.current;
+      if (el) el.scrollTo({ left: index * el.clientWidth, behavior: "auto" });
+    };
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [index]);
+
+  useEffect(() => {
+    firstHeadingRef.current?.focus({ preventScroll: true });
+  }, []);
+
+  // ── Tastatur ────────────────────────────────────────────────
+  useEffect(() => {
+    if (installOpen) return; // das Sheet bedient Esc/Tab selbst
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      // Enter auf Knöpfen/Links löst deren Klick aus – nicht doppelt beenden.
+      if (e.key === "Enter" && target?.closest("button, a, input, textarea, select")) return;
+      const action = keyAction(e.key, index, count);
+      if (!action) return;
+      e.preventDefault();
+      if (action.kind === "goto") goTo(action.index);
+      else leave();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [installOpen, index, count, goTo, leave]);
+
+  const current = pages[index] ?? pages[0];
+  const isLast = index === last;
 
   return (
-    <div>
-      <PageHeader
-        title="So funktioniert's"
-        subtitle="Alles drin, in 10 kleinen Schritten"
-        right={
-          <span className="text-[11px] font-semibold text-violet-700 dark:text-violet-300 tabular-nums whitespace-nowrap">
-            {CURRENT_VERSION} · {formatPatchDate(CURRENT_DATE)}
-          </span>
-        }
-      />
-
-      {/* Patch notes */}
-      <div className="px-4 pb-5">
-        <div className="rounded-2xl bg-white dark:bg-stone-800 border border-[#F0EBE6] dark:border-[#3A3633] overflow-hidden">
-          <div className="px-4 py-3 flex items-center justify-between gap-3 border-b border-stone-100 dark:border-stone-700">
-            <div className="min-w-0">
-              <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50">
-                Was ist neu?
-              </div>
-              <div className="text-[11px] text-stone-500 dark:text-stone-400 mt-0.5">
-                Kurz prüfen, ob sich's lohnt nochmal reinzuschauen.
-              </div>
-            </div>
-            <div className="text-2xl shrink-0">✨</div>
-          </div>
-          <div className="divide-y divide-stone-100 dark:divide-stone-700">
-            {shownNotes.map((note, i) => (
-              <div key={note.version} className="px-4 py-3">
-                <div className="flex items-baseline gap-2 mb-1.5 flex-wrap">
-                  <div
-                    className={
-                      i === 0
-                        ? "text-[13px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums"
-                        : "text-[13px] font-bold text-stone-500 dark:text-stone-400 tabular-nums"
-                    }
+    <div
+      className="flex h-dvh flex-col overflow-hidden text-fg md:items-center md:justify-center"
+      style={{ background: "radial-gradient(120% 60% at 50% 0%, rgb(var(--gm-glow)) 0%, rgb(var(--gm-canvas)) 60%)" }}
+    >
+      <IllDefs />
+      <h1 className="sr-only">So funktioniert's</h1>
+      <div className="flex min-h-0 w-full flex-1 flex-col md:my-8 md:max-h-[calc(100dvh-4rem)] md:max-w-md md:flex-none md:overflow-hidden md:rounded-sheet md:border md:border-line md:bg-canvas md:shadow-card">
+        <div
+          ref={scrollerRef}
+          onScroll={onScroll}
+          onPointerDown={onUserScroll}
+          onWheel={onUserScroll}
+          role="region"
+          aria-roledescription="Karussell"
+          aria-label="Tutorial"
+          className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          {pages.map((p, i) => {
+            const active = i === index;
+            return (
+              <section
+                key={p.id}
+                role="group"
+                aria-roledescription="Seite"
+                aria-label={`${i + 1} von ${count}`}
+                data-active={active}
+                className="flex w-full shrink-0 snap-start flex-col overflow-y-auto px-6 pt-6"
+                {...(active ? {} : { inert: "" })}
+              >
+                {/* my-auto: mittig, solange Platz ist; sonst oben beginnend scrollbar.
+                    pb-10 hebt den Block optisch leicht über die Mitte. */}
+                <div className="my-auto flex flex-col items-center pb-10">
+                  <div className="aspect-[4/3] max-h-[40dvh] w-full max-w-sm">
+                    <p.Ill alt={p.alt} />
+                  </div>
+                  <h2
+                    ref={i === 0 ? firstHeadingRef : undefined}
+                    tabIndex={-1}
+                    className="m-0 mt-6 text-balance text-center text-title font-extrabold tracking-tight text-fg outline-none"
                   >
-                    {note.version}
-                  </div>
-                  <div className="text-[11px] text-stone-400">
-                    {formatPatchDate(note.date)}
-                  </div>
-                  {i === 0 && (
-                    <span className="text-[10px] font-bold tracking-wide uppercase text-violet-700 dark:text-violet-300 px-1.5 py-0.5 rounded-md bg-violet-100 dark:bg-violet-950/40">
-                      neu
-                    </span>
-                  )}
+                    {p.title}
+                  </h2>
+                  <p className="m-0 mt-3 max-w-xs text-balance text-center text-base text-fg-soft">{p.body}</p>
+                  {p.id === "install" && <InstallAction onShowHowTo={() => setInstallOpen(true)} />}
                 </div>
-                <ul className="list-disc list-inside text-[13px] leading-[1.55] text-stone-700 dark:text-stone-200 space-y-0.5 marker:text-stone-400">
-                  {note.highlights.map((h, j) => (
-                    <li key={j}>{h}</li>
-                  ))}
-                </ul>
-              </div>
+              </section>
+            );
+          })}
+        </div>
+
+        <p aria-live="polite" className="sr-only">
+          {pageAnnouncement(index, count, current.title)}
+        </p>
+
+        <div className="px-6 pt-4 pb-[max(16px,env(safe-area-inset-bottom))]">
+          <div className="mb-3 flex items-center justify-center gap-1">
+            {pages.map((p, i) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => goTo(i)}
+                aria-label={`Seite ${i + 1}: ${p.title}`}
+                aria-current={i === index ? "step" : undefined}
+                className="flex h-6 w-6 items-center justify-center rounded-full"
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "block h-2 rounded-full motion-safe:transition-[width]",
+                    i === index ? "w-5 bg-grad-primary" : "w-2 bg-line-control/50",
+                  )}
+                />
+              </button>
             ))}
-          </div>
-          {remaining > 0 && (
-            <button
-              onClick={() => setVisibleNotes((v) => v + PATCH_PAGE)}
-              className="w-full px-4 py-3 text-[13px] font-semibold text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-950/40 border-t border-stone-100 dark:border-stone-700 flex items-center justify-center gap-1.5"
-            >
-              {nextChunk} {nextChunk === 1 ? "ältere Version" : "ältere Versionen"} laden
-              <Icon.chev size={12} className="rotate-90" />
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Hero intro */}
-      <div className="px-4 pb-5">
-        <div
-          className="relative overflow-hidden rounded-3xl text-white px-5 py-6"
-          style={{
-            background: "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
-            boxShadow:
-              "0 18px 36px -12px rgba(124,58,237,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)",
-          }}
-        >
-          <div className="text-5xl mb-2.5">🎁</div>
-          <h1 className="m-0 text-[24px] font-extrabold tracking-tight leading-tight mb-2">
-            Geschenke ohne Chaos.
-          </h1>
-          <p className="text-[14px] leading-[1.5] opacity-95">
-            Eine Trust-basierte App für deinen Freundeskreis. Jede Gruppe hat
-            eine eigene ID + Passwort — du kannst zwischen mehreren Gruppen
-            wechseln, eigene neu anlegen oder beitreten. Beim ersten Öffnen
-            landest du automatisch hier — das Tutorial erreichst du jederzeit
-            wieder über das <strong>?</strong> oben rechts oder die{" "}
-            <em>Einstellungen</em>.
-          </p>
-          <p className="text-[13px] leading-[1.5] opacity-95 mt-2">
-            📲 Direkt nach diesem Tutorial kommt ein <strong>Install-Tipp</strong>{" "}
-            — gerätespezifisch (Chrome/Edge: ein Klick, iPhone/iPad: Safari →
-            Teilen → <em>„Zum Home-Bildschirm"</em>). Nur in der installierten
-            App gibt's Push-Benachrichtigungen zu Geburtstagen und einen
-            sauberen Standalone-Look ohne Browser-Leiste. Den Button findest
-            du auch jederzeit in <em>Einstellungen → App</em>.
-          </p>
-        </div>
-      </div>
-
-      {/* Steps */}
-      <div className="px-4 space-y-4 pb-6">
-        <Step
-          n={1}
-          icon="👥"
-          title="Gruppen — eine oder mehrere"
-          body={
-            <>
-              <p>
-                Beim Login gibst du <strong>Gruppen-ID + Passwort</strong> ein.
-                Über <em>„+ Neue Gruppe erstellen"</em> legst du eine eigene
-                Gruppe an (ID frei wählbar, 3–30 Zeichen, plus eigenes
-                Passwort).
-              </p>
-              <p>
-                Oben rechts in der App ist ein <strong>Gruppen-Pill</strong>{" "}
-                mit der aktiven ID. Tipp drauf → Dropdown mit all deinen
-                gespeicherten Gruppen. Aktiv ist hervorgehoben, ein Klick
-                wechselt sofort (ohne erneute Passwort-Eingabe — der Trust
-                wurde beim ersten Login gesetzt).
-              </p>
-              <p>
-                Im Dropdown rechts hinter jedem Namen ein <strong>🗑</strong>{" "}
-                zum <em>Entfernen aus deiner Liste</em> (Daten bleiben auf
-                dem Server). Unten <em>„+ Gruppe hinzufügen"</em> bringt dich
-                wieder zur Erstellen-/Beitreten-Seite.
-              </p>
-              <p>
-                Eine ganze Gruppe <strong>komplett vom Server löschen</strong>{" "}
-                geht in den{" "}
-                <Link to="/settings" className={LINK}>
-                  Einstellungen
-                </Link>{" "}
-                unter <em>Gruppe → „Gruppe löschen"</em> — wird mit Passwort
-                bestätigt (siehe Schritt 9).
-              </p>
-              <p>
-                <strong>Auf weiteren Geräten?</strong> Entweder Gruppen-ID +
-                Passwort nochmal eintippen — oder einmal{" "}
-                <strong>„Mit Google anmelden"</strong> auf dem Login-Screen,
-                dann tauchen deine Gruppen automatisch auf jedem Gerät mit
-                demselben Google-Konto auf, ohne erneute Passwort-Eingabe.
-                Anonyme Nutzung bleibt aber voll möglich.
-              </p>
-            </>
-          }
-          mock={<MockGroupSwitcherDropdown />}
-        />
-
-        <Step
-          n={2}
-          icon="👋"
-          title="Sag, wer du bist"
-          body={
-            <>
-              <p>
-                Tippe oben rechts auf <strong>„Wer bist du?"</strong> oder geh in die{" "}
-                <Link to="/settings" className={LINK}>
-                  Einstellungen
-                </Link>{" "}
-                → <strong>„Wer bin ich?"</strong> und wähle dich aus den Personen aus.
-              </p>
-              <p>
-                Wichtig: deine Stimmen, Vorschläge und Wünsche werden danach dir zugeordnet.
-                Wechseln kannst du jederzeit — die Identität ist nur ein Label im Browser
-                (kein echtes Login). Sie ist <strong>pro Gruppe</strong> getrennt:
-                wechselst du die Gruppe, ist die Identität dort separat.
-              </p>
-            </>
-          }
-          mock={<MockTopBar />}
-        />
-
-        <Step
-          n={3}
-          icon="👥"
-          title="Personen anlegen, bearbeiten, löschen"
-          body={
-            <>
-              <p>
-                <Link to="/people" className={LINK}>
-                  Personen
-                </Link>{" "}
-                → violetter <strong>+</strong> rechts unten. Pro Person reichen{" "}
-                <strong>Name + Tag/Monat</strong>. Jahr ist nicht nötig — wir wollen ja nur
-                wissen, wann's wieder soweit ist.
-              </p>
-              <p>
-                Tipp auf eine Person → <strong>Profil</strong>-Tab → Felder ändern und{" "}
-                <em>Speichern</em>, oder Person komplett löschen (kaskadiert auch ihre
-                Geschenke + Wünsche). Wenn du dich selbst löschst, wird deine Identität
-                automatisch zurückgesetzt.
-              </p>
-              <p>
-                <strong>E-Mail (optional)</strong> — wenn hinterlegt, bekommt die Person
-                automatisch eine Erinnerung <strong>60 / 30 / 14 Tage</strong> vor ihrem
-                Geburtstag, eine Wunschliste zu schreiben. Ein Klick auf den Link in der Mail
-                führt sie ohne Passwort direkt rein. Abbestellen ist in jeder Mail möglich,
-                und die Folge-Erinnerungen entfallen sowieso, sobald die Wunschliste etwas
-                enthält.
-              </p>
-              <p>
-                <strong>🧪 Einmal Test-Mail schicken</strong> — direkt nach dem Eintragen der
-                E-Mail im <em>Profil</em>-Tab den Knopf <em>„Test-Mail an … senden"</em>{" "}
-                klicken. Die Person bekommt eine echte Mail (mit funktionierendem Link)
-                und sollte sie kurz im Posteingang öffnen und als <strong>„Kein Spam"</strong>{" "}
-                markieren — sonst landen die späteren Geburtstags-Erinnerungen womöglich
-                im Junk-Ordner. Einmal markieren reicht, die folgenden kommen dann sauber rein.
-              </p>
-            </>
-          }
-          mock={<MockPeopleGrid />}
-        />
-
-        <Step
-          n={4}
-          icon="📚"
-          title="Die Übersicht"
-          body={
-            <>
-              <p>
-                Auf der Startseite. <strong>30 Tage vor dem Geburtstag</strong> erscheint
-                jede Person automatisch hier — sortiert nach <strong>nächstem Geburtstag</strong>,
-                der nächste oben. Das Geschenk-Jahr steht klein am Titel.
-              </p>
-              <p>
-                Pro Karte: Avatar, Name + Datum + Jahr, Tage-Counter („in&nbsp;13&nbsp;T."),
-                Teilnehmer-Chip, Budget-Chip und ein 🗑 zum Entfernen, falls dieses Jahr
-                kein Geschenk gemacht wird.
-              </p>
-              <p>
-                Manuell hinzufügen geht über das <strong>+</strong> rechts unten — z.B. um
-                ein vergessenes Vorjahres-Geschenk nachzutragen oder ein zweites Geschenk
-                im selben Jahr.
-              </p>
-              <p>
-                Unter dem Stack: Button <strong>📦 Alte Geschenke</strong> mit allen
-                erhaltenen Geschenken in chronologischer Reihenfolge. Pro Eintrag siehst
-                du den Anlass, das Datum und die Gesamtsumme — Klick zeigt das volle
-                Detail inkl. <em>wer was bezahlt hat</em>.
-              </p>
-            </>
-          }
-          mock={<MockStackCard />}
-        />
-
-        <Step
-          n={5}
-          icon="✨"
-          title="Wunschliste pflegen — jederzeit"
-          body={
-            <>
-              <p>
-                Eigene Wünsche unter dem{" "}
-                <Link to="/wishlist" className={LINK}>
-                  Wunschliste
-                </Link>
-                -Tab. <strong>Identität noch nicht gesetzt?</strong> Kein Problem — direkt
-                dort tippst du dich mit einem Klick aus der Personenliste rein, ohne Umweg
-                über die Einstellungen. Wünsche von anderen findest du auf der jeweiligen
-                Person-Detail-Seite unter dem Tab <em>Wunschliste</em> — und auch dort kann
-                jeder ohne Identitäts-Pflicht reinschreiben.
-              </p>
-              <p>
-                Pro Wunsch reicht ein <strong>Titel</strong>. Optional: <em>Link</em> +{" "}
-                <em>Preis</em> unter <strong>+ Details</strong>. Jeder Wunsch zeigt
-                automatisch, <strong>wann er hinzugefügt wurde</strong> („gerade eben",
-                „vor 2 Std.", „gestern" oder das Datum). Neueste Wünsche stehen oben,
-                löschen über das 🗑 rechts.
-              </p>
-            </>
-          }
-          mock={<MockWishItem />}
-        />
-
-        <Step
-          n={6}
-          icon="🎁"
-          title="Geschenk-Detail im Überblick"
-          body={
-            <>
-              <p>
-                In der Übersicht auf eine Karte tippen → Geschenk-Detail mit personalisiertem
-                Banner (in der Avatar-Farbe der Person).
-              </p>
-              <p>Sektionen, von oben nach unten:</p>
-              <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
-                <li>
-                  <strong>💬 Gruppen-Link</strong> — z.B. WhatsApp-Einladung pro Geschenk
-                  hinterlegen, alle finden direkt rein. Wird beim nächsten Jahr für die
-                  gleiche Person + gleichen Anlass automatisch übernommen.
-                </li>
-                <li>
-                  <strong>Teilnehmer</strong> — wer macht mit. Chip antippen = ein/aus.
-                  Bei vielen Klick auf <em>„Alle hinzufügen"</em> rechts. Direkt drunter
-                  das Live-Budget (<em>Anzahl × Betrag pro Kopf</em>); das Pro-Kopf-Feld
-                  ist mit gestricheltem Unterstrich klickbar editierbar.
-                </li>
-                <li>
-                  <strong>Wunschliste von [Person]</strong> — alle Wünsche der beschenkten
-                  Person mit Preis, Link und Zeitstempel. Tipp auf{" "}
-                  <strong>„Übernehmen"</strong> → der Wunsch landet als Vorschlag im Pool,
-                  bekommt ein kleines <em>🎁&nbsp;Wunschzettel</em>-Label und zeigt
-                  danach <em>„übernommen"</em>, damit ihr nichts doppelt reinpackt.
-                </li>
-                <li>
-                  <strong>Vorschläge</strong> — Ideen sammeln mit Titel, optional Link/Preis.
-                  Pro Karte: <strong>Lila Checkbox links</strong> für die Auswahl
-                  (sichtbar für alle als <em>„✓ Für Gesamtsumme ausgewählt"</em>),{" "}
-                  <strong>✏</strong> zum Bearbeiten,{" "}
-                  <strong>✕</strong> zum Löschen.
-                </li>
-                <li>
-                  <strong>Abstimmung</strong> — siehe Schritt 7.
-                </li>
-              </ul>
-              <p>
-                <strong>📅 Anlass + Datum</strong> — beim Anlegen kannst du frei eingeben:
-                z.B. <em>„Reise"</em>, <em>„Hochzeit"</em>, <em>„Jubiläum"</em>. Default ist{" "}
-                <em>Geburtstag</em>. Per Checkbox <em>„Anderes Datum"</em> kannst du den
-                Stack-Termin vom Person-Geburtstag entkoppeln.
-              </p>
-              <p>
-                <strong>🔗 Teilen</strong> — oben rechts im Geschenk-Detail ist ein
-                kleines Teilen-Symbol. Tipp drauf → Dialog mit dem direkten Link.{" "}
-                <em>„Link kopieren"</em> legt ihn in die Zwischenablage; auf
-                Mobilgeräten gibt es zusätzlich <em>„Teilen..."</em> fürs
-                System-Sheet (AirDrop, WhatsApp & Co.). Wer den Link öffnet und noch
-                nicht in der Gruppe ist, sieht die Gruppen-ID schon vorausgefüllt —
-                nur Passwort eingeben, fertig. Beim ersten Beitritt fragt die App
-                ausserdem direkt, wer du bist.
-              </p>
-              <p>
-                <strong>📐 Lifecycle: offen → bestätigt → erhalten.</strong>{" "}
-                Im <em>offenen</em> Status sammelt ihr Vorschläge, stimmt ab und
-                trefft eure Auswahl. Mit <strong>„✓ Auswahl bestätigen"</strong>{" "}
-                schaltet ihr in den Zwischenzustand <em>bestätigt</em>:
-                Wunschliste und „Idee teilen" verschwinden, weil die Auswahl
-                final ist, und aus „Theoretische Gesamtsumme" wird einfach{" "}
-                <em>Gesamtsumme</em>. Ihr könnt jederzeit „Bestätigung aufheben"
-                klicken, um zurück in den offenen Modus zu gehen. Wenn alles
-                besorgt ist, geht's mit <strong>„✓ Geschenk erhalten"</strong>{" "}
-                in den finalen Status.
-              </p>
-              <p>
-                <strong>💶 Bezahler — schon vorab oder nach Erhalt:</strong> Sobald
-                ein Vorschlag per Checkbox <em>„Für Gesamtsumme ausgewählt"</em>{" "}
-                markiert ist, erscheint direkt darunter ein{" "}
-                <em>„💶 Bezahlt von: …"</em>-Dropdown. Vor dem Bestätigen steht
-                klein <em>„vorläufig — wird nach Erhalten gefestigt"</em>: ihr
-                könnt euch in Ruhe abstimmen, alles bleibt änderbar. Ganz unten
-                im Geschenk-Detail (ab <em>bestätigt</em>) steht eine dezente
-                Zeile mit der Summe pro Person — immer aktuell. Der Dialog{" "}
-                <em>„Wer hat was bezahlt?"</em> springt nach <em>„Geschenk
-                erhalten"</em> nur noch auf, wenn noch unausgefüllte Bezahler
-                übrig sind.
-              </p>
-              <p>
-                Ganz unten: roter <em>Geschenk löschen</em>-Knopf, falls ihr es doch nicht
-                verfolgen wollt — funktioniert auch für vergangene Geschenke.
-              </p>
-            </>
-          }
-          mock={<MockWishlistAdopt />}
-        />
-
-        <Step
-          n={7}
-          icon="🗳️"
-          title="Abstimmen — Mehrfach-Wahl möglich"
-          body={
-            <>
-              <p>
-                <strong>„Abstimmung starten"</strong> klicken → jeder Teilnehmer sieht
-                rechts an jedem Vorschlag einen Stimm-Kreis.{" "}
-                <strong>Jede Person darf beliebig viele Vorschläge wählen</strong>{" "}
-                — Klick toggelt die Stimme (gut, wenn ihr mehrere Geschenke
-                macht oder eine Top-3 sammeln wollt). Stimmen sind sofort für
-                alle sichtbar — transparente Wahl, keine Geheimwahl.
-              </p>
-              <p>
-                Oben in der Vorschläge-Sektion ein Banner{" "}
-                <em>„Du hast 2× gewählt: Kopfhörer, Karte"</em> mit Knopf{" "}
-                <strong>Alle zurücknehmen</strong>. Klick auf einen Vorschlag-Kreis
-                fügt deine Stimme hinzu oder entfernt sie.
-              </p>
-              <p>
-                <strong>„Abstimmung beenden"</strong> zeigt ein kompaktes Ergebnis mit
-                Top-Vorschlag und Prozenten; <em>Details</em> öffnet ein Modal mit allen
-                Vorschlägen + Bars + Voter-Avataren. Optional auch{" "}
-                <em>„Wieder öffnen"</em> oder <em>„Verwerfen"</em>.
-              </p>
-            </>
-          }
-          mock={<MockVoteCircle />}
-        />
-
-        <Step
-          n={8}
-          icon="✅"
-          title="Auswahl bestätigen + Kauf"
-          body={
-            <>
-              <p>
-                Unabhängig von der Abstimmung könnt ihr Vorschläge mit der lila Checkbox
-                links als <strong>„wir nehmen das"</strong> markieren — auch{" "}
-                <strong>mehrere</strong>. Die App listet die Auswahl mit Titeln und Preisen,
-                rechnet die <strong>theoretische Gesamtsumme</strong> live und erlaubt
-                einzelnes Entfernen.
-              </p>
-              <p>
-                Sobald ihr euch sicher seid: <strong>„✓ Auswahl bestätigen"</strong>{" "}
-                klicken. Damit wechselt das Geschenk in den Status{" "}
-                <em>bestätigt</em> — Wunschliste und „Idee teilen" verschwinden,
-                aus „Theoretisch" wird einfach „Gesamtsumme", und unten erscheint
-                eine kleine Zeile mit der Summe <em>pro Bezahler</em>. Ändern
-                könnt ihr trotzdem noch (Bezahler-Dropdowns, einzelne Vorschläge
-                editieren) — und „Bestätigung aufheben" bringt euch jederzeit
-                zurück in den offenen Modus.
-              </p>
-              <p>
-                Ist alles besorgt: <strong>„✓ Geschenk erhalten"</strong> — das
-                Geschenk verschwindet aus dem Stack und taucht unter{" "}
-                <em>📦 Alte Geschenke</em> bzw.{" "}
-                <em>Person → Geschenke</em> in der Historie auf.
-              </p>
-            </>
-          }
-          mock={<MockSelected />}
-        />
-
-        <Step
-          n={9}
-          icon="⚙️"
-          title="Einstellungen"
-          body={
-            <>
-              <p>
-                In der{" "}
-                <Link to="/settings" className={LINK}>
-                  Einstellungen
-                </Link>
-                -Seite findest du:
-              </p>
-              <ul className="list-disc list-inside space-y-1 mt-1 ml-1 text-[13px] leading-[1.6]">
-                <li>
-                  <strong>Konto</strong> — zeigt, ob du gerade <em>anonym</em>{" "}
-                  (Gerät-gebunden) bist oder <em>mit Google</em> verknüpft
-                  (E-Mail wird angezeigt). Verknüpfen geht hier mit einem Klick;
-                  Abmelden ebenso. Mit Google synchronisiert sich deine
-                  Mitgliedschaft automatisch auf jedes Gerät mit demselben
-                  Konto.
-                </li>
-                <li>
-                  <strong>App → Installieren</strong> — eigene Sektion, die nur
-                  im Browser auftaucht. <strong>Chrome / Edge</strong>: Button{" "}
-                  <em>„📲 Installieren"</em> öffnet den nativen Prompt direkt.{" "}
-                  <strong>iPhone / iPad</strong>: nur über Safari möglich →
-                  Teilen-Symbol → <em>„Zum Home-Bildschirm"</em>. In der bereits
-                  installierten PWA verschwindet die Sektion automatisch und
-                  zeigt stattdessen <em>„✓ App ist installiert"</em>. Erst dann
-                  hast du eigenes Icon, kein Browser-UI und eigenen Splashscreen.
-                </li>
-                <li>
-                  <strong>🔔 Push-Benachrichtigungen</strong> — Toggle aktiviert
-                  eine Push aufs Handy, sobald eine Person in den{" "}
-                  <em>30-Tage-Stack</em> rutscht. Funktioniert nur in der
-                  installierten App und nach einmaliger Erlaubnis im
-                  System-Dialog. Pro Gruppe getrennt einschaltbar.
-                </li>
-                <li>
-                  <strong>Gruppe</strong> — aktive Gruppen-ID + <em>„Gruppe löschen"</em>
-                  (rot). Letzteres entfernt Personen, Geschenke, Vorschläge, Wunschlisten
-                  und Abstimmungen <strong>unwiderruflich</strong> vom Server. Bestätigung
-                  per Passwort-Eingabe; danach Wechsel zur nächsten gespeicherten Gruppe
-                  (oder zurück zum Login).
-                </li>
-                <li>
-                  <strong>Wer bin ich?</strong> — Identität wechseln (siehe Schritt 2).
-                  Personen mit grünem Rahmen werden gerade von einem anderen
-                  User in der Gruppe als „Wer bin ich" verwendet — so siehst du
-                  auf einen Blick, wer die App schon aktiv nutzt.
-                </li>
-                <li>
-                  <strong>Wo mache ich mit?</strong> — zusammenklappbarer Kasten
-                  mit <em>allen</em> anderen Personen in der Gruppe (nicht mehr
-                  nur die nächsten 30 Tage). Zugeklappt zeigt der Kasten in
-                  einer Zeile <em>„Bei X von Y Personen aktiv"</em>; ein Tipp
-                  klappt die volle Liste auf. Pro Person ein Toggle: an = du
-                  bist bei allen offenen und bestätigten Geschenken dieser
-                  Person dabei und wirst auch bei zukünftigen automatisch
-                  eingetragen; aus = raus. Spart das Hin- und Herklicken durch
-                  die einzelnen Geschenk-Karten.
-                </li>
-                <li>
-                  <strong>Default-Budget pro Person</strong> — wird bei neuen Geschenken
-                  automatisch übernommen, pro Geschenk individuell überschreibbar
-                </li>
-                <li>
-                  <strong>Dark Mode</strong> — ist <em>Standard</em>; Toggle hier umschalten,
-                  wirkt sofort
-                </li>
-                <li>
-                  <strong>Passwort ändern</strong> — altes + neues angeben (gilt für die
-                  aktive Gruppe)
-                </li>
-                <li>
-                  <strong>Hilfe → So funktioniert's</strong> & <strong>Feedback</strong>{" "}
-                  (siehe Schritt 10)
-                </li>
-                <li>
-                  <strong>Abmelden</strong> — meldet diesen Browser ab und leert die
-                  Gruppen-Liste auf diesem Gerät
-                </li>
-              </ul>
-            </>
-          }
-        />
-
-        <Step
-          n={10}
-          icon="💬"
-          title="Feedback geben"
-          body={
-            <>
-              <p>
-                Was nervt? Was fehlt? Was wäre cool? Unter{" "}
-                <Link to="/feedback" className={LINK}>
-                  Einstellungen → Feedback
-                </Link>{" "}
-                kannst du Wünsche, Ideen, Bugs eintragen. Feedback ist{" "}
-                <strong>privat</strong>: nur du selbst (und der App-Owner, also
-                der, der die App pflegt) seht dein Feedback. Andere
-                Gruppen-Mitglieder können es weder lesen, editieren noch
-                löschen — auch nicht über Umwege. Backend-seitig abgesichert.
-              </p>
-              <p>
-                Wenn deine Identität gesetzt ist, wird das Feedback dir zugeordnet (kleiner
-                Avatar). Bist du mit Google angemeldet, sieht der Owner auch deine
-                E-Mail — sonst landest du als <em>anonym</em> in seiner Inbox.
-                Eigenes Feedback bleibt für dich jederzeit{" "}
-                <strong>bearbeitbar</strong>, <strong>löschbar</strong> und du
-                kannst es als <em>erledigt</em> markieren oder wieder öffnen.
-                Erledigte Einträge wandern in eine{" "}
-                <strong>aufklappbare Sektion</strong> (default zu), damit die
-                offenen Items oben Vorrang haben.
-              </p>
-            </>
-          }
-        />
-
-        {/* Trust principle reminder */}
-        <div className="rounded-2xl px-4 py-4 mt-2 bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900">
-          <div className="text-[15px] font-bold text-violet-700 dark:text-violet-300 mb-1">
-            🤝 Trust-Prinzip
-          </div>
-          <p className="text-[13px] leading-[1.55] text-stone-700 dark:text-stone-300">
-            Innerhalb einer Gruppe gibt es keine echten Rollen. Identität ist nur
-            ein Label, das du selber wählst. Jeder mit dem Gruppen-Passwort kann
-            alles. Das ist <strong>so gewollt</strong> — wir wollen kein
-            Permission-System für Menschen, denen wir Geschenke kaufen.
-          </p>
-          <p className="text-[12px] leading-[1.55] text-stone-600 dark:text-stone-400 mt-1.5">
-            Daten anderer Gruppen sind seit v1.2.0 backend-seitig abgeschottet —
-            ohne Passwort kommt da niemand rein. Google-Login ist optional und
-            verknüpft nur dein Gerät mit einem stabilen Konto.
-          </p>
-        </div>
-      </div>
-
-      <div className="px-4 pb-24">
-        <Button
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-          variant="secondary"
-          className="w-full"
-        >
-          ↑ Zurück nach oben
-        </Button>
-      </div>
-    </div>
-  );
-}
-
-const LINK = "text-violet-700 dark:text-violet-400 font-semibold";
-
-// ── Step block ────────────────────────────────────────────────
-function Step({
-  n,
-  icon,
-  title,
-  body,
-  mock,
-}: {
-  n: number;
-  icon: string;
-  title: string;
-  body: React.ReactNode;
-  mock?: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white dark:bg-stone-800 rounded-[20px] border border-[#F0EBE6] dark:border-[#3A3633] overflow-hidden">
-      <div className="flex items-stretch">
-        <div
-          className="flex flex-col items-center justify-start pt-4 pb-4 w-14 shrink-0 text-white"
-          style={{ background: "linear-gradient(180deg, #4F46E5, #7C3AED)" }}
-        >
-          <div className="text-[11px] font-bold tracking-[0.1em] opacity-90">SCHRITT</div>
-          <div className="text-[28px] font-extrabold leading-none mt-1">{n}</div>
-          <div className="text-2xl mt-2">{icon}</div>
-        </div>
-        <div className="flex-1 px-4 py-4 min-w-0">
-          <h3 className="m-0 mb-2 text-[16px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
-            {title}
-          </h3>
-          <div className="text-[13px] leading-[1.55] text-stone-600 dark:text-stone-300 space-y-1.5">
-            {body}
-          </div>
-        </div>
-      </div>
-      {mock && (
-        <div className="border-t border-stone-100 dark:border-stone-700 bg-stone-50 dark:bg-stone-900/40 px-4 py-3">
-          {mock}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ── Mocks (CSS-rendered, no real screenshots) ─────────────────
-const ANNA = { id: "demo-anna", name: "Anna", birthday: "06-15", color: pickColor("Anna"), createdAt: 0 };
-const BEN = { id: "demo-ben", name: "Ben", birthday: "07-02", color: pickColor("Ben"), createdAt: 0 };
-
-function MockTopBar() {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">🎁 Geschenke</div>
-      <div className="flex items-center gap-1">
-        <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-2 pr-1.5 py-1 inline-flex items-center gap-1">
-          <Icon.users size={11} />
-          <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Jeg</span>
-          <Icon.chev size={10} className="rotate-90 text-stone-400" />
-        </div>
-        <div className="w-6 h-6 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-500 flex items-center justify-center text-[11px] font-bold">
-          ?
-        </div>
-        <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-1 pr-2 py-1 inline-flex items-center gap-1">
-          <Avatar person={ANNA} size={20} />
-          <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Anna</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MockGroupSwitcherDropdown() {
-  const rowBase =
-    "px-2.5 py-1.5 flex items-center gap-1.5 text-[11px]";
-  return (
-    <div className="flex gap-2">
-      <div className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full pl-2 pr-1.5 py-1 inline-flex items-center gap-1 self-start">
-        <Icon.users size={11} />
-        <span className="text-[11px] font-semibold text-stone-700 dark:text-stone-200">Jeg</span>
-        <Icon.chev size={10} className="rotate-90 text-stone-400" />
-      </div>
-      <div className="flex-1 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 shadow-md overflow-hidden">
-        <div className="px-2.5 pt-1.5 pb-1 text-[9px] font-bold tracking-[0.05em] uppercase text-stone-400">
-          Deine Gruppen
-        </div>
-        <div className={`${rowBase} bg-violet-50 dark:bg-violet-950/40`}>
-          <Icon.check size={11} className="text-violet-700 dark:text-violet-300" />
-          <span className="flex-1 font-bold text-stone-900 dark:text-stone-50">Jeg</span>
-          <Icon.trash size={11} className="text-stone-300" />
-        </div>
-        <div className={rowBase}>
-          <span className="w-2.5" />
-          <span className="flex-1 text-stone-700 dark:text-stone-200">familie-müller</span>
-          <Icon.trash size={11} className="text-stone-300" />
-        </div>
-        <div className="border-t border-stone-100 dark:border-stone-700" />
-        <div className="px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] font-semibold text-violet-700 dark:text-violet-300">
-          <Icon.plus size={11} /> Gruppe hinzufügen
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MockPeopleGrid() {
-  return (
-    <div className="grid grid-cols-2 gap-2">
-      {[ANNA, BEN].map((p) => (
-        <div
-          key={p.id}
-          className="p-3 bg-white dark:bg-stone-800 rounded-[14px] border border-[#F0EBE6] dark:border-[#3A3633] flex flex-col gap-1.5"
-        >
-          <Avatar person={p} size={28} />
-          <div className="text-[12px] font-bold text-stone-900 dark:text-stone-50">{p.name}</div>
-          <Chip variant="accent" className="self-start">in 12 T.</Chip>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MockStackCard() {
-  return (
-    <div className="flex items-center gap-2.5 px-2.5 py-2.5 bg-white dark:bg-stone-800 rounded-[14px] border border-[#F0EBE6] dark:border-[#3A3633]">
-      <Avatar person={BEN} size={32} />
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-bold text-stone-900 dark:text-stone-50">
-          Ben <span className="text-stone-400 font-medium">· 2. Jul</span>{" "}
-          <span className="text-[9px] font-semibold text-stone-400 tracking-wide">2026</span>
-        </div>
-        <div className="text-[11px] text-stone-500">in 12 T. · seit 5 T. im Stack</div>
-      </div>
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex gap-1">
-          <Chip variant="neutral" className="text-[10px]">3 👥</Chip>
-          <Chip variant="accent" className="text-[10px]">30 €</Chip>
-        </div>
-        <div className="w-5 h-5 rounded-full border border-stone-200 dark:border-stone-700 text-stone-400 flex items-center justify-center text-[10px]">
-          🗑
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function MockWishItem() {
-  return (
-    <div className="px-3 py-2.5 bg-white dark:bg-stone-800 rounded-[14px] border border-[#F0EBE6] dark:border-[#3A3633]">
-      <div className="text-[13px] font-semibold text-stone-900 dark:text-stone-50">Gute Kopfhörer</div>
-      <div className="flex gap-2.5 mt-1 items-center text-[11px] flex-wrap">
-        <span className="text-violet-700 dark:text-violet-300 font-semibold">120 €</span>
-        <span className="text-stone-400 inline-flex items-center gap-0.5">
-          <Icon.link size={11} /> Link
-        </span>
-        <span className="text-stone-400">vor 2 Tagen</span>
-      </div>
-    </div>
-  );
-}
-
-function MockWishlistAdopt() {
-  return (
-    <div className="space-y-1.5">
-      <div className="text-[10px] font-bold tracking-wide text-stone-400 uppercase pl-0.5">
-        Wunschliste von Anna
-      </div>
-      <div
-        className="px-3 py-2 rounded-[12px] flex items-start gap-2"
-        style={{
-          background: "rgba(245, 158, 11, 0.06)",
-          border: "1px solid rgba(245, 158, 11, 0.25)",
-        }}
-      >
-        <span className="text-base leading-none mt-0.5">🎁</span>
-        <div className="flex-1 min-w-0">
-          <div className="text-[12px] font-semibold text-stone-900 dark:text-stone-50">
-            Gute Kopfhörer
-          </div>
-          <div className="flex gap-2 mt-0.5 text-[10px] items-center flex-wrap">
-            <span className="text-violet-700 dark:text-violet-300 font-semibold">120 €</span>
-            <span className="text-stone-400">vor 2 Tagen</span>
-          </div>
-        </div>
-        <div
-          className="px-2 py-1 rounded-md text-[10px] font-semibold text-white shrink-0"
-          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
-        >
-          Übernehmen
-        </div>
-      </div>
-      <div className="text-[10px] font-bold tracking-wide text-stone-400 uppercase pt-1 pl-0.5">
-        Vorschläge
-      </div>
-      <div className="px-3 py-2 rounded-[12px] bg-white dark:bg-stone-800 border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2">
-        <div
-          className="w-4 h-4 rounded-[4px] flex items-center justify-center text-white"
-          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
-        >
-          <Icon.check size={10} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="text-[12px] font-bold text-stone-900 dark:text-stone-50">
-            Gute Kopfhörer
-          </div>
-          <div className="flex gap-1.5 text-[10px] items-center flex-wrap">
-            <span className="text-violet-700 dark:text-violet-300 font-semibold">120 €</span>
-            <span className="text-stone-400">von Ben</span>
-            <span className="text-amber-700 dark:text-amber-400 font-semibold">
-              🎁 Wunschzettel
+            <span aria-hidden className="ml-2 text-meta font-semibold tabular-nums text-fg-muted">
+              {index + 1}/{count}
             </span>
           </div>
+          <div className="flex items-center gap-3">
+            {!isLast && (
+              <Button variant="ghost" size="lg" onClick={leave} className="text-fg-soft">
+                Überspringen
+              </Button>
+            )}
+            <Button size="lg" className="flex-1" onClick={() => (isLast ? leave() : goTo(index + 1))}>
+              {isLast ? "Los geht's" : "Weiter"}
+              {!isLast && <Icon.chev size={16} />}
+            </Button>
+          </div>
         </div>
       </div>
+
+      <PwaInstallTipDialog open={installOpen} onClose={() => setInstallOpen(false)} />
     </div>
   );
 }
 
-function MockVoteCircle() {
-  return (
-    <div className="space-y-1.5">
-      <div
-        className="px-3 py-2 rounded-[10px] flex items-center gap-2"
-        style={{
-          background: "rgba(124, 58, 237, 0.08)",
-          border: "1px solid rgba(124, 58, 237, 0.2)",
-        }}
-      >
-        <span className="text-sm">✓</span>
-        <div className="text-[12px] flex-1">
-          <span className="text-stone-500 dark:text-stone-400">Du hast gewählt:</span>{" "}
-          <span className="font-semibold text-stone-900 dark:text-stone-50">Kopfhörer</span>
-        </div>
-        <span className="text-[10px] font-semibold text-violet-700 dark:text-violet-300">
-          Zurücknehmen
-        </span>
-      </div>
-      <div className="px-3 py-2 rounded-[10px] bg-white dark:bg-stone-800 border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2">
-        <div className="flex-1 text-[13px] font-bold text-stone-900 dark:text-stone-50">Kopfhörer</div>
-        <div
-          className="w-6 h-6 rounded-full flex items-center justify-center text-white"
-          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
-        >
-          <Icon.check size={12} />
-        </div>
-      </div>
-    </div>
-  );
-}
+/** Seite 6: direkt installieren (Chrome/Edge) oder die Anleitung öffnen. */
+function InstallAction({ onShowHowTo }: { onShowHowTo: () => void }) {
+  const [hasPrompt, setHasPrompt] = useState(() => !!getCachedInstallPrompt());
+  const [installing, setInstalling] = useState(false);
+  useEffect(() => onInstallPromptChange(() => setHasPrompt(!!getCachedInstallPrompt())), []);
 
-function MockSelected() {
-  return (
-    <div className="px-3 py-2.5 rounded-[12px] bg-violet-50 dark:bg-violet-950/40 border border-violet-200 dark:border-violet-900">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-[11px] font-bold text-violet-700 dark:text-violet-300">2 ausgewählt</div>
-        <div className="text-[16px] font-extrabold text-violet-700 dark:text-violet-300 tabular-nums">45 €</div>
-      </div>
-      <div className="flex flex-col gap-0.5">
-        <div className="flex justify-between text-[11px]">
-          <span className="text-stone-700 dark:text-stone-200">Kopfhörer</span>
-          <span className="text-violet-700 dark:text-violet-300 font-semibold">25 €</span>
-        </div>
-        <div className="flex justify-between text-[11px]">
-          <span className="text-stone-700 dark:text-stone-200">Karte</span>
-          <span className="text-violet-700 dark:text-violet-300 font-semibold">20 €</span>
-        </div>
-      </div>
-    </div>
+  async function install() {
+    setInstalling(true);
+    try {
+      const outcome = await tryInstallPwa();
+      if (outcome === "accepted") toast.success("App installiert 🎉");
+      else if (outcome === "unavailable") onShowHowTo();
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  return hasPrompt ? (
+    <Button variant="secondary" className="mt-5" onClick={install} loading={installing}>
+      Jetzt installieren
+    </Button>
+  ) : (
+    <Button variant="ghost" className="mt-4 text-accent-text" onClick={onShowHowTo}>
+      So geht's
+      <Icon.chev size={14} />
+    </Button>
   );
 }

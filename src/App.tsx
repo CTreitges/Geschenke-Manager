@@ -218,6 +218,15 @@ function AppRoutes() {
       <Route path="/login/new" element={<CreateGroup />} />
       <Route path="/m/:token" element={<MagicLink />} />
       <Route path="/g/:groupId/gift/:giftId" element={<ShareGift />} />
+      {/* Tutorial ohne Header und Tab-Bar (außerhalb von Layout) */}
+      <Route
+        path="/tutorial"
+        element={
+          <RequireAuth>
+            <Tutorial />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/*"
         element={
@@ -231,7 +240,6 @@ function AppRoutes() {
                 <Route path="/gift/:id" element={<GiftDetail />} />
                 <Route path="/wishlist" element={<MyWishlist />} />
                 <Route path="/past" element={<PastGifts />} />
-                <Route path="/tutorial" element={<Tutorial />} />
                 <Route path="/whats-new" element={<WhatsNew />} />
                 <Route path="/help" element={<Help />} />
                 <Route path="/feedback" element={<Feedback />} />

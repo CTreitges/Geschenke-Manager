@@ -87,6 +87,54 @@
   --gm-bg: rgb(var(--gm-canvas));
 }
 
+/* ── Illustrations-Tokens (Tutorial, src/components/tutorial) ────
+   Alle Farben der Inline-SVGs kommen von hier, damit der Dark Mode ohne
+   Extra-Code funktioniert. Demo-Personen haben feste Farben aus der
+   PALETTE (src/lib/colors.ts): Lea = „du“, Anna, Ben, Mia, Tom. */
+:root {
+  --ill-blob: #EDE9FE;
+  --ill-phone: #E7E5E4;
+  --ill-screen: #FFFFFF;
+  --ill-card: #FFFFFF;
+  --ill-card-line: #E7E5E4;
+  --ill-line: #D6D3D1;
+  --ill-line-strong: #A8A29E;
+  --ill-soft: #F5F3FF;
+  --ill-accent: #7C3AED;
+  --ill-grad-from: #4F46E5;
+  --ill-grad-to: #7C3AED;
+  --ill-bow: #C4B5FD;
+  --ill-on-accent: #FFFFFF;
+  --ill-amber: #F59E0B;
+  --ill-amber-soft: #FEF3C7;
+  --ill-badge: #E11D48;
+  --ill-scrim: rgba(28, 25, 23, 0.28);
+  --ill-frost: rgba(255, 255, 255, 0.72);
+  --ill-spark-1: #A78BFA;
+  --ill-spark-2: #F472B6;
+  --ill-spark-3: #FBBF24;
+  --ill-p-lea: #0D9488;
+  --ill-p-anna: #DB2777;
+  --ill-p-ben: #0284C7;
+  --ill-p-mia: #16A34A;
+  --ill-p-tom: #D97706;
+}
+.dark {
+  --ill-blob: rgba(124, 58, 237, 0.18);
+  --ill-phone: #44403C;
+  --ill-screen: #1C1917;
+  --ill-card: #292524;
+  --ill-card-line: #3A3633;
+  --ill-line: #57534E;
+  --ill-line-strong: #78716C;
+  --ill-soft: #2E1065;
+  --ill-accent: #A78BFA;
+  --ill-bow: #DDD6FE;
+  --ill-amber-soft: rgba(245, 158, 11, 0.16);
+  --ill-scrim: rgba(0, 0, 0, 0.45);
+  --ill-frost: rgba(28, 25, 23, 0.72);
+}
+
 @layer base {
   html {
     -webkit-tap-highlight-color: transparent;
@@ -145,6 +193,23 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Tutorial: Mikro-Animationen nur auf der aktiven Seite und nur, wenn
+   keine reduzierte Bewegung gewünscht ist. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-active="true"] .ill-drop { animation: illDrop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both; }
+  [data-active="true"] .ill-pop { animation: illPop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) 0.35s both; }
+}
+.ill-pop { transform-box: fill-box; transform-origin: center; }
+@keyframes illDrop {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes illPop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
 @keyframes fadeIn {

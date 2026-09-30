@@ -1,0 +1,33 @@
+{
+  // Typprüfung der Playwright-Tests (Teil von `tsc -b` über die Referenz in
+  // ../tsconfig.json). .mjs-Helfer (Seed, Shots) laufen per allowJs mit,
+  // ohne selbst geprüft zu werden (checkJs: false).
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    "skipLibCheck": true,
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "tsBuildInfoFile": "../node_modules/.tmp/tsconfig.e2e.tsbuildinfo",
+    "baseUrl": "..",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@shared/*": ["./functions/src/shared/*"],
+      // firebase-admin liegt nur in functions/node_modules (Seed-Helfer).
+      "firebase-admin/firestore": ["./functions/node_modules/firebase-admin/lib/firestore/index.d.ts"]
+    }
+  },
+  "include": ["tests/**/*.ts", "playwright.config.ts", "*.d.mts", "../src/vite-env.d.ts"]
+}

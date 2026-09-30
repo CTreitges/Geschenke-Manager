@@ -18,7 +18,10 @@ const require = createRequire(new URL("../functions/package.json", import.meta.u
 
 let dbInstance = null;
 
-/** Admin-Firestore gegen den Emulator — bricht ab, wenn kein Emulator gesetzt ist. */
+/**
+ * Admin-Firestore gegen den Emulator — bricht ab, wenn kein Emulator gesetzt ist.
+ * @returns {import("firebase-admin/firestore").Firestore}
+ */
 export function getDb() {
   if (dbInstance) return dbInstance;
   process.env.FIRESTORE_EMULATOR_HOST ||= "127.0.0.1:8080";

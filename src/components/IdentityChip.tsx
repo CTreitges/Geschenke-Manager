@@ -16,9 +16,11 @@ export function IdentityChip() {
         type="button"
         onClick={() => void open()}
         aria-haspopup="dialog"
-        className="min-h-tap inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-3 text-xs font-semibold text-accent-text"
+        className="min-h-tap inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border border-line bg-surface px-3 text-xs font-semibold text-accent-text"
       >
-        <span aria-hidden className="text-sm leading-none">👋</span>
+        <span aria-hidden className="hidden text-sm leading-none min-[400px]:inline">
+          👋
+        </span>
         Wer bist du?
       </button>
     );

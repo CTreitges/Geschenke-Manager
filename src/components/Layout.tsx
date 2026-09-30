@@ -21,7 +21,7 @@ export function Layout({ children }: { children: ReactNode }) {
     >
       <header className="sticky top-0 z-30 backdrop-blur border-b border-stone-200 dark:border-stone-800 bg-stone-50/80 dark:bg-stone-900/80">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="text-base font-semibold tracking-tight">
+          <Link to="/" className="shrink-0 whitespace-nowrap text-base font-semibold tracking-tight">
             🎁 Geschenke
           </Link>
           <div className="flex items-center gap-1.5">

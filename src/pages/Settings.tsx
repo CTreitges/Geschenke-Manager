@@ -59,9 +59,7 @@ export default function Settings() {
 
   async function chooseIdentity() {
     const result = await identityPrompt.open();
-    if (result.kind !== "picked") return;
-    const p = persons.find((x) => x.id === result.personId);
-    toast.success(p ? `Du bist jetzt ${p.name}` : "Willkommen in der Gruppe!");
+    if (result.kind === "picked") toast.success(`Du bist jetzt ${result.name}`);
   }
 
   function toggleDark() {

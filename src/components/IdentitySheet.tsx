@@ -20,7 +20,7 @@ import type { ID, Person } from "@/lib/types";
 // History-Eintrag geschlossen ist, damit ein navigate() danach nicht
 // vom asynchronen history.back() überholt wird.
 
-export type IdentityResult = { kind: "picked"; personId: ID } | { kind: "later" } | { kind: "dismissed" };
+export type IdentityResult = { kind: "picked"; personId: ID; name: string } | { kind: "later" } | { kind: "dismissed" };
 
 export type IdentityPromptOptions = {
   /** Satz unter dem Titel: warum wir gerade fragen. */
@@ -116,13 +116,18 @@ function IdentityPicker({ options, onDone }: { options: IdentityPromptOptions; o
     return (
       <ConfirmStep
         person={step.person}
-        onYes={() => onDone({ kind: "picked", personId: step.person.id })}
+        onYes={() => onDone({ kind: "picked", personId: step.person.id, name: step.person.name })}
         onBack={() => setStep({ kind: "pick" })}
       />
     );
   }
   if (step.kind === "create") {
-    return <CreateStep onCreated={(id) => onDone({ kind: "picked", personId: id })} onBack={() => setStep({ kind: "pick" })} />;
+    return (
+      <CreateStep
+        onCreated={(id, name) => onDone({ kind: "picked", personId: id, name })}
+        onBack={() => setStep({ kind: "pick" })}
+      />
+    );
   }
   return (
     <PickStep
@@ -238,7 +243,7 @@ function ConfirmStep({ person, onYes, onBack }: { person: Person; onYes: () => v
   );
 }
 
-function CreateStep({ onCreated, onBack }: { onCreated: (id: ID) => void; onBack: () => void }) {
+function CreateStep({ onCreated, onBack }: { onCreated: (id: ID, name: string) => void; onBack: () => void }) {
   const [name, setName] = useState("");
   const [birthday, setBirthday] = useState("");
   const [busy, setBusy] = useState(false);
@@ -249,7 +254,7 @@ function CreateStep({ onCreated, onBack }: { onCreated: (id: ID) => void; onBack
     setBusy(true);
     try {
       const id = await addPerson({ name: trimmed, birthday, color: pickColor(trimmed) });
-      onCreated(id);
+      onCreated(id, trimmed);
     } catch {
       toast.error("Anlegen hat nicht geklappt – bitte nochmal");
       setBusy(false);

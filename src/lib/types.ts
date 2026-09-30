@@ -71,6 +71,17 @@ export interface WishlistItem {
   url?: string;
   price?: number;
   createdAt: number;
+  /** Freitext: Größe, Farbe, Variante („Schwarz, nicht die XM5“). */
+  note?: string;
+  /** Herzenswunsch (steht oben). */
+  favorite?: boolean;
+  /** Identität dessen, der den Wunsch notiert hat; leer = Altbestand bzw. ohne Identität. */
+  addedBy?: ID;
+  /** Zuletzt bearbeitet bzw. „Noch aktuell ✓“ bestätigt. */
+  updatedAt?: number;
+  /** Beim „Geschenk erhalten“ gesetzt, wenn eine ausgewählte Idee aus diesem Wunsch stammt. */
+  fulfilledAt?: number;
+  fulfilledGiftId?: ID;
 }
 
 export type { PollCloseReason, PollStatus } from "@shared/poll";

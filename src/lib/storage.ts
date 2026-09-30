@@ -21,10 +21,13 @@ import {
 import { getGiftLocks, normalizePoll, pollPhase, type PollCloseReason } from "@shared/poll";
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
+import { getIdentity } from "./auth";
 import { auth, authReady, db, functions } from "./firebase";
 import { dedupPlan, personDeletion } from "./cascade";
 import { isFeedbackOwner } from "./feedback-owner";
+import { toUpdate } from "./patch";
 import { assertNotRecipient } from "./spoiler";
+import { adoptedSuggestionId, fulfilledWishIds } from "./wishlist";
 import {
   closeFields,
   extendedEndsAt,
@@ -707,12 +710,22 @@ function closeActivePollInBatch(
   batch.update(gdoc("polls", giftId), { ...closeFields(poll, by, now) });
 }
 
-/** Geschenk erhalten; eine noch aktive Abstimmung endet im selben Batch. */
+/**
+ * Geschenk erhalten; eine noch aktive Abstimmung endet im selben Batch.
+ * Wünsche hinter ausgewählten Ideen gelten ab jetzt als bekommen.
+ */
 export async function markReceived(giftId: ID, closedBy?: ID | null) {
   const now = Date.now();
   const batch = writeBatch(db);
   batch.update(gdoc("gifts", giftId), { status: "received", receivedAt: now });
   closeActivePollInBatch(batch, giftId, { closedBy, reason: "gift-received" }, now);
+  const gift = state.gifts.find((g) => g.id === giftId);
+  if (gift) {
+    const wishIds = new Set(state.wishlist.map((w) => w.id));
+    for (const wid of fulfilledWishIds(gift, state.suggestions, wishIds)) {
+      batch.update(gdoc("wishlist", wid), { fulfilledAt: now, fulfilledGiftId: giftId });
+    }
+  }
   await batch.commit();
 }
 
@@ -785,7 +798,8 @@ export async function updateSuggestion(id: ID, patch: Partial<Suggestion>) {
   if (!isPaidByOnlyPatch(patch)) {
     assertUnlocked(state.suggestions.find((s) => s.id === id)?.giftId, "editIdea");
   }
-  await updateDoc(gdoc("suggestions", id), clean(patch as Record<string, unknown>));
+  // Geleerte Felder (Link, Preis) wirklich löschen (B26).
+  await updateDoc(gdoc("suggestions", id), toUpdate(patch as Record<string, unknown>, deleteField));
 }
 
 /** Rückgängig nach dem Löschen: gleiche ID, gleiche Felder (setDoc). */
@@ -800,12 +814,57 @@ export async function setPaidBy(suggestionId: ID, personId: ID | null) {
 }
 
 // ─── Wishlist ───────────────────────────────────────────
-export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt">) {
-  await addDoc(gcol("wishlist"), clean({ ...w, createdAt: Date.now() }));
+/** Neuer Wunsch; addedBy = aktuelle Identität (falls gesetzt). Liefert die neue ID. */
+export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt" | "addedBy">): Promise<ID> {
+  const ref = await addDoc(gcol("wishlist"), clean({ ...w, addedBy: getIdentity() ?? undefined, createdAt: Date.now() }));
+  return ref.id;
+}
+
+/** Bearbeiten bzw. „Noch aktuell ✓“: setzt updatedAt; undefined löscht ein Feld. */
+export async function updateWishItem(id: ID, patch: Partial<Omit<WishlistItem, "id" | "personId" | "createdAt">>) {
+  await updateDoc(gdoc("wishlist", id), toUpdate({ ...patch, updatedAt: Date.now() }, deleteField));
 }
 
 export async function deleteWishItem(id: ID) {
   await deleteDoc(gdoc("wishlist", id));
+}
+
+/** Rückgängig nach dem Löschen: gleiche ID, gleiche Felder (setDoc). */
+export async function restoreWishItem(w: WishlistItem) {
+  const { id, ...data } = w;
+  await setDoc(gdoc("wishlist", id), clean(data as Record<string, unknown>));
+}
+
+/**
+ * Wunsch als Idee ins Geschenk übernehmen. Deterministische ID
+ * wish_{giftId}_{wishId}: Doppeltipp oder zwei Leute gleichzeitig ergeben
+ * keine Duplikate (created = false, wenn schon übernommen). Wirft
+ * PollLockedError während der Abstimmung; ohne Identität bzw. als
+ * beschenkte Person geht es nicht.
+ */
+export async function adoptWish(
+  giftId: ID,
+  wish: WishlistItem,
+  by: ID | null | undefined,
+): Promise<{ id: ID; created: boolean }> {
+  if (!by) throw new Error("Wähle erst, wer du bist.");
+  assertNotRecipient(state.gifts.find((g) => g.id === giftId), by);
+  assertUnlocked(giftId, "adoptWish");
+  const id = adoptedSuggestionId(giftId, wish.id);
+  if (state.suggestions.some((s) => s.id === id)) return { id, created: false };
+  await setDoc(
+    gdoc("suggestions", id),
+    clean({
+      giftId,
+      title: wish.title,
+      url: wish.url,
+      price: wish.price,
+      suggestedBy: by,
+      fromWishItemId: wish.id,
+      createdAt: Date.now(),
+    }),
+  );
+  return { id, created: true };
 }
 
 // ─── Polls ──────────────────────────────────────────────

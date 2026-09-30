@@ -18,6 +18,26 @@ let waiters: Array<() => void> = [];
 let listening = false;
 let savedOverflow: string | null = null;
 
+/** Beobachter der Anzahl offener Sheets (z. B. der Toaster, der dann nach oben rückt). */
+const sheetListeners = new Set<() => void>();
+
+function notifySheets() {
+  sheetListeners.forEach((l) => l());
+}
+
+/** Anzahl offener Sheets – für useSyncExternalStore. */
+export function openSheetCount(): number {
+  return stack.length;
+}
+
+/** Meldet Änderungen an der Zahl offener Sheets; liefert die Abmeldung. */
+export function subscribeSheets(listener: () => void): () => void {
+  sheetListeners.add(listener);
+  return () => {
+    sheetListeners.delete(listener);
+  };
+}
+
 /** Sicherheitsnetz, falls ein erwartetes popstate nie eintrifft. */
 const SETTLE_TIMEOUT_MS = 1000;
 
@@ -86,6 +106,7 @@ export function registerSheet(close: () => void, opts: { history?: boolean } = {
   const entry: Entry = { id: ++seq, close, pushed: false, released: false };
   if (stack.length === 0) lockScroll();
   stack.push(entry);
+  notifySheets();
   if (!listening) {
     window.addEventListener("popstate", onPopState);
     listening = true;
@@ -108,6 +129,7 @@ export function registerSheet(close: () => void, opts: { history?: boolean } = {
       const i = stack.indexOf(entry);
       if (i >= 0) stack.splice(i, 1);
       if (stack.length === 0) unlockScroll();
+      notifySheets();
       // Nur zurückspringen, wenn wir noch auf dem eigenen Eintrag stehen.
       // Hat jemand inzwischen navigiert, bleibt der Eintrag liegen – ein
       // Zurückspringen würde sonst die Navigation rückgängig machen.

@@ -160,6 +160,23 @@ describe("registerSheet", () => {
   });
 });
 
+describe("subscribeSheets / openSheetCount", () => {
+  it("meldet Öffnen und Schließen, bis zur Abmeldung", () => {
+    const listener = vi.fn();
+    const off = mod.subscribeSheets(listener);
+    const a = mod.registerSheet(vi.fn());
+    expect(mod.openSheetCount()).toBe(1);
+    expect(listener).toHaveBeenCalledTimes(1);
+    a.release();
+    a.release(); // doppeltes release meldet nichts mehr
+    expect(mod.openSheetCount()).toBe(0);
+    expect(listener).toHaveBeenCalledTimes(2);
+    off();
+    mod.registerSheet(vi.fn()).release();
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe("whenHistorySettled", () => {
   it("löst sofort auf, wenn nichts abzuräumen ist", async () => {
     await expect(mod.whenHistorySettled()).resolves.toBeUndefined();

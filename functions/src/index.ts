@@ -6,6 +6,7 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
+import { shouldArchive } from "./archive";
 import { birthdayYearFor, daysUntil } from "./shared/dates";
 
 admin.initializeApp();
@@ -882,15 +883,8 @@ function renderHtmlPage(title: string, body: string): string {
 // gespeicherte Doc landet in /groups/{groupId}/_archive/{archiveId} und
 // kann vom Client per setDoc auf das Original-Doc wiederhergestellt
 // werden. Sichert die App gegen versteckte Überschreibungs-Bugs (siehe
-// ensureAutoGift-Vorfall am 2026-05-14).
-const ARCHIVABLE_COLLECTIONS = new Set([
-  "gifts",
-  "persons",
-  "suggestions",
-  "wishlist",
-  "polls",
-]);
-
+// ensureAutoGift-Vorfall am 2026-05-14). Welche Writes archiviert werden,
+// entscheidet shouldArchive (./archive.ts) — Polls nur bei Statuswechsel.
 export const archiveGroupDocChange = onDocumentWritten(
   {
     document: "groups/{groupId}/{collectionId}/{docId}",
@@ -898,13 +892,13 @@ export const archiveGroupDocChange = onDocumentWritten(
   },
   async (event) => {
     const { groupId, collectionId, docId } = event.params;
-    if (!ARCHIVABLE_COLLECTIONS.has(collectionId)) return;
     const before = event.data?.before;
-    if (!before?.exists) return; // Create-Events brauchen kein Archiv
-    const beforeData = before.data();
-    if (!beforeData) return;
-
     const after = event.data?.after;
+    const beforeData = before?.exists ? before.data() : undefined;
+    const afterData = after?.exists ? after.data() : undefined;
+    // !beforeData: Create-Events brauchen kein Archiv (auch in shouldArchive).
+    if (!beforeData || !shouldArchive(collectionId, beforeData, afterData)) return;
+
     const op = !after?.exists ? "delete" : "update";
 
     const archiveRef = db

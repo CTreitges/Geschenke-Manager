@@ -26,6 +26,7 @@ describe.each(Object.entries(themes))("Design-Tokens %s", (_name, t) => {
       "danger", "danger-soft", "glow",
       "status-open", "status-open-soft", "status-vote", "status-vote-soft",
       "status-done", "status-done-soft", "status-received", "status-received-soft",
+      "wish", "wish-text", "wish-soft",
     ]) {
       expect(t[key], key).toBeDefined();
     }
@@ -45,6 +46,13 @@ describe.each(Object.entries(themes))("Design-Tokens %s", (_name, t) => {
     for (const s of ["open", "vote", "done", "received"]) {
       expect(contrastRatio(t[`status-${s}`], t[`status-${s}-soft`]), s).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it("Wunsch-Amber: Text ≥ 4,5:1 auf wish-soft und surface, Stern/Kante ≥ 3:1", () => {
+    expect(contrastRatio(t["wish-text"], t["wish-soft"])).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(t["wish-text"], t.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(t.wish, t.surface)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(t.wish, t["wish-soft"])).toBeGreaterThanOrEqual(3);
   });
 
   it("Control-Ränder erreichen ≥ 3:1 (Nicht-Text-Kontrast)", () => {

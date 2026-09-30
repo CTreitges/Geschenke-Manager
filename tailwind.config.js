@@ -27,6 +27,7 @@ export default {
           received: c("status-received"),
           "received-soft": c("status-received-soft"),
         },
+        wish: { DEFAULT: c("wish"), text: c("wish-text"), soft: c("wish-soft") },
         glow: c("glow"),
       },
       // 9 Stufen, Minimum 11 px. xs/sm/base behalten die Tailwind-Zeilenhöhen,

@@ -14,9 +14,11 @@
      hell:   fg-muted auf surface 5,10:1 · auf canvas 4,88:1 · auf surface-2 4,54:1
              fg-soft auf surface-2 6,79:1 · line-control auf surface 3,69:1
              Status-Text auf -soft: open 6,59 · vote 6,37 · done 5,98 · received 4,84
+             wish-text auf wish-soft 6,84 · wish (Kante/Stern) auf surface 3,19
      dunkel: fg-muted auf surface 6,01:1 · auf canvas 6,93:1 · auf surface-2 4,74:1
              fg-soft auf surface-2 8,03:1 · line-control auf surface 3,16:1
              Status-Text auf -soft: open 8,32 · vote 10,39 · done 8,25 · received 9,94
+             wish-text auf wish-soft 9,55 · wish auf surface 9,09
      Weiß auf grad-primary: 6,29 (#4F46E5) bis 5,70:1 (#7C3AED). */
 :root {
   color-scheme: light;
@@ -42,6 +44,9 @@
   --gm-status-done-soft: 237 233 254;   /* violet-100 */
   --gm-status-received: 4 120 87;       /* emerald-700 – Erhalten */
   --gm-status-received-soft: 209 250 229; /* emerald-100 */
+  --gm-wish: 217 119 6;           /* amber-600 – Wünsche: Stern, Akzentkante */
+  --gm-wish-text: 146 64 14;      /* amber-800 */
+  --gm-wish-soft: 255 251 235;    /* amber-50 */
   --gm-glow: 237 233 254;         /* #EDE9FE Radial-Schein oben */
   --gm-grad-primary: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
   --gm-grad-hero: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%);
@@ -74,6 +79,9 @@
   --gm-status-done-soft: 46 16 101;
   --gm-status-received: 110 231 183;
   --gm-status-received-soft: 2 44 34;
+  --gm-wish: 251 191 36;          /* amber-400 */
+  --gm-wish-text: 252 211 77;     /* amber-300 */
+  --gm-wish-soft: 59 42 16;       /* #3B2A10 */
   --gm-glow: 46 16 101;
   --gm-shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.04);
   --gm-bg: rgb(var(--gm-canvas));

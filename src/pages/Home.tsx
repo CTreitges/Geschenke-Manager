@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button } from "@/components/ui";
+import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button, useConfirm } from "@/components/ui";
+import { SurpriseStackCard } from "@/components/surprise/SurpriseStackCard";
 import { useStore } from "@/lib/hooks";
 import {
   ageOnNextBirthday,
@@ -15,8 +16,9 @@ import {
 } from "@/lib/birthdays";
 import { addGift, deduplicateOpenGifts, deleteGift, ensureAutoGift } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
+import { isRecipient } from "@/lib/spoiler";
 import { toast } from "sonner";
-import type { Person } from "@/lib/types";
+import type { Gift, Person } from "@/lib/types";
 
 export default function Home() {
   const store = useStore();
@@ -55,6 +57,23 @@ export default function Home() {
   const myId = useIdentity();
   const me = persons.find((p) => p.id === myId);
   const heroDays = hero ? daysUntilBirthday(hero) : 0;
+  // Spoiler-Schutz: Habe ich selbst als Nächstes Geburtstag, führt der Hero zur Wunschliste.
+  const heroIsMe = !!hero && hero.id === myId;
+  const heroDaysText = heroDays === 0 ? "Heute! 🎉" : heroDays === 1 ? "Morgen" : `in ${heroDays} Tagen`;
+  const confirm = useConfirm();
+
+  async function removeGift(g: Gift, p: Person) {
+    const ok = await confirm({
+      title: `Geschenk für ${p.name} (${g.year}) entfernen?`,
+      body: "Alle Ideen und die Abstimmung gehen verloren.",
+      confirmLabel: "Entfernen",
+      tone: "danger",
+    });
+    if (!ok) return;
+    deleteGift(g.id)
+      .then(() => toast.success("Geschenk entfernt"))
+      .catch(() => toast.error("Entfernen hat nicht geklappt – bitte nochmal"));
+  }
 
   return (
     <div>
@@ -73,13 +92,15 @@ export default function Home() {
       {/* Hero card */}
       {hero && (
         <div className="px-4 pt-1 pb-4">
-          <div
+          <button
+            type="button"
             onClick={() => {
+              if (heroIsMe) return nav("/wishlist");
               const sg = stack.find((g) => g.personId === hero.id);
               if (sg) nav(`/gift/${sg.id}`);
               else nav(`/person/${hero.id}`);
             }}
-            className="relative overflow-hidden rounded-3xl text-white cursor-pointer"
+            className="relative block w-full overflow-hidden rounded-3xl text-left text-white cursor-pointer"
             style={{
               padding: "20px 20px 22px",
               background: "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
@@ -89,7 +110,7 @@ export default function Home() {
           >
             <Confetti active={heroDays <= 3} />
             <div className="flex items-center gap-2 text-[13px] font-semibold opacity-95">
-              <span>🎂</span> Als Nächstes hat Geburtstag …
+              <span>🎂</span> {heroIsMe ? "Als Nächstes hast du Geburtstag!" : "Als Nächstes hat Geburtstag …"}
             </div>
             <div className="flex items-end gap-3.5 mt-3">
               <Avatar person={hero} size={56} />
@@ -108,11 +129,12 @@ export default function Home() {
               style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)" }}
             >
               <div className="text-[22px] font-extrabold tracking-tight">
-                {heroDays === 0 ? "Heute! 🎉" : heroDays === 1 ? "Morgen" : `in ${heroDays} Tagen`}
+                {heroDaysText}
+                {heroIsMe && <span className="ml-1.5 text-sm font-semibold opacity-95">· Wunschliste pflegen</span>}
               </div>
               <Icon.chev className="opacity-90" />
             </div>
-          </div>
+          </button>
         </div>
       )}
 
@@ -145,6 +167,9 @@ export default function Home() {
           stack.map((g) => {
             const p = persons.find((x) => x.id === g.personId);
             if (!p) return null;
+            if (isRecipient(g, myId)) {
+              return <SurpriseStackCard key={g.id} gift={g} person={p} onOpen={() => nav("/wishlist")} />;
+            }
             return (
               <StackCard
                 key={g.id}
@@ -156,16 +181,7 @@ export default function Home() {
                 participants={g.participantIds.length}
                 budget={g.participantIds.length * g.budgetPerPerson}
                 onOpen={() => nav(`/gift/${g.id}`)}
-                onRemove={() => {
-                  if (
-                    confirm(
-                      `Geschenk für ${p.name} (${g.year}) aus dem Stack entfernen?\n\nAlle Vorschläge + die Abstimmung gehen verloren.`,
-                    )
-                  ) {
-                    deleteGift(g.id);
-                    toast.success(`Geschenk entfernt`);
-                  }
-                }}
+                onRemove={() => void removeGift(g, p)}
               />
             );
           })
@@ -272,7 +288,10 @@ function StackCard({
 }
 
 function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { persons, settings, gifts } = useStore();
+  const { persons: allPersons, settings, gifts } = useStore();
+  const myId = useIdentity();
+  // Geschenke für mich legen die anderen an (Spoiler-Schutz).
+  const persons = allPersons.filter((p) => p.id !== myId);
   const [personId, setPersonId] = useState("");
   const [year, setYear] = useState(new Date().getFullYear());
   const [occasion, setOccasion] = useState("Geburtstag");

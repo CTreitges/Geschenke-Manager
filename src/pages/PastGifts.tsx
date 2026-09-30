@@ -1,7 +1,10 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { Avatar, Chip, EmptyState, Icon, PageHeader } from "@/components/ui";
+import { useIdentity } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
+import { isRecipient } from "@/lib/spoiler";
 
 /**
  * History view: every received gift across all people, newest first.
@@ -10,6 +13,7 @@ import { useStore } from "@/lib/hooks";
 export default function PastGifts() {
   const { gifts, persons, suggestions } = useStore();
   const nav = useNavigate();
+  const myId = useIdentity();
 
   const past = useMemo(
     () =>
@@ -64,6 +68,8 @@ export default function PastGifts() {
               const p = personById[g.personId];
               const total = giftTotal(g.id);
               const occ = g.occasion ?? "Geburtstag";
+              // Eigene Geschenke ohne Betrag – Details zeigt die Überreicht-Ansicht.
+              const mine = isRecipient(g, myId);
               return (
                 <button
                   key={g.id}
@@ -80,9 +86,15 @@ export default function PastGifts() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className="text-[14px] font-bold tabular-nums text-violet-700 dark:text-violet-300">
-                      {total} €
-                    </div>
+                    {mine ? (
+                      <div>
+                        <SurpriseBadge label="für dich" />
+                      </div>
+                    ) : (
+                      <div className="text-[14px] font-bold tabular-nums text-violet-700 dark:text-violet-300">
+                        {total} €
+                      </div>
+                    )}
                     <Chip variant="success" className="mt-0.5">erhalten</Chip>
                   </div>
                   <Icon.chev />

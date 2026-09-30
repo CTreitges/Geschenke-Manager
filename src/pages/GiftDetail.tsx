@@ -16,6 +16,7 @@ import { DecisionSheet } from "@/components/poll/DecisionSheet";
 import { NowCard } from "@/components/poll/NowCard";
 import { StartSheet } from "@/components/poll/StartSheet";
 import { IdentityGate } from "@/components/surprise/IdentityGate";
+import { SurpriseScreen } from "@/components/surprise/SurpriseScreen";
 import { usePollSheets } from "@/components/poll/usePollSheets";
 import { VoteSheet } from "@/components/poll/VoteSheet";
 import { useGroupId, useIdentity } from "@/lib/auth";
@@ -27,6 +28,7 @@ import { pollModel } from "@/lib/pollModel";
 import { lockMessage, startPollBlocker } from "@/lib/pollOps";
 import { markPrompted, votePromptKey } from "@/lib/pollPrompts";
 import { sortIdeas } from "@/lib/pollView";
+import { surprisePhase } from "@/lib/spoiler";
 import { markReceived, startPoll } from "@/lib/storage";
 import type { Gift, Person } from "@/lib/types";
 import { useNow } from "@/lib/useNow";
@@ -62,8 +64,11 @@ export default function GiftDetail() {
       </div>
     );
   }
-  // Ab hier keine Hooks mehr (Early-Returns). Ohne Identität zuerst fragen –
-  // außer „nur ansehen“ wurde in dieser Sitzung gewählt oder es ist vorbei.
+  // Ab hier keine Hooks mehr (Early-Returns). Spoiler-Schutz: die beschenkte
+  // Person sieht nur die Überraschungs-Ansicht.
+  const surprise = surprisePhase(gift, myId);
+  if (surprise !== "none") return <SurpriseScreen gift={gift} person={person} phase={surprise} onBack={back} />;
+  // Ohne Identität zuerst fragen – außer „nur ansehen“ gilt schon oder es ist vorbei.
   const skipped = skippedNow || isIdentitySkipped(groupId);
   if (!myId && !skipped && gift.status !== "received") {
     return (

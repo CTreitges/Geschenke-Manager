@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
+import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader, useConfirm } from "@/components/ui";
 import { BirthdayPicker } from "@/components/BirthdayPicker";
+import { GiftsTab } from "@/components/person/GiftsTab";
+import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { useStore } from "@/lib/hooks";
+import { mySurpriseGiftIds } from "@/lib/spoiler";
 import {
-  addGift,
   addWishItem,
-  deleteGift,
   deletePerson,
   deleteWishItem,
   sendTestMailCF,
@@ -14,12 +15,11 @@ import {
 } from "@/lib/storage";
 import {
   ageOnNextBirthday,
-  birthdayYearForPerson,
   daysUntilBirthday,
   formatBirthday,
 } from "@/lib/birthdays";
 import type { WishlistItem, Person } from "@/lib/types";
-import { getIdentity, setIdentity } from "@/lib/auth";
+import { getIdentity, setIdentity, useIdentity } from "@/lib/auth";
 import { formatRelativeDate } from "@/lib/dates";
 import { toast } from "sonner";
 
@@ -31,6 +31,7 @@ export default function PersonDetail() {
   const nav = useNavigate();
   const person = persons.find((p) => p.id === id);
   const [tab, setTab] = useState<Tab>("wishlist");
+  const isMe = useIdentity() === id;
 
   if (!person) {
     return (
@@ -70,7 +71,8 @@ export default function PersonDetail() {
             {person.email || "keine Mail"}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {stack.length > 0 && <Chip variant="accent">{stack.length} im Stack</Chip>}
+            {stack.length > 0 &&
+              (isMe ? <SurpriseBadge label="Überraschung läuft" /> : <Chip variant="accent">{stack.length} im Stack</Chip>)}
             <Chip variant="neutral">{myWishes.length} Wünsche</Chip>
             <Chip variant="neutral">{past.length} erhalten</Chip>
           </div>
@@ -96,7 +98,7 @@ export default function PersonDetail() {
 
       <div className="px-4 py-4 pb-24">
         {tab === "wishlist" && <WishlistTab personId={person.id} person={person} items={myWishes} />}
-        {tab === "gifts" && <GiftsTab person={person} stack={stack} past={past} />}
+        {tab === "gifts" && <GiftsTab person={person} stack={stack} past={past} isMe={isMe} />}
         {tab === "profile" && <ProfileTab person={person} />}
       </div>
     </div>
@@ -217,219 +219,10 @@ function WishlistTab({ personId, person, items }: { personId: string; person: Pe
   );
 }
 
-function GiftsTab({
-  person,
-  stack,
-  past,
-}: {
-  person: Person;
-  stack: import("@/lib/types").Gift[];
-  past: import("@/lib/types").Gift[];
-}) {
-  const nav = useNavigate();
-  const { settings } = useStore();
-  const all = [...stack, ...past];
-
-  const [newGiftOpen, setNewGiftOpen] = useState(false);
-  const [newGiftYear, setNewGiftYear] = useState(birthdayYearForPerson(person));
-  const [newGiftOccasion, setNewGiftOccasion] = useState("Geburtstag");
-  const [useCustomDate, setUseCustomDate] = useState(false);
-  const [customDate, setCustomDate] = useState("");
-
-  function createGift() {
-    const occ = newGiftOccasion.trim() || "Geburtstag";
-    const finalDate = useCustomDate && customDate ? customDate : undefined;
-    // Carry over the last gift's group-chat link for the same person+occasion
-    const lastSameKind = [...stack, ...past]
-      .filter((g) => (g.occasion ?? "Geburtstag") === occ)
-      .sort((a, b) => b.enteredStackAt - a.enteredStackAt)[0];
-    addGift({
-      personId: person.id,
-      year: finalDate ? +finalDate.slice(0, 4) || newGiftYear : newGiftYear,
-      status: "open",
-      budgetPerPerson: settings.defaultBudget,
-      manuallyAdded: true,
-      occasion: occ,
-      customDate: finalDate,
-      whatsappLink: lastSameKind?.whatsappLink,
-    });
-    toast.success(`Geschenk angelegt`);
-    setNewGiftOpen(false);
-    setNewGiftOccasion("Geburtstag");
-    setUseCustomDate(false);
-    setCustomDate("");
-  }
-
-  function removeGift(g: import("@/lib/types").Gift) {
-    if (
-      !confirm(
-        `Geschenk ${g.year} für ${person.name} wirklich löschen?\n\nVorschläge + Abstimmung gehen verloren.`,
-      )
-    )
-      return;
-    deleteGift(g.id);
-    toast.success("Gelöscht");
-  }
-
-  const byYear: Record<number, typeof all> = {};
-  all.forEach((g) => {
-    (byYear[g.year] ||= []).push(g);
-  });
-  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
-
-  return (
-    <div>
-      {all.length === 0 ? (
-        <EmptyState
-          emoji="🎁"
-          title="Noch kein Geschenk hier"
-          subtitle={`Lege ein neues Geschenk für ${person.name} an.`}
-        />
-      ) : (
-        years.map((y) => (
-          <div key={y} className="mb-4">
-            <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 mb-2 pl-1">
-              {y}
-            </div>
-            <div className="flex flex-col gap-2">
-              {byYear[y].map((g) => (
-                <div
-                  key={g.id}
-                  className="px-3.5 py-3 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2.5"
-                >
-                  <button
-                    onClick={() => nav(`/gift/${g.id}`)}
-                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
-                  >
-                    <div
-                      className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
-                      style={{
-                        background:
-                          g.status !== "received"
-                            ? "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)"
-                            : undefined,
-                        color: g.status !== "received" ? "#fff" : undefined,
-                      }}
-                    >
-                      {g.status !== "received" ? (
-                        <Icon.gift />
-                      ) : (
-                        <span className="text-stone-500">
-                          <Icon.gift />
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
-                        {g.occasion ?? "Geburtstag"} {y}
-                      </div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                        {g.status !== "received"
-                          ? `${g.participantIds.length} Personen · ${g.participantIds.length * g.budgetPerPerson} €`
-                          : "erhalten"}
-                      </div>
-                    </div>
-                    <Chip
-                      variant={
-                        g.status === "open"
-                          ? "info"
-                          : g.status === "confirmed"
-                            ? "accent"
-                            : "success"
-                      }
-                    >
-                      {g.status === "open"
-                        ? "offen"
-                        : g.status === "confirmed"
-                          ? "bestätigt"
-                          : "erhalten"}
-                    </Chip>
-                  </button>
-                  <button
-                    onClick={() => removeGift(g)}
-                    className="text-stone-500 dark:text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 p-2 rounded-lg shrink-0"
-                    aria-label="Geschenk löschen"
-                    title="Geschenk löschen"
-                  >
-                    <Icon.trash />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
-
-      {!newGiftOpen ? (
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setNewGiftYear(birthdayYearForPerson(person));
-            setNewGiftOpen(true);
-          }}
-          className="w-full mt-1"
-        >
-          <Icon.plus /> Neues Geschenk anlegen
-        </Button>
-      ) : (
-        <div className="bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] p-3.5 mt-1 space-y-2.5">
-          <Input
-            label="Anlass"
-            type="text"
-            value={newGiftOccasion}
-            onChange={(e) => setNewGiftOccasion(e.target.value)}
-            placeholder="z.B. Geburtstag, Reise, Hochzeit"
-          />
-          <Input
-            label="Jahr"
-            type="number"
-            value={newGiftYear}
-            onChange={(e) => setNewGiftYear(parseInt(e.target.value, 10) || newGiftYear)}
-            disabled={useCustomDate}
-          />
-          <label className="flex items-start gap-3 cursor-pointer select-none py-1 px-0.5">
-            <input
-              type="checkbox"
-              checked={useCustomDate}
-              onChange={(e) => setUseCustomDate(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-violet-600"
-            />
-            <span className="text-[14px] text-stone-700 dark:text-stone-200">
-              Anderes Datum (statt {person.name}s Geburtstag)
-            </span>
-          </label>
-          {useCustomDate && (
-            <Input
-              label="Datum"
-              type="date"
-              value={customDate}
-              onChange={(e) => setCustomDate(e.target.value)}
-            />
-          )}
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setNewGiftOpen(false)}
-              className="flex-1"
-            >
-              Abbrechen
-            </Button>
-            <Button
-              onClick={createGift}
-              disabled={useCustomDate && !customDate}
-              className="flex-1"
-            >
-              Anlegen
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ProfileTab({ person }: { person: Person }) {
   const nav = useNavigate();
+  const confirm = useConfirm();
+  const { gifts } = useStore();
   const [name, setName] = useState(person.name);
   const [bd, setBd] = useState(person.birthday);
   const [email, setEmail] = useState(person.email ?? "");
@@ -463,13 +256,28 @@ function ProfileTab({ person }: { person: Person }) {
     toast.success("Gespeichert");
   }
 
-  function remove() {
+  async function remove() {
     const isSelf = getIdentity() === person.id;
-    const msg = isSelf
-      ? `${person.name} wirklich löschen?\n\nDas ist deine aktuelle Identität — danach bist du wieder „niemand" und kannst dich neu zuordnen.\n\nAlle Geschenke + Wünsche werden mitgelöscht.`
-      : `${person.name} wirklich löschen? Alle Geschenke + Wünsche gehen verloren.`;
-    if (!confirm(msg)) return;
-    deletePerson(person.id);
+    // Warnen statt verbieten: eine laufende Planung geht mit verloren.
+    const planning = mySurpriseGiftIds(gifts, person.id).size > 0;
+    const body = [
+      planning &&
+        (isSelf
+          ? "Für dich läuft gerade eine Überraschung – die Planung deiner Freunde geht dabei verloren."
+          : `Für ${person.name} wird gerade geplant – Ideen und Abstimmung gehen dabei verloren.`),
+      isSelf && "Das ist deine aktuelle Identität – danach kannst du dich neu zuordnen.",
+      "Alle Geschenke, Ideen und Wünsche werden mitgelöscht.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const ok = await confirm({ title: `${person.name} wirklich löschen?`, body, confirmLabel: "Löschen", tone: "danger" });
+    if (!ok) return;
+    try {
+      await deletePerson(person.id);
+    } catch {
+      toast.error("Löschen hat nicht geklappt – bitte nochmal");
+      return;
+    }
     if (isSelf) setIdentity(null);
     toast.success("Gelöscht");
     nav("/people");
@@ -512,7 +320,7 @@ function ProfileTab({ person }: { person: Person }) {
           {testing ? "Sende Test-Mail…" : `🧪 Test-Mail an ${person.email} senden`}
         </Button>
       )}
-      <Button variant="danger" onClick={remove} className="w-full mt-3.5">
+      <Button variant="danger" onClick={() => void remove()} className="w-full mt-3.5">
         <Icon.trash /> Person löschen
       </Button>
     </div>

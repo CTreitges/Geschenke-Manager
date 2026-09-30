@@ -1,4 +1,8 @@
 import * as admin from "firebase-admin";
+// FieldValue & Co. modular importieren: Der Functions-Emulator ersetzt
+// firebase-admin durch einen Proxy, der admin.firestore gebunden liefert –
+// statische Member wie admin.firestore.FieldValue sind dort undefined.
+import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
@@ -147,7 +151,7 @@ async function migrateLegacyHash(
     version: 1,
   });
   batch.update(db.doc(`groups/${groupId}`), {
-    passwordHash: admin.firestore.FieldValue.delete(),
+    passwordHash: FieldValue.delete(),
   });
   await batch.commit();
   return true;
@@ -816,7 +820,7 @@ export const archiveGroupDocChange = onDocumentWritten(
       docId,
       op,
       data: beforeData,
-      archivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      archivedAt: FieldValue.serverTimestamp(),
     });
 
     logger.info("archived", { groupId, collectionId, docId, op });

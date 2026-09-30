@@ -236,7 +236,7 @@ function StackCard({
 
   return (
     <div className="relative rounded-card border border-line-subtle bg-surface shadow-card">
-      <button type="button" onClick={() => onOpen()} className="flex w-full items-start gap-2.5 py-3 pl-3 pr-3 text-left">
+      <button type="button" onClick={() => onOpen()} className="flex w-full items-start gap-2.5 pb-2 pl-3 pr-3 pt-3 text-left">
         {/* Initialen nicht mitlesen: der Button-Name beginnt mit dem Namen */}
         <span aria-hidden>
           <Avatar person={person} size={42} />
@@ -254,35 +254,38 @@ function StackCard({
               {formatDaysShort(days)}
             </span>
           </span>
-          <span className={cn("mt-1 block truncate pr-10 text-meta font-semibold", PHASE_TEXT[info.phase])}>{info.label}</span>
-          <span className={cn("mt-1 flex items-center gap-1 text-xs text-fg-muted", badge && "pr-32")}>
-            <Icon.users size={12} />
-            <span className="sr-only">Teilnehmer:</span>
-            {participants} · {formatEuro(participants * gift.budgetPerPerson)}
-          </span>
+          <span className={cn("mt-1 block truncate pr-8 text-meta font-semibold", PHASE_TEXT[info.phase])}>{info.label}</span>
         </span>
       </button>
       <div className="absolute right-0.5 top-0.5">{menu}</div>
-      {badge && (
-        <button
-          type="button"
-          onClick={() => onOpen(badge === "du-fehlst")}
-          className={cn(
-            "absolute bottom-1.5 right-2 inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-xs font-bold",
-            badge === "du-fehlst" ? "bg-status-vote-soft text-status-vote" : "bg-accent-soft text-accent-text",
-          )}
-        >
-          {badge === "du-fehlst" ? (
-            <>
-              <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-status-vote" />
-              Du fehlst
-              <span className="sr-only"> – jetzt abstimmen</span>
-            </>
-          ) : (
-            "Bezahlung offen"
-          )}
-        </button>
-      )}
+      {/* Teilnehmer/Budget und ggf. Badge in einer Zeile unter dem Text (Badge ist ein eigener Knopf) */}
+      <div className="flex min-h-7 items-center justify-between gap-2 pb-2.5 pl-16 pr-2.5">
+        <span className="flex items-center gap-1 text-xs text-fg-muted">
+          <Icon.users size={12} />
+          <span className="sr-only">Teilnehmer:</span>
+          {participants} · {formatEuro(participants * gift.budgetPerPerson)}
+        </span>
+        {badge && (
+          <button
+            type="button"
+            onClick={() => onOpen(badge === "du-fehlst")}
+            className={cn(
+              "-my-1 inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-bold",
+              badge === "du-fehlst" ? "bg-status-vote-soft text-status-vote" : "bg-accent-soft text-accent-text",
+            )}
+          >
+            {badge === "du-fehlst" ? (
+              <>
+                <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-status-vote" />
+                Du fehlst
+                <span className="sr-only"> – jetzt abstimmen</span>
+              </>
+            ) : (
+              "Bezahlung offen"
+            )}
+          </button>
+        )}
+      </div>
     </div>
   );
 }

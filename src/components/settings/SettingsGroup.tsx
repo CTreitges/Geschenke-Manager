@@ -5,7 +5,7 @@ import { cn } from "@/lib/cn";
 // Bausteine der Einstellungen: Gruppe (Überschrift + Karte) und Zeile.
 // Zeilen mit onClick sind echte Buttons mit Pfeil, alle anderen nicht.
 
-export function SettingsGroup({ title, tone, children }: { title: string; tone?: "danger"; children: ReactNode }) {
+export function SettingsGroup({ title, tone, children }: { title: ReactNode; tone?: "danger"; children: ReactNode }) {
   return (
     <section className="mb-5">
       <h2

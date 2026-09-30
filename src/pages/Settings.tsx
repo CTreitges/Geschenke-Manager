@@ -192,7 +192,14 @@ export default function Settings() {
           <NotificationsBlock groupId={groupId} />
         </SettingsGroup>
 
-        <SettingsGroup title={`Gruppe „${groupId ?? "—"}“`}>
+        {/* Gruppen-IDs unterscheiden Groß/Klein – nicht in Versalien setzen */}
+        <SettingsGroup
+          title={
+            <>
+              Gruppe <span className="normal-case">„{groupId ?? "—"}“</span>
+            </>
+          }
+        >
           <SettingsRow label="Gruppen-ID" hint="Teile ID + Passwort mit deinen Freunden" icon={<Icon.users size={18} />}>
             <span className="text-sm font-bold tabular-nums text-fg">{groupId ?? "—"}</span>
           </SettingsRow>

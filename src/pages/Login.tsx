@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button, Icon, Input } from "@/components/ui";
 import { addKnownGroup, getGroupId, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
+import { loginTarget } from "@/lib/nav";
 import { joinGroupCF, listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -13,6 +14,9 @@ export default function Login() {
   const [shake, setShake] = useState(false);
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
+  // Nach dem Login zurück dorthin, wo RequireAuth abgefangen hat (inkl. ?vote=1).
+  const returnTo = loginTarget(useLocation().state);
+  const goToTarget = () => nav(returnTo, { replace: true });
   const knownGroups = useKnownGroups();
   const showSaved = isAuthed() && knownGroups.length > 0;
   const fbUser = useFirebaseUser();
@@ -54,7 +58,7 @@ export default function Login() {
       // points to a group we weren't a member of yet).
       setActiveGroup(id);
       toast.success("Reingekommen 🎉");
-      nav("/");
+      goToTarget();
     } finally {
       setBusy(false);
     }
@@ -92,7 +96,7 @@ export default function Login() {
         setGroupId(target);
         setAuthed(true);
         setActiveGroup(target);
-        nav("/");
+        goToTarget();
         return;
       }
       // No groups yet → user falls back to the password form / create flow.
@@ -207,7 +211,7 @@ export default function Login() {
                 key={g}
                 onClick={() => {
                   setGroupId(g);
-                  nav("/");
+                  goToTarget();
                 }}
                 className={`w-full px-3.5 py-2.5 flex items-center gap-2 hover:bg-stone-50 dark:hover:bg-stone-700/40 ${
                   i > 0 ? "border-t border-stone-100 dark:border-stone-700" : ""

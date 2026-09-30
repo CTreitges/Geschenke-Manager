@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeTab, canGoBack } from "./nav";
+import { activeTab, canGoBack, loginTarget } from "./nav";
 
 describe("canGoBack", () => {
   it("true ab dem zweiten App-Eintrag", () => {
@@ -41,5 +41,23 @@ describe("activeTab", () => {
     expect(activeTab("/help")).toBeNull();
     expect(activeTab("/whats-new")).toBeNull();
     expect(activeTab("/giftx")).toBeNull();
+  });
+});
+
+describe("loginTarget", () => {
+  it("führt nach dem Login zurück zum gemerkten Ziel inkl. Query und Hash", () => {
+    expect(loginTarget({ from: { pathname: "/gift/anna_2026", search: "?vote=1", hash: "" } })).toBe("/gift/anna_2026?vote=1");
+    expect(loginTarget({ from: { pathname: "/person/ben", search: "", hash: "#profil" } })).toBe("/person/ben#profil");
+  });
+
+  it("fällt ohne gültiges Ziel auf die Übersicht zurück", () => {
+    expect(loginTarget(null)).toBe("/");
+    expect(loginTarget(undefined)).toBe("/");
+    expect(loginTarget({})).toBe("/");
+    expect(loginTarget({ from: { pathname: "/login" } })).toBe("/");
+    expect(loginTarget({ from: { pathname: "/login/new" } })).toBe("/");
+    expect(loginTarget({ from: { pathname: "//evil.example" } })).toBe("/");
+    expect(loginTarget({ from: { pathname: "https://evil.example/x" } })).toBe("/");
+    expect(loginTarget({ from: { pathname: "/", search: "vote=1" } })).toBe("/");
   });
 });

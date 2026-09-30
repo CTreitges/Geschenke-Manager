@@ -67,3 +67,17 @@ export function activeTab(pathname: string): TabKey | null {
   if (pathname === "/feedback") return "feedback";
   return null;
 }
+
+/**
+ * Ziel nach dem Login: der von RequireAuth gemerkte Ort (state.from) samt
+ * Query und Hash – z. B. /gift/anna_2026?vote=1 –, sonst „/“. Nur App-interne
+ * Pfade, nie zurück auf /login.
+ */
+export function loginTarget(state: unknown): string {
+  const from = (state as { from?: { pathname?: unknown; search?: unknown; hash?: unknown } } | null | undefined)?.from;
+  const path = typeof from?.pathname === "string" ? from.pathname : "";
+  if (!path.startsWith("/") || path.startsWith("//") || path === "/login" || path.startsWith("/login/")) return "/";
+  const search = typeof from?.search === "string" && from.search.startsWith("?") ? from.search : "";
+  const hash = typeof from?.hash === "string" && from.hash.startsWith("#") ? from.hash : "";
+  return path + search + hash;
+}

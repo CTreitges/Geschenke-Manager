@@ -1,8 +1,8 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
-import { Toaster } from "sonner";
 import App from "./App";
+import { AppToaster } from "./components/AppToaster";
 import { ConfirmProvider } from "./components/ui";
 import { PWAUpdatePrompt } from "./components/PWAUpdatePrompt";
 import "./index.css";
@@ -12,7 +12,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <BrowserRouter>
       <ConfirmProvider>
         <App />
-        <Toaster position="top-center" richColors />
+        <AppToaster />
         <PWAUpdatePrompt />
       </ConfirmProvider>
     </BrowserRouter>

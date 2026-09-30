@@ -53,6 +53,26 @@ describe.each(Object.entries(themes))("Design-Tokens %s", (_name, t) => {
   });
 });
 
+describe("Globale a11y-Regeln in index.css", () => {
+  it("hat einen sichtbaren :focus-visible-Ring in Akzentfarbe", () => {
+    expect(css).toMatch(/:focus-visible\s*\{[^}]*outline:\s*2px solid rgb\(var\(--gm-accent\)\)/);
+  });
+
+  it("schaltet Animationen bei prefers-reduced-motion ab", () => {
+    const block = /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/.exec(css)?.[1] ?? "";
+    expect(block).toMatch(/animation-duration:\s*0\.01ms !important/);
+    expect(block).toMatch(/animation-iteration-count:\s*1 !important/);
+    expect(block).toMatch(/transition-duration:\s*0\.01ms !important/);
+  });
+
+  it("blendet Scrollbars nur bei pointer: coarse aus", () => {
+    const hidden = [...css.matchAll(/::-webkit-scrollbar\s*\{\s*width:\s*0/g)];
+    expect(hidden).toHaveLength(1);
+    const before = css.slice(0, hidden[0].index);
+    expect(before.lastIndexOf("@media (pointer: coarse)")).toBeGreaterThan(before.lastIndexOf("}"));
+  });
+});
+
 describe("Design-Tokens: Alias", () => {
   it("--gm-bg bleibt als Alias auf canvas erhalten", () => {
     expect(css).toMatch(/--gm-bg:\s*rgb\(var\(--gm-canvas\)\)/);

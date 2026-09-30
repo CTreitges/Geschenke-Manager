@@ -40,6 +40,40 @@ export function claimedPersonIds(
 }
 
 /**
+ * Gültige Identität: nur, wenn die Person (noch) existiert – sonst null, damit
+ * Spoiler-Schutz und Identitäts-Gates greifen (Person gelöscht oder neu
+ * angelegt). Solange die Personen der aktiven Gruppe nicht geladen sind
+ * (`ready` false, auch direkt nach einem Gruppenwechsel), gilt die gespeicherte.
+ */
+export function liveIdentity(
+  raw: ID | null | undefined,
+  c: { persons: readonly Pick<Person, "id">[]; ready: boolean },
+): ID | null {
+  if (!raw) return null;
+  if (!c.ready) return raw;
+  return c.persons.some((p) => p.id === raw) ? raw : null;
+}
+
+/**
+ * Was beim Aufräumen einer veralteten Identität zu leeren ist: `local`
+ * (localStorage, samt Cloud über setIdentity) bzw. nur `cloud` (Member-Doc
+ * zeigt auf eine gelöschte Person, lokal ist nichts gesetzt).
+ */
+export function staleIdentity(c: {
+  localId: ID | null;
+  uid: string | null | undefined;
+  members: readonly Pick<Member, "uid" | "identityPersonId">[];
+  persons: readonly Pick<Person, "id">[];
+  ready: boolean;
+}): "local" | "cloud" | null {
+  if (!c.ready) return null;
+  const exists = (id: ID) => c.persons.some((p) => p.id === id);
+  if (c.localId) return exists(c.localId) ? null : "local";
+  const cloud = c.members.find((m) => m.uid === c.uid)?.identityPersonId;
+  return cloud && !exists(cloud) ? "cloud" : null;
+}
+
+/**
  * Cloud-Restore: lokal ist keine Identität gesetzt, das eigene Member-Doc
  * kennt aber noch eine existierende Person → diese einmal übernehmen.
  */

@@ -1,13 +1,12 @@
 import { Link } from "react-router-dom";
-import { useStore } from "@/lib/hooks";
-import { useIdentity } from "@/lib/auth";
+import { useMyId, useStore } from "@/lib/hooks";
 import { useIdentityPrompt } from "./IdentitySheet";
 import { Avatar } from "./ui";
 
 // Header-Chip: sichtbar 32 px hoch wie Gruppe und „?“, Trefferfläche 44 px.
 export function IdentityChip() {
   const { persons } = useStore();
-  const id = useIdentity();
+  const id = useMyId();
   const { open } = useIdentityPrompt();
   const me = persons.find((p) => p.id === id);
   if (!me) {

@@ -6,7 +6,7 @@ import { PwaInstallTipDialog } from "@/components/PwaInstallTipDialog";
 import { IllDefs } from "@/components/tutorial/primitives";
 import { tutorialPages } from "@/components/tutorial/pages";
 import { indexFromScroll, keyAction, pageAnnouncement, settleIndex } from "@/components/tutorial/pager";
-import { useIdentity } from "@/lib/auth";
+import { useMyId } from "@/lib/hooks";
 import { cn } from "@/lib/cn";
 import { useBack } from "@/lib/nav";
 import { markInstallTipSeen, markTutorialSeen } from "@/lib/onboarding";
@@ -29,7 +29,7 @@ export default function Tutorial() {
   const location = useLocation();
   const back = useBack("/");
   const firstRun = (location.state as TutorialState)?.firstRun === true;
-  const hasIdentity = !!useIdentity();
+  const hasIdentity = !!useMyId();
   // Beim Öffnen einmal festlegen, damit sich die Seitenzahl nicht mittendrin ändert.
   const [showInstall] = useState(() => !isStandalonePWA() && !wasPwaInstalledEver());
   const pages = useMemo(() => tutorialPages({ showInstall, hasIdentity }), [showInstall, hasIdentity]);

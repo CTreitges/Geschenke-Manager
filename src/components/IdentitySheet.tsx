@@ -6,9 +6,9 @@ import { whenHistorySettled } from "@/components/ui/sheetStack";
 import { getIdentity, setIdentity, useGroupId, useIdentity } from "@/lib/auth";
 import { pickColor } from "@/lib/colors";
 import { useFirebaseUser } from "@/lib/firebase";
-import { useStore } from "@/lib/hooks";
-import { claimedPersonIds, identityToRestore } from "@/lib/identity";
-import { addPerson } from "@/lib/storage";
+import { useMyId, usePersonsReady, useStore } from "@/lib/hooks";
+import { claimedPersonIds, identityToRestore, liveIdentity, staleIdentity } from "@/lib/identity";
+import { addPerson, getSnapshot, setMyIdentityCloud } from "@/lib/storage";
 import type { ID, Person } from "@/lib/types";
 
 // ── „Wer bist du?“ als Bottom-Sheet ───────────────────────────
@@ -52,7 +52,9 @@ export function useRequireIdentity(): (options?: IdentityPromptOptions) => Promi
   const { open } = useIdentityPrompt();
   return useCallback(
     async (options) => {
-      const current = getIdentity();
+      // Nur eine noch existierende Person zählt (SPO-05).
+      const { persons, personsHydrated } = getSnapshot();
+      const current = liveIdentity(getIdentity(), { persons, ready: personsHydrated });
       if (current) return current;
       const result = await open(options);
       if (result.kind !== "picked" || result.personId === options?.recipientId) return null;
@@ -68,6 +70,7 @@ export function IdentityProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const answerRef = useRef<(() => void) | null>(null);
   useIdentityCloudRestore();
+  useStaleIdentityCleanup();
 
   const open = useCallback<OpenFn>((options = {}) => {
     return new Promise<IdentityResult>((resolve) => {
@@ -151,7 +154,7 @@ function PickStep({
   onLater: () => void;
 }) {
   const { persons, members, personsHydrated } = useStore();
-  const myId = useIdentity();
+  const myId = useMyId();
   const user = useFirebaseUser();
   const claimed = claimedPersonIds(members, user?.uid);
   const sorted = [...persons].sort((a, b) => a.name.localeCompare(b.name, "de"));
@@ -276,6 +279,24 @@ function CreateStep({ onCreated, onBack }: { onCreated: (id: ID, name: string) =
       </div>
     </div>
   );
+}
+
+/**
+ * Veraltete Identität (Person gelöscht oder neu angelegt) aufräumen: lokal
+ * samt Cloud leeren bzw. nur den Cloud-Wert, wenn lokal nichts steht – sonst
+ * sperrt z. B. der Push-Versand die falsche Person (SPO-05).
+ */
+function useStaleIdentityCleanup() {
+  const localId = useIdentity();
+  const user = useFirebaseUser();
+  const { members, persons } = useStore();
+  const ready = usePersonsReady();
+
+  useEffect(() => {
+    const stale = staleIdentity({ localId, uid: user?.uid, members, persons, ready });
+    if (stale === "local") setIdentity(null);
+    else if (stale === "cloud") void setMyIdentityCloud(null);
+  }, [localId, user, members, persons, ready]);
 }
 
 /**

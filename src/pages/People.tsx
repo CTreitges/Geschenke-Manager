@@ -2,10 +2,9 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Avatar, Button, Chip, Dialog, EmptyState, FAB, Input, PageHeader, Segmented } from "@/components/ui";
 import { BirthdayPicker } from "@/components/BirthdayPicker";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { addPerson } from "@/lib/storage";
 import { daysUntilBirthday, formatBirthday } from "@/lib/birthdays";
-import { useIdentity } from "@/lib/auth";
 import { pickColor } from "@/lib/colors";
 import { toast } from "sonner";
 
@@ -14,7 +13,7 @@ export default function People() {
   const nav = useNavigate();
   const [open, setOpen] = useState(false);
   const [sort, setSort] = useState<"birthday" | "alpha">("birthday");
-  const myId = useIdentity();
+  const myId = useMyId();
 
   const sorted = useMemo(() => {
     const xs = [...persons];

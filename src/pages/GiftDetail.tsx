@@ -19,10 +19,10 @@ import { SurpriseScreen } from "@/components/surprise/SurpriseScreen";
 import { usePollSheets } from "@/components/poll/usePollSheets";
 import { VoteSheet } from "@/components/poll/VoteSheet";
 import { GiftWishlist } from "@/components/wishlist/WishAdoptSheet";
-import { useGroupId, useIdentity } from "@/lib/auth";
+import { useGroupId } from "@/lib/auth";
 import { giftDate, giftDateLine } from "@/lib/birthdays";
 import { withLiveParticipants } from "@/lib/cascade";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { isIdentitySkipped, skipIdentity } from "@/lib/identity";
 import { useBack } from "@/lib/nav";
 import { pollModel } from "@/lib/pollModel";
@@ -43,7 +43,7 @@ export default function GiftDetail() {
   const store = useStore();
   const back = useBack("/");
   const nav = useNavigate();
-  const myId = useIdentity();
+  const myId = useMyId();
   const groupId = useGroupId();
   const [skippedNow, setSkippedNow] = useState(false);
   const found = store.gifts.find((g) => g.id === id);
@@ -90,7 +90,7 @@ export default function GiftDetail() {
 
 function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack: () => void }) {
   const { persons, suggestions, polls } = useStore();
-  const myId = useIdentity();
+  const myId = useMyId();
   const groupId = useGroupId();
   const nav = useNavigate();
   const confirm = useConfirm();

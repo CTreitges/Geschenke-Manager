@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { PwaInstallTipDialog } from "./PwaInstallTipDialog";
-import { useIdentity } from "@/lib/auth";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import {
   markInstallTipSeen,
   markStepShown,
@@ -29,7 +28,7 @@ type OnboardingFlowProps = {
 export function OnboardingFlow({ onNeedIdentity }: OnboardingFlowProps) {
   const nav = useNavigate();
   const location = useLocation();
-  const identity = useIdentity();
+  const identity = useMyId();
   const { persons, personsHydrated } = useStore();
   const [installOpen, setInstallOpen] = useState(false);
   // Pro History-Eintrag höchstens einmal entscheiden (StrictMode, Re-Renders).

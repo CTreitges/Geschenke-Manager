@@ -5,9 +5,8 @@ import { IdentityChip } from "./IdentityChip";
 import { GroupSwitcher } from "./GroupSwitcher";
 import { HelpMenu } from "./HelpMenu";
 import { Icon } from "./ui";
-import { useIdentity } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { activeTab, type TabKey } from "@/lib/nav";
 
 export function Layout({ children }: { children: ReactNode }) {
@@ -15,7 +14,7 @@ export function Layout({ children }: { children: ReactNode }) {
   const current = activeTab(loc.pathname);
   // Ohne Identität ist der Chip („Wer bist du?“) breit – dann zeigt das Logo
   // erst ab 400 px den Schriftzug, damit der Header bei 360/390 px nicht umbricht.
-  const myId = useIdentity();
+  const myId = useMyId();
   const hasMe = useStore().persons.some((p) => p.id === myId);
   const tabs: { key: TabKey; to: string; label: string; Icon: (typeof Icon)["home"] }[] = [
     { key: "home", to: "/", label: "Übersicht", Icon: Icon.home },

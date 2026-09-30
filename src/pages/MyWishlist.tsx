@@ -1,6 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { useStore } from "@/lib/hooks";
-import { useIdentity } from "@/lib/auth";
+import { useMyId, useStore } from "@/lib/hooks";
 import { useIdentityPrompt } from "@/components/IdentitySheet";
 import { Avatar, Button, Card, EmptyState, PageHeader } from "@/components/ui";
 import { WishlistView } from "@/components/wishlist/WishlistView";
@@ -8,7 +7,7 @@ import { daysUntilBirthday } from "@/lib/birthdays";
 import { nextSurprise, surpriseBanner } from "@/lib/spoiler";
 
 export default function MyWishlist() {
-  const id = useIdentity();
+  const id = useMyId();
   const { persons, wishlist, gifts } = useStore();
   const me = persons.find((p) => p.id === id);
   const nav = useNavigate();

@@ -11,11 +11,11 @@ import { NotificationsBlock } from "@/components/settings/NotificationsBlock";
 import { ParticipationSheet, participationCount } from "@/components/settings/ParticipationSheet";
 import { PasswordSheet } from "@/components/settings/PasswordSheet";
 import { SettingsGroup, SettingsRow } from "@/components/settings/SettingsGroup";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { setActiveGroup, updateSettings } from "@/lib/storage";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import { unregisterPushOnLogout } from "@/lib/messaging";
-import { getKnownGroups, removeKnownGroup, setAuthed, setGroupId, useGroupId, useIdentity } from "@/lib/auth";
+import { getKnownGroups, removeKnownGroup, setAuthed, setGroupId, useGroupId } from "@/lib/auth";
 
 // Einstellungen: Du → Mitteilungen → Gruppe → Darstellung → Konto → Hilfe → Gefahrenzone.
 export default function Settings() {
@@ -23,7 +23,7 @@ export default function Settings() {
   const identityPrompt = useIdentityPrompt();
   const confirm = useConfirm();
   const nav = useNavigate();
-  const identity = useIdentity() ?? "";
+  const identity = useMyId() ?? "";
   const groupId = useGroupId();
   const me = persons.find((p) => p.id === identity);
   const fbUser = useFirebaseUser();

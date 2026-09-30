@@ -2,8 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Button, EmptyState, Icon, Overline, QuickAdd } from "@/components/ui";
-import { useIdentity } from "@/lib/auth";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { addWishItem, updateWishItem } from "@/lib/storage";
 import type { Person, WishlistItem } from "@/lib/types";
 import { addedByLabel, groupWishes, wishBadges } from "@/lib/wishlist";
@@ -18,7 +17,7 @@ type SheetState = { mode: "new" } | { mode: "edit"; id: string } | null;
 // „übernommen“ (wishBadges), „bekommen“ erst nach dem Erhalt.
 export function WishlistView({ person, isOwner }: { person: Person; isOwner: boolean }) {
   const { wishlist, suggestions, gifts, persons } = useStore();
-  const myId = useIdentity();
+  const myId = useMyId();
   const nav = useNavigate();
   const [sheet, setSheet] = useState<SheetState>(null);
 

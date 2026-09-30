@@ -1,8 +1,7 @@
 import { useState } from "react";
 import { Avatar, Button, Card, Chip, EmptyState, Icon, IconButton, PageHeader, useConfirm } from "@/components/ui";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { addFeedback, deleteFeedback, updateFeedback } from "@/lib/storage";
-import { useIdentity } from "@/lib/auth";
 import { useFirebaseUser } from "@/lib/firebase";
 import { isFeedbackOwner } from "@/lib/feedback-owner";
 import { toast } from "sonner";
@@ -22,7 +21,7 @@ function formatRelative(ts: number): string {
 
 export default function Feedback() {
   const { feedback, persons } = useStore();
-  const myId = useIdentity();
+  const myId = useMyId();
   const fbUser = useFirebaseUser();
   const myUid = fbUser?.uid ?? null;
   const isOwner = isFeedbackOwner(fbUser);

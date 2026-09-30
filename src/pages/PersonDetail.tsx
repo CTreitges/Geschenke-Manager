@@ -6,7 +6,7 @@ import { BirthdayPicker } from "@/components/BirthdayPicker";
 import { GiftsTab } from "@/components/person/GiftsTab";
 import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { WishlistView } from "@/components/wishlist/WishlistView";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { mySurpriseGiftIds } from "@/lib/spoiler";
 import {
   deletePerson,
@@ -15,7 +15,7 @@ import {
 } from "@/lib/storage";
 import { ageOnNextBirthday, daysUntilBirthday, formatBirthday, formatDaysUntil } from "@/lib/birthdays";
 import type { Person } from "@/lib/types";
-import { getIdentity, setIdentity, useIdentity } from "@/lib/auth";
+import { getIdentity, setIdentity } from "@/lib/auth";
 import { useBack, useLeave } from "@/lib/nav";
 import { isNewEmail } from "@/lib/onboarding";
 import { isSkipped } from "@/lib/stack";
@@ -38,7 +38,7 @@ export default function PersonDetail() {
   const [params, setParams] = useSearchParams();
   const tab: Tab = TABS.find((t) => t.value === params.get("tab"))?.value ?? "wishlist";
   const setTab = (t: Tab) => setParams(t === "wishlist" ? {} : { tab: t }, { replace: true });
-  const isMe = useIdentity() === id;
+  const isMe = useMyId() === id;
 
   // Bis die Personen geladen sind: Platzhalter statt „nicht gefunden“ (B28).
   if (!personsHydrated) {

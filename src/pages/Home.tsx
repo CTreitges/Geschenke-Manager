@@ -4,7 +4,7 @@ import { Archive } from "lucide-react";
 import { ActionMenu, Avatar, Button, Card, Confetti, Dialog, EmptyState, FAB, Icon, Input, Overline, Section } from "@/components/ui";
 import { SurpriseStackCard } from "@/components/surprise/SurpriseStackCard";
 import { useGiftMenuItems } from "@/components/gift/useGiftMenuItems";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
 import { formatEuro } from "@/lib/money";
 import {
   ageOnNextBirthday,
@@ -24,7 +24,6 @@ import { withLiveParticipants } from "@/lib/cascade";
 import { cn } from "@/lib/cn";
 import { giftPhase, type GiftPhase, type GiftPhaseInfo } from "@/lib/giftPhase";
 import { addGift, deduplicateOpenGifts, ensureAutoGift } from "@/lib/storage";
-import { useIdentity } from "@/lib/auth";
 import { isRecipient } from "@/lib/spoiler";
 import { useNow } from "@/lib/useNow";
 import { toast } from "sonner";
@@ -72,7 +71,7 @@ export default function Home() {
   }, [gifts, persons]);
   const hero = useMemo(() => findHero(persons), [persons]);
 
-  const myId = useIdentity();
+  const myId = useMyId();
   const me = persons.find((p) => p.id === myId);
   const heroDays = hero ? daysUntilBirthday(hero) : 0;
   // Spoiler-Schutz: Habe ich selbst als Nächstes Geburtstag, führt der Hero zur Wunschliste.
@@ -297,7 +296,7 @@ function StackCard({
 
 function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { persons: allPersons, settings, gifts } = useStore();
-  const myId = useIdentity();
+  const myId = useMyId();
   // Geschenke für mich legen die anderen an (Spoiler-Schutz).
   const persons = allPersons.filter((p) => p.id !== myId);
   const [personId, setPersonId] = useState("");

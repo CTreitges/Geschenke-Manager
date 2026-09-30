@@ -1,5 +1,51 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { claimedPersonIds, identitySkipKey, identityToRestore, isIdentitySkipped, skipIdentity } from "./identity";
+import {
+  claimedPersonIds,
+  identitySkipKey,
+  identityToRestore,
+  isIdentitySkipped,
+  liveIdentity,
+  skipIdentity,
+  staleIdentity,
+} from "./identity";
+
+describe("liveIdentity (Regression SPO-05)", () => {
+  const persons = [{ id: "anna" }, { id: "ben" }];
+
+  it("gilt nur, solange die Person existiert", () => {
+    expect(liveIdentity("anna", { persons, ready: true })).toBe("anna");
+    expect(liveIdentity("anna-alt", { persons, ready: true })).toBeNull();
+    expect(liveIdentity(null, { persons, ready: true })).toBeNull();
+  });
+
+  it("vor dem Laden der Personen (oder beim Gruppenwechsel) zählt die gespeicherte", () => {
+    expect(liveIdentity("anna-alt", { persons: [], ready: false })).toBe("anna-alt");
+  });
+});
+
+describe("staleIdentity (Regression SPO-05)", () => {
+  const persons = [{ id: "anna" }];
+  const base = { uid: "u1", members: [] as { uid: string; identityPersonId?: string }[], persons, ready: true };
+
+  it("lokale Identität einer gelöschten Person → lokal (und Cloud) leeren", () => {
+    expect(staleIdentity({ ...base, localId: "anna-alt" })).toBe("local");
+    expect(staleIdentity({ ...base, localId: "anna" })).toBeNull();
+  });
+
+  it("nur die Cloud zeigt auf eine gelöschte Person → Cloud leeren", () => {
+    const members = [
+      { uid: "u1", identityPersonId: "anna-alt" },
+      { uid: "u2", identityPersonId: "weg" },
+    ];
+    expect(staleIdentity({ ...base, localId: null, members })).toBe("cloud");
+    expect(staleIdentity({ ...base, localId: null, members: [{ uid: "u1", identityPersonId: "anna" }] })).toBeNull();
+    expect(staleIdentity({ ...base, localId: null, members: [{ uid: "u1", identityPersonId: "" }] })).toBeNull();
+  });
+
+  it("nichts, solange die Personen der Gruppe nicht geladen sind", () => {
+    expect(staleIdentity({ ...base, localId: "anna-alt", persons: [], ready: false })).toBeNull();
+  });
+});
 
 describe("Sitzungs-Ausweg „nur ansehen“", () => {
   afterEach(() => vi.unstubAllGlobals());

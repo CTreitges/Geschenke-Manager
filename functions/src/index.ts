@@ -14,6 +14,7 @@ import { shouldArchive } from "./archive";
 import { runBirthdayPush } from "./push/birthdayJob";
 import { runTestPush } from "./push/testPush";
 import { birthdayYearFor, daysUntil } from "./shared/dates";
+import { hasFreshOwnWish } from "./wishlistReminder";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -339,7 +340,7 @@ export const deleteGroup = onCall({ region: REGION }, async (request) => {
 interface ReminderStage {
   days: number;
   key: "60d" | "30d" | "14d";
-  conditional: boolean; // true → only send if wishlist is still empty
+  conditional: boolean; // true → nur senden, wenn kein frischer eigener Wunsch existiert
 }
 
 const REMINDER_STAGES: ReminderStage[] = [
@@ -496,14 +497,10 @@ export const sendBirthdayReminders = onSchedule(
         const marker = `reminder-${stage.key}-${bdYear}`;
         if (person.notificationsSent?.[marker]) continue;
 
-        // Conditional stages skip if a wishlist already exists.
+        // 30/14 Tage: entfällt nur bei einem frischen, eigenen Wunsch (B27) –
+        // alte Wünsche und Einträge von Freunden zählen nicht.
         if (stage.conditional) {
-          const wlSnap = await db
-            .collection(`groups/${groupId}/wishlist`)
-            .where("personId", "==", personDoc.id)
-            .limit(1)
-            .get();
-          if (!wlSnap.empty) {
+          if (await hasFreshOwnWish(db, groupId, personDoc.id, Date.now())) {
             // Still mark as "sent" so we don't re-check next day.
             await personDoc.ref.update({
               [`notificationsSent.${marker}`]: Date.now(),

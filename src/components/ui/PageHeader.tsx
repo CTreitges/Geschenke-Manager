@@ -14,7 +14,10 @@ export function PageHeader({ onBack, title, subtitle, right }: { onBack?: () => 
       <div className="flex items-center gap-2 min-h-9">
         {onBack && (
           <button
+            type="button"
             onClick={onBack}
+            aria-label="Zurück"
+            title="Zurück"
             className="bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 rounded-full w-9 h-9 flex items-center justify-center shrink-0 text-stone-900 dark:text-stone-50"
           >
             <Icon.back />

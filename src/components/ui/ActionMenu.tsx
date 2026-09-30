@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/cn";
-import { IconButton } from "./Button";
+import { Button, IconButton } from "./Button";
 import { Icon } from "./icons";
 import { Sheet } from "./Sheet";
 import { whenHistorySettled } from "./sheetStack";
@@ -17,7 +17,18 @@ export type ActionMenuItem = {
 };
 
 // ── ActionMenu: ⋯-Knopf öffnet ein Sheet mit Aktionen ──────────
-export function ActionMenu({ items, label = "Weitere Aktionen", title }: { items: ActionMenuItem[]; label?: string; title?: string }) {
+export function ActionMenu({
+  items,
+  label = "Weitere Aktionen",
+  title,
+  showLabel = false,
+}: {
+  items: ActionMenuItem[];
+  label?: string;
+  title?: string;
+  /** true = Text-Knopf „⋯ label“ statt reinem Icon (z. B. „⋯ Optionen“ im Sheet-Fuß). */
+  showLabel?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const pendingRef = useRef<(() => void) | null>(null);
 
@@ -33,9 +44,16 @@ export function ActionMenu({ items, label = "Weitere Aktionen", title }: { items
 
   return (
     <>
-      <IconButton label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
-        <Icon.more />
-      </IconButton>
+      {showLabel ? (
+        <Button variant="ghost" size="sm" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+          <Icon.more size={18} />
+          {label}
+        </Button>
+      ) : (
+        <IconButton label={label} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen(true)}>
+          <Icon.more />
+        </IconButton>
+      )}
       <Sheet open={open} onClose={() => setOpen(false)} title={title ?? label}>
         <ul className="m-0 flex list-none flex-col gap-1 p-0">
           {items.map((item) => (

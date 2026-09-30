@@ -202,6 +202,13 @@ describe("Sheet / Dialog / weitere", () => {
     expect(out).toContain('aria-expanded="false"');
   });
 
+  it("ActionMenu mit showLabel zeigt den Text sichtbar statt nur als aria-label", () => {
+    const out = html(<ActionMenu showLabel label="Optionen" items={[{ label: "+1 Std", onSelect: () => {} }]} />);
+    expect(out).toContain(">Optionen</button>");
+    expect(out).not.toContain('aria-label="Optionen"');
+    expect(out).toContain('aria-haspopup="dialog"');
+  });
+
   it("Section rendert h2 mit Zähler; Overline und Skeleton", () => {
     const out = html(
       <Section title="Vorschläge" count={4}>

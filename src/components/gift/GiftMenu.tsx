@@ -3,13 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { ActionMenu, Icon, useConfirm, type ActionMenuItem } from "@/components/ui";
 import type { PollModel } from "@/lib/pollModel";
+import { useLeave } from "@/lib/nav";
 import { lockMessage } from "@/lib/pollOps";
 import { deleteGift, markReceived } from "@/lib/storage";
 import type { Gift } from "@/lib/types";
 
 // ── ⋯ im Kopf der Geschenkseite ───────────────────────────────
 // Link teilen · Ohne Auswahl abschließen · Geschenk löschen. Große Schritte
-// immer mit Rückfrage (useConfirm), danach zurück zur Übersicht.
+// immer mit Rückfrage (useConfirm), danach zurück (Löschen) bzw. zur Übersicht.
 export function GiftMenu({
   gift,
   personName,
@@ -27,6 +28,7 @@ export function GiftMenu({
 }) {
   const confirm = useConfirm();
   const nav = useNavigate();
+  const leave = useLeave("/");
 
   async function finishWithoutSelection() {
     const ok = await confirm({
@@ -52,11 +54,12 @@ export function GiftMenu({
       tone: "danger",
     });
     if (!ok) return;
-    // Erst weg von der Seite, sonst blitzt „nicht gefunden“ auf.
-    nav("/", { replace: true });
-    deleteGift(gift.id)
-      .then(() => toast.success("Geschenk gelöscht"))
-      .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal"));
+    // Erst zurück, dann löschen – sonst blitzt „nicht gefunden“ auf.
+    leave(() =>
+      deleteGift(gift.id)
+        .then(() => toast.success("Geschenk gelöscht"))
+        .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal")),
+    );
   }
 
   const lock = model.locks.decideOutsideResult;

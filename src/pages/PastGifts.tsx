@@ -4,6 +4,7 @@ import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { Avatar, Chip, EmptyState, Icon, PageHeader } from "@/components/ui";
 import { useIdentity } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
+import { useBack } from "@/lib/nav";
 import { formatEuro } from "@/lib/money";
 import { isRecipient } from "@/lib/spoiler";
 
@@ -14,6 +15,7 @@ import { isRecipient } from "@/lib/spoiler";
 export default function PastGifts() {
   const { gifts, persons, suggestions } = useStore();
   const nav = useNavigate();
+  const back = useBack("/");
   const myId = useIdentity();
 
   const past = useMemo(
@@ -51,7 +53,7 @@ export default function PastGifts() {
   return (
     <>
       <PageHeader
-        onBack={() => nav(-1)}
+        onBack={back}
         title="Alte Geschenke"
         subtitle={`${past.length} ${past.length === 1 ? "erhaltenes" : "erhaltene"} Geschenk${past.length === 1 ? "" : "e"}`}
       />

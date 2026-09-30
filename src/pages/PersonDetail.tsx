@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Button, Card, Chip, Icon, Input, PageHeader, useConfirm } from "@/components/ui";
+import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader, Skeleton, useConfirm } from "@/components/ui";
 import { BirthdayPicker } from "@/components/BirthdayPicker";
 import { GiftsTab } from "@/components/person/GiftsTab";
 import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
@@ -19,33 +19,58 @@ import {
 } from "@/lib/birthdays";
 import type { Person } from "@/lib/types";
 import { getIdentity, setIdentity, useIdentity } from "@/lib/auth";
+import { useBack, useLeave } from "@/lib/nav";
 import { isNewEmail } from "@/lib/onboarding";
+import { isSkipped } from "@/lib/stack";
 import { toast } from "sonner";
 
 type Tab = "wishlist" | "gifts" | "profile";
 
 export default function PersonDetail() {
   const { id } = useParams<{ id: string }>();
-  const { persons, wishlist, gifts } = useStore();
+  const { persons, wishlist, gifts, personsHydrated } = useStore();
   const nav = useNavigate();
+  const back = useBack("/people");
   const person = persons.find((p) => p.id === id);
   const [tab, setTab] = useState<Tab>("wishlist");
   const isMe = useIdentity() === id;
 
+  // Bis die Personen geladen sind: Platzhalter statt „nicht gefunden“ (B28).
+  if (!personsHydrated) {
+    return (
+      <div aria-busy="true">
+        <PageHeader onBack={back} />
+        <span className="sr-only">Person wird geladen …</span>
+        <div className="flex items-center gap-3.5 px-5">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-4 w-1/3" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!person) {
     return (
-      <div className="px-4 py-8">
-        <p>Person nicht gefunden.</p>
-        <Button onClick={() => nav("/people")} className="mt-4">Zurück</Button>
+      <div>
+        <PageHeader onBack={back} title="Person" />
+        <EmptyState
+          emoji="👥"
+          title="Person nicht gefunden"
+          subtitle="Vielleicht wurde sie gerade gelöscht."
+          action={<Button onClick={() => nav("/people", { replace: true })}>Zu den Personen</Button>}
+        />
       </div>
     );
   }
 
   const myWishes = wishlist.filter((w) => w.personId === person.id && !w.fulfilledAt);
   const myGifts = gifts.filter((g) => g.personId === person.id);
-  // Stack = offen + bestätigt; past = erhalten.
+  // Stack = offen + bestätigt (inkl. ausgesetzter, für „Wieder aufnehmen“); past = erhalten.
   const stack = myGifts.filter((g) => g.status === "open" || g.status === "confirmed");
   const past = myGifts.filter((g) => g.status === "received");
+  const activeCount = stack.filter((g) => !isSkipped(g)).length;
 
   const tabs: { id: Tab; label: string }[] = [
     { id: "wishlist", label: "Wunschliste" },
@@ -56,7 +81,7 @@ export default function PersonDetail() {
   return (
     <div>
       <PageHeader
-        onBack={() => nav(-1)}
+        onBack={back}
         title={person.name}
         subtitle={`${formatBirthday(person)} · in ${daysUntilBirthday(person)} Tagen`}
       />
@@ -70,8 +95,8 @@ export default function PersonDetail() {
             {person.email || "keine Mail"}
           </div>
           <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {stack.length > 0 &&
-              (isMe ? <SurpriseBadge label="Überraschung läuft" /> : <Chip variant="accent">{stack.length} im Stack</Chip>)}
+            {activeCount > 0 &&
+              (isMe ? <SurpriseBadge label="Überraschung läuft" /> : <Chip variant="accent">{activeCount} in Planung</Chip>)}
             <Chip variant="neutral">{myWishes.length} Wünsche</Chip>
             <Chip variant="neutral">{past.length} erhalten</Chip>
           </div>
@@ -105,7 +130,7 @@ export default function PersonDetail() {
 }
 
 function ProfileTab({ person }: { person: Person }) {
-  const nav = useNavigate();
+  const leave = useLeave("/people");
   const confirm = useConfirm();
   const { gifts } = useStore();
   const [name, setName] = useState(person.name);
@@ -160,15 +185,16 @@ function ProfileTab({ person }: { person: Person }) {
       .join(" ");
     const ok = await confirm({ title: `${person.name} wirklich löschen?`, body, confirmLabel: "Löschen", tone: "danger" });
     if (!ok) return;
-    try {
-      await deletePerson(person.id);
-    } catch {
-      toast.error("Löschen hat nicht geklappt – bitte nochmal");
-      return;
-    }
-    if (isSelf) setIdentity(null);
-    toast.success("Gelöscht");
-    nav("/people");
+    // Erst zurück, dann löschen – sonst steht kurz „nicht gefunden“ da und
+    // Zurück führt wieder auf die gelöschte Person (B13).
+    leave(() =>
+      deletePerson(person.id)
+        .then(() => {
+          if (isSelf) setIdentity(null);
+          toast.success(`${person.name} gelöscht`);
+        })
+        .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal")),
+    );
   }
 
   return (

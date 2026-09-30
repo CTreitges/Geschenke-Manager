@@ -22,3 +22,48 @@ export function useBack(fallback: string): () => void {
     else navigate(fallback, { replace: true });
   }, [navigate, fallback]);
 }
+
+/**
+ * Wie useBack, aber `then` (z. B. das Löschen) läuft erst, wenn die Seite
+ * verlassen ist – sonst blitzt kurz „nicht gefunden“ auf. Ohne App-Eintrag
+ * davor geht es per replace zu `fallback`, damit Zurück nie auf die
+ * gelöschte Seite führt (B13).
+ */
+export function useLeave(fallback: string): (then?: () => void) => void {
+  const navigate = useNavigate();
+  return useCallback(
+    (then?: () => void) => {
+      if (!canGoBack(window.history.state)) {
+        navigate(fallback, { replace: true });
+        then?.();
+        return;
+      }
+      if (then) {
+        let done = false;
+        const run = () => {
+          if (done) return;
+          done = true;
+          window.removeEventListener("popstate", run);
+          then();
+        };
+        window.addEventListener("popstate", run);
+        // Sicherheitsnetz, falls das popstate ausbleibt.
+        setTimeout(run, 800);
+      }
+      navigate(-1);
+    },
+    [navigate, fallback],
+  );
+}
+
+export type TabKey = "home" | "people" | "wishlist" | "settings" | "feedback";
+
+/** Aktiver Bottom-Tab, auch auf Unterseiten: /person/* → Personen, /gift/* und /past → Übersicht. */
+export function activeTab(pathname: string): TabKey | null {
+  if (pathname === "/" || pathname.startsWith("/gift/") || pathname === "/past") return "home";
+  if (pathname === "/people" || pathname.startsWith("/person/")) return "people";
+  if (pathname === "/wishlist") return "wishlist";
+  if (pathname === "/settings") return "settings";
+  if (pathname === "/feedback") return "feedback";
+  return null;
+}

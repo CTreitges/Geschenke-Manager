@@ -5,15 +5,17 @@ import { GroupSwitcher } from "./GroupSwitcher";
 import { HelpMenu } from "./HelpMenu";
 import { Icon } from "./ui";
 import { cn } from "@/lib/cn";
+import { activeTab, type TabKey } from "@/lib/nav";
 
 export function Layout({ children }: { children: ReactNode }) {
   const loc = useLocation();
-  const tabs = [
-    { to: "/", label: "Übersicht", Icon: Icon.home },
-    { to: "/people", label: "Personen", Icon: Icon.users },
-    { to: "/wishlist", label: "Wunschliste", Icon: Icon.gift },
-    { to: "/settings", label: "Einstellungen", Icon: Icon.cog },
-    { to: "/feedback", label: "Feedback", Icon: Icon.mail },
+  const current = activeTab(loc.pathname);
+  const tabs: { key: TabKey; to: string; label: string; Icon: (typeof Icon)["home"] }[] = [
+    { key: "home", to: "/", label: "Übersicht", Icon: Icon.home },
+    { key: "people", to: "/people", label: "Personen", Icon: Icon.users },
+    { key: "wishlist", to: "/wishlist", label: "Wunschliste", Icon: Icon.gift },
+    { key: "settings", to: "/settings", label: "Einstellungen", Icon: Icon.cog },
+    { key: "feedback", to: "/feedback", label: "Feedback", Icon: Icon.mail },
   ];
   return (
     <div
@@ -39,12 +41,13 @@ export function Layout({ children }: { children: ReactNode }) {
       >
         <div className="max-w-2xl mx-auto px-2 h-16 flex">
           {tabs.map((t) => {
-            const active = t.to === "/" ? loc.pathname === "/" : loc.pathname.startsWith(t.to);
+            const active = t.key === current;
             const I = t.Icon;
             return (
               <Link
                 key={t.to}
                 to={t.to}
+                aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-semibold",
                   active ? "text-indigo-600 dark:text-indigo-400" : "text-stone-500",

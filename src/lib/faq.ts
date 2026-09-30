@@ -30,7 +30,7 @@ export const FAQ: FaqEntry[] = [
     id: "mail-erinnerungen",
     question: "Wie funktionieren die Mail-Erinnerungen?",
     answer:
-      "Ist bei einer Person eine E-Mail hinterlegt, bekommt sie 60, 30 und 14 Tage vor dem Geburtstag eine Erinnerung an ihre Wunschliste – der Link darin führt ohne Passwort direkt hinein. Schick nach dem Eintragen einmal eine Test-Mail und markiere sie als „Kein Spam“, damit die echten Erinnerungen sicher ankommen. Abbestellen geht in jeder Mail.",
+      "Ist bei einer Person eine E-Mail hinterlegt, bekommt sie 60, 30 und 14 Tage vor dem Geburtstag eine Erinnerung an ihre Wunschliste – Folge-Erinnerungen entfallen, solange eigene Wünsche aus den letzten 4 Monaten darauf stehen. Schick nach dem Eintragen einmal eine Test-Mail und markiere sie als „Kein Spam“, damit die echten Erinnerungen sicher ankommen. Der Link in der Mail führt ohne Passwort direkt in die Wunschliste, abbestellen geht in jeder Mail.",
   },
   {
     id: "push",

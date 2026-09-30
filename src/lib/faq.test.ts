@@ -26,6 +26,11 @@ describe("FAQ", () => {
     expect(byId["mail-erinnerungen"].answer).toMatch(/Kein Spam/);
   });
 
+  it("nennt die Aussetz-Regel der Mail-Erinnerung wie der Server (eigene Wünsche, 4 Monate)", () => {
+    const mail = FAQ.find((f) => f.id === "mail-erinnerungen")!;
+    expect(mail.answer).toMatch(/solange eigene Wünsche aus den letzten 4 Monaten/);
+  });
+
   it("Satzzähler erkennt Grenzfälle", () => {
     expect(sentences("Eins. Zwei! Drei?")).toBe(3);
     expect(sentences("Preis 12.50 € bleibt ein Satz.")).toBe(1);

@@ -24,6 +24,7 @@ import { httpsCallable } from "firebase/functions";
 import { auth, authReady, db, functions } from "./firebase";
 import { dedupPlan, personDeletion } from "./cascade";
 import { isFeedbackOwner } from "./feedback-owner";
+import { assertNotRecipient } from "./spoiler";
 import {
   closeFields,
   extendedEndsAt,
@@ -768,6 +769,7 @@ function assertUnlocked(giftId: ID | undefined, action: LockedAction) {
 
 /** Neue Idee bzw. Wunsch-Übernahme (mit fromWishItemId). */
 export async function addSuggestion(s: Omit<Suggestion, "id" | "createdAt">) {
+  assertNotRecipient(state.gifts.find((g) => g.id === s.giftId), s.suggestedBy);
   assertUnlocked(s.giftId, s.fromWishItemId ? "adoptWish" : "addIdea");
   await addDoc(gcol("suggestions"), clean({ ...s, createdAt: Date.now() }));
 }
@@ -832,6 +834,7 @@ export async function startPoll(
  * Doppeltipp hebt sich nicht auf.
  */
 export async function setMyVote(giftId: ID, personId: ID, suggestionId: ID, on: boolean) {
+  assertNotRecipient(state.gifts.find((g) => g.id === giftId), personId);
   const poll = state.polls.find((p) => p.giftId === giftId);
   if (pollPhase(poll, Date.now()) !== "running") throw new Error("Die Abstimmung ist schon beendet.");
   await updateDoc(

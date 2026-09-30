@@ -1,5 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
-import { GROUP_ID, GROUP_PASSWORD } from "../emu-seed.mjs";
+import { expect, test, type Locator, type Page } from "@playwright/test";
+import { GROUP_ID, GROUP_PASSWORD, seed } from "../emu-seed.mjs";
 import { ONBOARDING_KEYS, TUTORIAL_VERSION } from "../../src/lib/onboarding";
 import { CURRENT_VERSION } from "../../src/lib/patchnotes";
 import { formatA11y, loginAs, personId, seriousA11yViolations } from "./helpers";
@@ -9,11 +9,23 @@ import { formatA11y, loginAs, personId, seriousA11yViolations } from "./helpers"
 // damit Live-Region und Punkte sofort den Endstand zeigen.
 test.use({ contextOptions: { reducedMotion: "reduce" } });
 
-const DAY = 24 * 60 * 60 * 1000;
+// Frischer Seed pro Test: andere Specs ändern Identitäten und Geschenke.
+let giftIds: Record<string, string>;
+test.beforeEach(async () => {
+  ({ giftIds } = await seed());
+});
+
 const isHome = (u: URL) => u.pathname === "/";
 
 const helpButton = (page: Page) => page.getByRole("button", { name: /^Hilfe/ });
 const liveRegion = (page: Page) => page.locator("p[aria-live]");
+
+/** Zur letzten Seite springen – erst wenn der Pager steht (der Tasten-Listener hängt im Effekt). */
+async function jumpToLastPage(page: Page) {
+  await expect(liveRegion(page)).toHaveText(/^Seite 1 von \d/);
+  await page.keyboard.press("End");
+  await expect(page.getByRole("button", { name: "Los geht's" })).toBeVisible();
+}
 
 /** Titel der Einträge im Hilfe-Sheet in Anzeige-Reihenfolge (ohne „Schließen“). */
 async function helpEntryTitles(page: Page): Promise<string[]> {
@@ -25,14 +37,20 @@ async function helpEntryTitles(page: Page): Promise<string[]> {
   return names.filter((n) => n !== "Schließen");
 }
 
+const identitySheet = (page: Page) => page.getByRole("dialog", { name: "Wer bist du?" });
+
 /**
- * Nach dem Laden hat OnboardingFlow die Chance umzuleiten; danach muss die
- * Seite noch dieselbe sein. (Eine Negativ-Erwartung braucht ein Zeitfenster.)
+ * OnboardingFlow entscheidet, sobald die Personen geladen sind. `loaded` ist
+ * etwas, das erst mit den Personen erscheint (z. B. „Hallo, Ben“). Danach
+ * einen Frame abwarten (Effekte sind durch) und die URL im Browser lesen –
+ * so braucht die Negativ-Erwartung kein festes Zeitfenster.
  */
-async function expectStaysOn(page: Page, pathname: string) {
-  await page.getByText("Lade Gruppendaten…").waitFor({ state: "detached", timeout: 30_000 });
-  await page.waitForTimeout(1500);
-  expect(new URL(page.url()).pathname).toBe(pathname);
+async function expectStaysOn(page: Page, pathname: string, loaded: Locator) {
+  await expect(loaded).toBeVisible();
+  const path = await page.evaluate(
+    () => new Promise<string>((resolve) => requestAnimationFrame(() => setTimeout(() => resolve(location.pathname)))),
+  );
+  expect(path).toBe(pathname);
 }
 
 test("Hilfe-Sheet: Tutorial zuerst, Neu-Punkt verschwindet nach „Was ist neu“", async ({ page }, testInfo) => {
@@ -102,6 +120,8 @@ test("Tutorial-Pager: Weiter, Punkte, Tastatur, Überspringen", async ({ page },
   // Nur die aktive Seite ist bedienbar.
   await expect(page.locator('section[aria-roledescription="Seite"][inert]')).toHaveCount(count - 1);
   const tutorialA11y = await seriousA11yViolations(page);
+  // Der Pager selbst ist per Tastatur erreichbar (Kontraste der Tab-Leiste gibt es hier nicht).
+  expect(tutorialA11y.map((v) => v.id)).not.toContain("scrollable-region-focusable");
 
   // Knopf „Weiter“
   await page.getByRole("button", { name: "Weiter" }).click();
@@ -165,8 +185,7 @@ test("First-Run: neues Tutorial erscheint genau einmal, danach kein Neu-Punkt", 
   // Neuer App-Start (neuer Tab = neue Sitzung): kein Tutorial mehr.
   const next = await page.context().newPage();
   await next.goto("/");
-  await expect(next.getByRole("heading", { name: /Hallo, Ben/ })).toBeVisible();
-  await expectStaysOn(next, "/");
+  await expectStaysOn(next, "/", next.getByRole("heading", { name: /Hallo, Ben/ }));
   await next.close();
 });
 
@@ -174,7 +193,7 @@ test("Bestandsnutzer (Alt-Key v5): neues Tutorial einmal, Neu-Punkt bleibt", asy
   await loginAs(page, "Anna", { keys: { "gm:tutorial-seen:v5": "yes", [ONBOARDING_KEYS.installTip]: "yes" } });
   // Alt-Keys zählen NICHT als gesehen (Spec §1 Tutorial).
   await page.waitForURL(/\/tutorial$/);
-  await page.keyboard.press("End");
+  await jumpToLastPage(page);
   await page.getByRole("button", { name: "Los geht's" }).click();
   await page.waitForURL(isHome);
   await expect(page.getByRole("heading", { name: /Hallo, Anna/ })).toBeVisible();
@@ -183,14 +202,52 @@ test("Bestandsnutzer (Alt-Key v5): neues Tutorial einmal, Neu-Punkt bleibt", asy
 
   const next = await page.context().newPage();
   await next.goto("/");
-  await expect(next.getByRole("heading", { name: /Hallo, Anna/ })).toBeVisible();
-  await expectStaysOn(next, "/");
+  await expectStaysOn(next, "/", next.getByRole("heading", { name: /Hallo, Anna/ }));
   await next.close();
 });
 
+test("First-Run ohne Identität: nach dem Tutorial fragt „Wer bist du?“, „Später“ merkt es sich", async ({ page }) => {
+  await loginAs(page, null, { keys: { [ONBOARDING_KEYS.installTip]: "yes" } });
+  await page.waitForURL(/\/tutorial$/);
+  await page.getByRole("button", { name: "Überspringen" }).click();
+  await page.waitForURL(isHome);
+
+  // Direkt danach (noch derselbe Schritt) das IdentitySheet.
+  const sheet = identitySheet(page);
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: "Später" }).click();
+  await expect(sheet).toBeHidden();
+  expect(new URL(page.url()).pathname).toBe("/");
+  expect(await page.evaluate((k) => localStorage.getItem(k), ONBOARDING_KEYS.identityAsked)).toBe("yes");
+  // Der Header-Chip bleibt als Weg zur Auswahl.
+  await expect(page.getByRole("button", { name: "Wer bist du?" })).toBeVisible();
+
+  // Neuer App-Start: weder Tutorial noch erneute Frage.
+  const next = await page.context().newPage();
+  await next.goto("/");
+  await expectStaysOn(next, "/", next.getByRole("button", { name: /Christof/ }).first());
+  await expect(identitySheet(next)).toHaveCount(0);
+  await next.close();
+});
+
+test("First-Run ohne Identität: Auswahl im Sheet setzt „Wer bin ich?“", async ({ page }) => {
+  await loginAs(page, null, { keys: { [ONBOARDING_KEYS.installTip]: "yes" } });
+  await page.waitForURL(/\/tutorial$/);
+  await jumpToLastPage(page);
+  await page.getByRole("button", { name: "Los geht's" }).click();
+  await page.waitForURL(isHome);
+
+  const sheet = identitySheet(page);
+  await sheet.getByRole("button", { name: /Ben/ }).click();
+  await sheet.getByRole("button", { name: "Ja, das bin ich" }).click();
+  await expect(sheet).toBeHidden();
+  await expect(page.getByRole("heading", { name: /Hallo, Ben/ })).toBeVisible();
+  expect(new URL(page.url()).pathname).toBe("/");
+  expect(await page.evaluate((k) => localStorage.getItem(k), `gm:identity:v1:${GROUP_ID}`)).toBe(personId("Ben"));
+});
+
 test("Share-Link-Einstieg: kein Tutorial in dieser Sitzung, erst beim nächsten Start", async ({ page }) => {
-  // Geschenk-ID wie in e2e/emu-seed.mjs: Anna hat in 15 Tagen Geburtstag.
-  const annaGift = `anna_${new Date(Date.now() + 15 * DAY).getFullYear()}`;
+  const annaGift = giftIds.anna;
   await page.context().addInitScript(
     ({ key, id }) => localStorage.setItem(key, id),
     { key: `gm:identity:v1:${GROUP_ID}`, id: personId("Ben") },
@@ -199,13 +256,13 @@ test("Share-Link-Einstieg: kein Tutorial in dieser Sitzung, erst beim nächsten 
   await page.goto(`/g/${GROUP_ID}/gift/${annaGift}`);
   await page.getByPlaceholder("Gruppenpasswort").fill(GROUP_PASSWORD);
   await page.locator('form button[type="submit"]').click();
-  await page.waitForURL(new RegExp(`/gift/${annaGift}$`), { timeout: 60_000 });
-  await expectStaysOn(page, `/gift/${annaGift}`);
+  // Ben hat noch nicht gewählt → das VoteSheet darf sich öffnen (?vote=1).
+  await page.waitForURL(new RegExp(`/gift/${annaGift}(\\?vote=1)?$`), { timeout: 60_000 });
+  await expectStaysOn(page, `/gift/${annaGift}`, page.getByRole("heading", { name: "Anna · Geburtstag" }));
 
   // Auch auf der Übersicht keine Unterbrechung in dieser Sitzung.
   await page.goto("/");
-  await expect(page.getByRole("heading", { name: /Hallo, Ben/ })).toBeVisible();
-  await expectStaysOn(page, "/");
+  await expectStaysOn(page, "/", page.getByRole("heading", { name: /Hallo, Ben/ }));
 
   // Nächster App-Start (neuer Tab): jetzt kommt das Tutorial.
   const next = await page.context().newPage();

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
 import Login from "@/pages/Login";
 import CreateGroup from "@/pages/CreateGroup";
 import Home from "@/pages/Home";
@@ -28,6 +29,7 @@ import {
   useGroupId,
 } from "@/lib/auth";
 import { consumeGoogleRedirectResult } from "@/lib/firebase";
+import { markIdentityAsked } from "@/lib/onboarding";
 import { useStore } from "@/lib/hooks";
 import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
@@ -212,6 +214,11 @@ export default function App() {
 }
 
 function AppRoutes() {
+  // Onboarding-Schritt „Wer bist du?“: IdentitySheet; „Später“ bzw. Schließen
+  // ohne Auswahl merkt sich die Frage. useCallback, weil der Callback in den
+  // Effekt-Deps von OnboardingFlow steht.
+  const { open } = useIdentityPrompt();
+  const needIdentity = useCallback(() => void open({ onLater: markIdentityAsked }), [open]);
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -231,7 +238,7 @@ function AppRoutes() {
         path="/*"
         element={
           <RequireAuth>
-            <OnboardingFlow />
+            <OnboardingFlow onNeedIdentity={needIdentity} />
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />

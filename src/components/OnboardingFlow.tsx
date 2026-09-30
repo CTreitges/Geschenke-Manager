@@ -1,11 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { PwaInstallTipDialog } from "./PwaInstallTipDialog";
 import { useIdentity } from "@/lib/auth";
 import { useStore } from "@/lib/hooks";
 import {
-  markIdentityAsked,
   markInstallTipSeen,
   markStepShown,
   nextOnboardingStep,
@@ -15,12 +13,11 @@ import { isStandalonePWA, wasPwaInstalledEver } from "@/lib/pwa";
 
 type OnboardingFlowProps = {
   /**
-   * Schritt „Wer bist du?“: öffnet das IdentitySheet. Die Aufruferin
-   * kümmert sich um die Antwort – „Später“ bzw. Schließen ohne Auswahl
-   * ruft `markIdentityAsked()` aus `@/lib/onboarding`, eine Auswahl
-   * `setIdentity()`. Ohne Prop: Hinweis-Toast + Einstellungen („Wer bin ich?“).
+   * Schritt „Wer bist du?“: öffnet das IdentitySheet (verdrahtet in App.tsx).
+   * Die Aufruferin kümmert sich um die Antwort – „Später“ bzw. Schließen ohne
+   * Auswahl ruft `markIdentityAsked()`, eine Auswahl setzt die Identität.
    */
-  onNeedIdentity?: () => void;
+  onNeedIdentity: () => void;
 };
 
 /**
@@ -61,15 +58,7 @@ export function OnboardingFlow({ onNeedIdentity }: OnboardingFlowProps) {
     if (step === "tutorial") {
       nav("/tutorial", { replace: true, state: { firstRun: true } });
     } else if (step === "identity") {
-      if (onNeedIdentity) {
-        onNeedIdentity();
-      } else {
-        markIdentityAsked();
-        toast.message("Wer bist du?", {
-          description: "Wähle dich unter „Wer bin ich?“ aus – dann gehören Stimmen und Wünsche dir.",
-        });
-        nav("/settings");
-      }
+      onNeedIdentity();
     } else if (step === "install-tip") {
       setInstallOpen(true);
     }

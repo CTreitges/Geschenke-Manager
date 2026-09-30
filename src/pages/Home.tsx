@@ -254,7 +254,7 @@ function StackCard({
               {formatDaysShort(days)}
             </span>
           </span>
-          <span className={cn("mt-1 block truncate pr-8 text-meta font-semibold", PHASE_TEXT[info.phase])}>{info.label}</span>
+          <span className={cn("mt-1 block truncate text-meta font-semibold", PHASE_TEXT[info.phase])}>{info.label}</span>
         </span>
       </button>
       <div className="absolute right-0.5 top-0.5">{menu}</div>

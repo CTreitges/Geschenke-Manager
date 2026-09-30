@@ -7,6 +7,7 @@ import { logger } from "firebase-functions/v2";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { shouldArchive } from "./archive";
+import { runBirthdayPush } from "./push/birthdayJob";
 import { birthdayYearFor, daysUntil } from "./shared/dates";
 
 admin.initializeApp();
@@ -19,7 +20,6 @@ const MAIL_FROM = "Geschenke-Manager <christof.treitges@gmail.com>";
 const UNSUB_SECRET = defineSecret("UNSUB_SECRET");
 const BREVO_SMTP_USER = defineSecret("BREVO_SMTP_USER");
 const BREVO_SMTP_PASS = defineSecret("BREVO_SMTP_PASS");
-const STACK_WINDOW_DAYS = 30;
 
 interface MailContent {
   to: string;
@@ -292,41 +292,12 @@ export const changePassword = onCall({ region: REGION }, async (request) => {
 
 // ─── notifyUpcomingBirthdays ────────────────────────────
 //
-// Läuft täglich 08:00 Europe/Vienna, sucht in jeder Gruppe nach Personen
-// deren Geburtstag heute genau STACK_WINDOW_DAYS Tage entfernt ist (sie
-// rutschen also heute frisch in den 30-Tage-Stack), und schickt eine
-// Web-Push-Notification an alle Member-Tokens deren Member-Doc
-// `notifyStack: true` hat.
-function getTodayInVienna(): { y: number; m: number; d: number } {
-  const fmt = new Intl.DateTimeFormat("en-CA", {
-    timeZone: "Europe/Vienna",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  });
-  // en-CA gibt YYYY-MM-DD aus.
-  const [y, m, d] = fmt.format(new Date()).split("-").map(Number);
-  return { y, m, d };
-}
-
-function daysUntilBirthday(birthday: string): number {
-  const parts = birthday.split("-");
-  const month = parts.length === 3 ? +parts[1] : +parts[0];
-  const day = parts.length === 3 ? +parts[2] : +parts[1];
-  if (!month || !day) return Number.POSITIVE_INFINITY;
-  const { y, m, d } = getTodayInVienna();
-  const todayUtc = Date.UTC(y, m - 1, d);
-  let candidate = Date.UTC(y, month - 1, day);
-  if (candidate < todayUtc) candidate = Date.UTC(y + 1, month - 1, day);
-  return Math.round((candidate - todayUtc) / 86400000);
-}
-
-interface PersonLike {
-  id: string;
-  name: string;
-  birthday: string;
-}
-
+// Läuft täglich 08:00 Europe/Vienna. Personen, deren Geburtstag 28–30 Tage
+// entfernt ist, rutschen in den 30-Tage-Stack: alle Mitglieder mit
+// notifyStack bekommen einen Push — außer der beschenkten Person selbst (auch
+// nicht über geteilte Geräte-Tokens); sie bekommt stattdessen den Hinweis,
+// ihre Wunschliste zu ergänzen. Einmal pro Person und Jahr (Marker in _push).
+// Logik: push/birthdayJob.ts, push/birthday.ts, push/recipients.ts.
 export const notifyUpcomingBirthdays = onSchedule(
   {
     region: REGION,
@@ -334,91 +305,9 @@ export const notifyUpcomingBirthdays = onSchedule(
     timeZone: "Europe/Vienna",
   },
   async () => {
-    const messaging = admin.messaging();
-    const groupRefs = await db.collection("groups").listDocuments();
-    let totalSent = 0;
-    let totalGroups = 0;
-
-    for (const groupRef of groupRefs) {
-      const groupId = groupRef.id;
-      const personsSnap = await db
-        .collection(`groups/${groupId}/persons`)
-        .get();
-      const due: PersonLike[] = [];
-      for (const p of personsSnap.docs) {
-        const data = p.data() as { name?: string; birthday?: string };
-        if (
-          typeof data.birthday === "string" &&
-          typeof data.name === "string" &&
-          daysUntilBirthday(data.birthday) === STACK_WINDOW_DAYS
-        ) {
-          due.push({ id: p.id, name: data.name, birthday: data.birthday });
-        }
-      }
-      if (due.length === 0) continue;
-
-      const membersSnap = await db
-        .collection(`groups/${groupId}/members`)
-        .where("notifyStack", "==", true)
-        .get();
-      const uids = membersSnap.docs.map((d) => d.id);
-      if (uids.length === 0) continue;
-
-      const tokenDocs = await Promise.all(
-        uids.map((uid) => db.doc(`pushTokens/${uid}`).get()),
-      );
-      const tokenEntries: { uid: string; token: string }[] = [];
-      for (const snap of tokenDocs) {
-        if (!snap.exists) continue;
-        const data = snap.data() as Record<string, unknown>;
-        for (const token of Object.keys(data)) {
-          tokenEntries.push({ uid: snap.id, token });
-        }
-      }
-      if (tokenEntries.length === 0) continue;
-
-      const tokens = tokenEntries.map((e) => e.token);
-      totalGroups++;
-      for (const person of due) {
-        const result = await messaging.sendEachForMulticast({
-          notification: {
-            title: "Geburtstag in 30 Tagen",
-            body: `${person.name} rückt in „${groupId}" in den Stack.`,
-          },
-          data: {
-            groupId,
-            personId: person.id,
-            tag: `gm-stack-${groupId}-${person.id}`,
-            url: "/",
-          },
-          tokens,
-        });
-        totalSent += result.successCount;
-
-        // Ungültige Tokens (User hat App deinstalliert o.ä.) aufräumen,
-        // damit der Pool nicht zumüllt.
-        const cleanups: Promise<unknown>[] = [];
-        result.responses.forEach((resp, i) => {
-          if (resp.success) return;
-          const code = resp.error?.code ?? "";
-          if (
-            code === "messaging/invalid-registration-token" ||
-            code === "messaging/registration-token-not-registered"
-          ) {
-            const entry = tokenEntries[i];
-            cleanups.push(
-              db.doc(`pushTokens/${entry.uid}`).update({
-                [entry.token]: admin.firestore.FieldValue.delete(),
-              }),
-            );
-          }
-        });
-        if (cleanups.length > 0) await Promise.all(cleanups);
-      }
-    }
-
+    const { sent, groups } = await runBirthdayPush(db);
     logger.info(
-      `notifyUpcomingBirthdays: sent ${totalSent} push messages across ${totalGroups} group(s)`,
+      `notifyUpcomingBirthdays: sent ${sent} push messages across ${groups} group(s)`,
     );
   },
 );
@@ -433,7 +322,8 @@ export const deleteGroup = onCall({ region: REGION }, async (request) => {
   await verifyPassword(groupId, password);
 
   // Recursive delete handles all subcollections (persons, gifts,
-  // suggestions, wishlist, polls, members, _meta) plus the group doc.
+  // suggestions, wishlist, polls, members, _meta, _archive, _push,
+  // _debugPush) plus the group doc.
   await db.recursiveDelete(db.doc(`groups/${groupId}`));
 
   return { ok: true };

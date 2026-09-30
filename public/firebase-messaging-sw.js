@@ -63,6 +63,23 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// Browser hat das Push-Abo erneuert oder entzogen (v. a. Firefox): Der
+// gespeicherte FCM-Token hängt am alten Abo und ist tot. Ohne SDK im Worker
+// kann nur die App neu registrieren — offene Fenster bekommen Bescheid
+// (usePushNavigation → syncPushToken({ force: true })); sonst holt es der
+// nächste App-Start nach (Endpoint-Vergleich in syncPushToken).
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    self.clients
+      .matchAll({ type: "window", includeUncontrolled: true })
+      .then((wins) =>
+        wins.forEach((w) =>
+          w.postMessage({ type: "GM_PUSH_SUBSCRIPTION_CHANGE" }),
+        ),
+      ),
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
   let target = new URL(

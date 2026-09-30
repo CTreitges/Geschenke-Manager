@@ -13,8 +13,11 @@ export interface PushPrefs {
 /** localStorage-Eintrag: welcher FCM-Token für welche UID registriert ist. */
 export interface StoredPushToken {
   token: string;
+  /** UID, unter der der Token in pushTokens/{uid} liegt. */
   uid: string;
   syncedAt: number;
+  /** Endpoint der Push-Subscription beim letzten Sync (null = unbekannt). */
+  endpoint: string | null;
 }
 
 export const PUSH_TOKEN_KEY = "gm:push-token";
@@ -36,7 +39,12 @@ export function parseStoredToken(raw: string | null): StoredPushToken | null {
   try {
     const v = JSON.parse(raw) as Partial<StoredPushToken>;
     if (typeof v.token !== "string" || !v.token || typeof v.uid !== "string" || !v.uid) return null;
-    return { token: v.token, uid: v.uid, syncedAt: typeof v.syncedAt === "number" ? v.syncedAt : 0 };
+    return {
+      token: v.token,
+      uid: v.uid,
+      syncedAt: typeof v.syncedAt === "number" ? v.syncedAt : 0,
+      endpoint: typeof v.endpoint === "string" && v.endpoint ? v.endpoint : null,
+    };
   } catch {
     return null;
   }
@@ -66,9 +74,20 @@ export function clearStoredToken(storage: StorageLike | null = defaultStorage())
   }
 }
 
-/** Muss der Token neu geholt/geschrieben werden (neue UID oder älter als ein Tag)? */
-export function needsTokenSync(stored: StoredPushToken | null, uid: string, now: number): boolean {
+/**
+ * Muss der Token neu geholt/geschrieben werden? Ja bei neuer UID, bei
+ * geänderter oder verlorener Push-Subscription (`endpoint` = aktueller
+ * Endpoint, null = keine) — dann sofort, ohne Tages-Takt — und sonst
+ * höchstens einmal pro Tag.
+ */
+export function needsTokenSync(
+  stored: StoredPushToken | null,
+  uid: string,
+  now: number,
+  endpoint: string | null,
+): boolean {
   if (!stored || stored.uid !== uid) return true;
+  if (endpoint !== stored.endpoint) return true;
   return now - stored.syncedAt >= PUSH_SYNC_INTERVAL_MS || now < stored.syncedAt;
 }
 

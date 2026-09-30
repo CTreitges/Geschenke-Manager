@@ -14,7 +14,7 @@ import { SettingsGroup, SettingsRow } from "@/components/settings/SettingsGroup"
 import { useMyId, useStore } from "@/lib/hooks";
 import { setActiveGroup, updateSettings } from "@/lib/storage";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
-import { unregisterPushOnLogout } from "@/lib/messaging";
+import { disablePushForGroup } from "@/lib/messaging";
 import { getKnownGroups, removeKnownGroup, setAuthed, setGroupId, useGroupId } from "@/lib/auth";
 
 // Einstellungen: Du → Mitteilungen → Gruppe → Darstellung → Konto → Hilfe → Gefahrenzone.
@@ -60,13 +60,14 @@ export default function Settings() {
   async function leaveOnThisDevice() {
     const ok = await confirm({
       title: `Gruppe „${groupId}“ auf diesem Gerät verlassen?`,
-      body: "Mitteilungen für dieses Gerät werden abgemeldet. Mit Gruppen-ID und Passwort kommst du jederzeit wieder rein.",
+      body: "Mitteilungen dieser Gruppe werden abgeschaltet. Mit Gruppen-ID und Passwort kommst du jederzeit wieder rein.",
       confirmLabel: "Verlassen",
       tone: "danger",
     });
     if (!ok) return;
-    // Push-Token dieses Geräts abmelden (liest den Merker sofort, der Rest läuft im Hintergrund).
-    void unregisterPushOnLogout();
+    // Push nur für diese Gruppe abschalten (Schreibvorgang läuft im Hintergrund
+    // weiter); der Geräte-Token bleibt für andere Gruppen derselben UID.
+    if (groupId) void disablePushForGroup(groupId);
     setActiveGroup(null);
     setAuthed(false);
     nav("/login");

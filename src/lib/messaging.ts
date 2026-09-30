@@ -1,7 +1,10 @@
 // Web-Push im Client: Service-Worker-Registrierung, FCM-Token-Lebenszyklus,
 // Opt-ins pro Gruppe und Navigation aus Notification-Klicks.
 // Context7: firebase-js-sdk messaging (getToken mit eigener
-// serviceWorkerRegistration, deleteToken).
+// serviceWorkerRegistration, deleteToken). Token-Lebenszyklus gegen
+// @firebase/messaging 0.12.12 (getTokenInternal/deleteTokenInternal) geprüft:
+// getToken holt bei geändertem Endpoint oder fehlender Subscription selbst
+// einen neuen Token, deleteToken meldet ihn bei FCM ab und kündigt das Abo.
 
 import { deleteToken, getMessaging, getToken, isSupported } from "firebase/messaging";
 import {
@@ -16,7 +19,7 @@ import {
 import { httpsCallable } from "firebase/functions";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { app, auth, authReady, db, functions } from "./firebase";
+import { app, auth, authReady, db, functions, useFirebaseUser } from "./firebase";
 import { isStandalonePWA } from "./pwa";
 import {
   clearStoredToken,
@@ -39,6 +42,7 @@ const FCM_SW_URL = "/firebase-messaging-sw.js";
 const FCM_SW_SCOPE = "/firebase-cloud-messaging-push-scope";
 const SW_ACTIVATE_TIMEOUT_MS = 10_000;
 const PUSH_CHANGE_EVENT = "gm:push-change";
+const DELETE_TOKEN_TIMEOUT_MS = 4000;
 
 function notifyPushChange() {
   window.dispatchEvent(new Event(PUSH_CHANGE_EVENT));
@@ -58,6 +62,27 @@ function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> 
       },
     );
   });
+}
+
+/**
+ * Aktuelle UID für Push-Schreibvorgänge. `authReady` kennt nur die UID beim
+ * App-Start; nach „Bei Google abmelden“/„Google trennen“ (signOutAndReanon)
+ * läuft die Seite ohne Reload mit einer neuen anonymen UID weiter.
+ */
+async function currentUid(): Promise<string> {
+  const startUid = await authReady;
+  return auth.currentUser?.uid ?? startUid;
+}
+
+/** Endpoint der Push-Subscription am FCM-Worker (null = keine/unbekannt). */
+async function currentPushEndpoint(registration?: ServiceWorkerRegistration): Promise<string | null> {
+  try {
+    const reg = registration ?? (await navigator.serviceWorker.getRegistration(FCM_SW_SCOPE));
+    const sub = await reg?.pushManager?.getSubscription();
+    return sub?.endpoint ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /** Registriert den FCM-Worker und wartet (mit Timeout) bis er aktiv ist. */
@@ -102,7 +127,12 @@ export async function isPushSupported(): Promise<boolean> {
 /**
  * Holt den FCM-Token dieses Geräts und schreibt ihn als Upsert nach
  * pushTokens/{uid}[token]. Ein vorher unter derselben UID gemerkter, anderer
- * Token wird entfernt (Token-Rotation).
+ * Token wird entfernt (Token-Rotation). Gehört der gemerkte Token einer
+ * anderen UID (geteiltes Gerät, Abmelden ohne erfolgreiches deleteToken,
+ * Google-Kontowechsel), wird er zuerst bei FCM abgemeldet: Den Eintrag unter
+ * pushTokens/{alteUid} dürfen wir nicht löschen (Rules), ein neuer Token
+ * sorgt aber dafür, dass dort nur noch ein toter Token liegt, den der Server
+ * beim nächsten Versand wegräumt.
  */
 async function registerDeviceToken(uid: string, opts: { updateWorker?: boolean } = {}): Promise<string> {
   if (!VAPID_KEY) {
@@ -111,13 +141,23 @@ async function registerDeviceToken(uid: string, opts: { updateWorker?: boolean }
   const registration = await ensureFcmServiceWorker();
   // Holt neue SW-Versionen (z. B. diesen Push-Fix) auch zu Bestandsgeräten.
   if (opts.updateWorker) registration.update().catch(() => undefined);
-  const token = await getToken(getMessaging(app), {
+  const messaging = getMessaging(app);
+  const stored = readStoredToken();
+  if (stored && stored.uid !== uid) {
+    // Scheitert das, lieber ohne Push als mit den Pushes der alten UID —
+    // der Merker bleibt, der nächste Sync versucht es erneut.
+    await withTimeout(
+      deleteToken(messaging),
+      DELETE_TOKEN_TIMEOUT_MS,
+      "Alte Geräte-Anmeldung ließ sich nicht entfernen – bitte später erneut versuchen",
+    );
+  }
+  const token = await getToken(messaging, {
     vapidKey: VAPID_KEY,
     serviceWorkerRegistration: registration,
   });
   if (!token) throw new Error("Kein FCM-Token erhalten");
 
-  const stored = readStoredToken();
   const ref = doc(db, "pushTokens", uid);
   const meta = {
     ua: navigator.userAgent,
@@ -131,7 +171,7 @@ async function registerDeviceToken(uid: string, opts: { updateWorker?: boolean }
   if (stored && stored.uid === uid && stored.token !== token) {
     await updateDoc(ref, new FieldPath(stored.token), deleteField()).catch(() => undefined);
   }
-  writeStoredToken({ token, uid, syncedAt: Date.now() });
+  writeStoredToken({ token, uid, syncedAt: Date.now(), endpoint: await currentPushEndpoint(registration) });
   notifyPushChange();
   return token;
 }
@@ -151,7 +191,7 @@ export async function enablePushForGroup(groupId: string): Promise<void> {
         : "Benachrichtigungen nicht erlaubt",
     );
   }
-  const uid = await authReady;
+  const uid = await currentUid();
   await registerDeviceToken(uid);
   await updateDoc(doc(db, "groups", groupId, "members", uid), {
     notifyStack: true,
@@ -164,7 +204,7 @@ export async function setPushPrefs(
   groupId: string,
   prefs: { notifyStack?: boolean; notifyPolls?: boolean },
 ): Promise<void> {
-  const uid = await authReady;
+  const uid = await currentUid();
   const patch: { notifyStack?: boolean; notifyPolls?: boolean } = {};
   if (typeof prefs.notifyStack === "boolean") patch.notifyStack = prefs.notifyStack;
   if (typeof prefs.notifyPolls === "boolean") patch.notifyPolls = prefs.notifyPolls;
@@ -173,17 +213,36 @@ export async function setPushPrefs(
 }
 
 /**
- * Beim App-Start: hält den Token frisch (höchstens 1×/Tag), trägt lastSeenAt
- * nach und holt den neuen Service Worker. Kein Prompt, keine UI — läuft nur,
- * wenn die Berechtigung schon erteilt ist.
+ * „Gruppe auf diesem Gerät verlassen“: schaltet Push für DIESE Gruppe ab
+ * (notifyStack/notifyPolls = false im eigenen Member-Doc, das dabei stehen
+ * bleibt). Der Geräte-Token bleibt, damit andere Gruppen derselben UID auf
+ * dem Gerät weiter Push bekommen; nach erneutem Beitritt kommt erst wieder
+ * etwas, wenn man es in den Einstellungen einschaltet. Vor dem Austritt
+ * aufrufen, solange die UID die aktuelle ist. Wirft nie.
  */
-export async function syncPushToken(): Promise<void> {
+export async function disablePushForGroup(groupId: string): Promise<void> {
+  try {
+    await setPushPrefs(groupId, { notifyStack: false, notifyPolls: false });
+  } catch (err) {
+    console.warn("[push] Gruppen-Push nicht abgeschaltet", err);
+  }
+}
+
+/**
+ * Beim App-Start: hält den Token frisch (höchstens 1×/Tag), trägt lastSeenAt
+ * nach und holt den neuen Service Worker. Hat der Browser das Push-Abo
+ * erneuert oder verloren (Endpoint weicht vom Merker ab) oder meldet der
+ * Worker `pushsubscriptionchange` (`force`), sofort — ohne Tages-Takt. Kein
+ * Prompt, keine UI — läuft nur, wenn die Berechtigung schon erteilt ist.
+ */
+export async function syncPushToken(opts: { force?: boolean } = {}): Promise<void> {
   try {
     if (!VAPID_KEY) return;
     if (!(await isPushSupported())) return;
     if (Notification.permission !== "granted") return;
-    const uid = await authReady;
-    if (!needsTokenSync(readStoredToken(), uid, Date.now())) return;
+    const uid = await currentUid();
+    const endpoint = await currentPushEndpoint();
+    if (!opts.force && !needsTokenSync(readStoredToken(), uid, Date.now(), endpoint)) return;
     await registerDeviceToken(uid, { updateWorker: true });
   } catch (err) {
     console.warn("[push] Token-Sync fehlgeschlagen", err);
@@ -193,17 +252,19 @@ export async function syncPushToken(): Promise<void> {
 /**
  * Beim Abmelden (vor einem UID-Wechsel aufrufen): Token bei FCM löschen,
  * aus pushTokens/{uid} entfernen und den lokalen Merker vergessen. Die
- * Gruppen-Schalter bleiben (gelten für andere Geräte). Wirft nie.
+ * Gruppen-Schalter bleiben (gelten für andere Geräte). Scheitert deleteToken
+ * (Timeout/Fehler), bleibt der Merker mit der alten UID stehen: Der nächste
+ * Sync unter neuer UID meldet den Token dann erneut ab, bevor er einen neuen
+ * holt (registerDeviceToken). Wirft nie.
  */
 export async function unregisterPushOnLogout(): Promise<void> {
   const stored = readStoredToken();
-  clearStoredToken();
   const uid = auth.currentUser?.uid;
   try {
     if (stored && uid && stored.uid === uid) {
       await withTimeout(
         updateDoc(doc(db, "pushTokens", uid), new FieldPath(stored.token), deleteField()),
-        4000,
+        DELETE_TOKEN_TIMEOUT_MS,
         "Token-Löschen dauert zu lange",
       );
     }
@@ -216,8 +277,9 @@ export async function unregisterPushOnLogout(): Promise<void> {
         ? await navigator.serviceWorker.getRegistration(FCM_SW_SCOPE)
         : undefined;
     if (registration && (await isPushSupported())) {
-      await withTimeout(deleteToken(getMessaging(app)), 4000, "deleteToken dauert zu lange");
+      await withTimeout(deleteToken(getMessaging(app)), DELETE_TOKEN_TIMEOUT_MS, "deleteToken dauert zu lange");
     }
+    clearStoredToken();
   } catch (err) {
     console.warn("[push] deleteToken fehlgeschlagen", err);
   }
@@ -242,6 +304,8 @@ function currentPermission(): NotificationPermission | null {
  * `state` ist null, solange die Unterstützung noch geprüft wird.
  */
 export function usePushState(groupId: string | null): { state: PushState | null; prefs: PushPrefs } {
+  // Reagiert auch auf einen UID-Wechsel ohne Reload (PUSH-01).
+  const uid = useFirebaseUser()?.uid ?? null;
   const [supported, setSupported] = useState<boolean | null>(null);
   const [, setTick] = useState(0); // Neuberechnung bei Push-/Sichtbarkeits-Änderung
   const [member, setMember] = useState<MemberPushFlags | null>(null);
@@ -264,29 +328,24 @@ export function usePushState(groupId: string | null): { state: PushState | null;
 
   useEffect(() => {
     setMember(null);
-    if (!groupId) return;
+    if (!groupId || !uid) return;
     let cancelled = false;
-    let unsub: (() => void) | null = null;
-    authReady.then((uid) => {
-      if (cancelled) return;
-      unsub = onSnapshot(
-        doc(db, "groups", groupId, "members", uid),
-        (snap) => {
-          if (!cancelled) setMember((snap.data() as MemberPushFlags | undefined) ?? {});
-        },
-        () => {
-          if (!cancelled) setMember({});
-        },
-      );
-    });
+    const unsub = onSnapshot(
+      doc(db, "groups", groupId, "members", uid),
+      (snap) => {
+        if (!cancelled) setMember((snap.data() as MemberPushFlags | undefined) ?? {});
+      },
+      () => {
+        if (!cancelled) setMember({});
+      },
+    );
     return () => {
       cancelled = true;
-      unsub?.();
+      unsub();
     };
-  }, [groupId]);
+  }, [groupId, uid]);
 
   const stored = readStoredToken();
-  const uid = auth.currentUser?.uid ?? null;
   const state =
     supported === null
       ? null
@@ -301,20 +360,39 @@ export function usePushState(groupId: string | null): { state: PushState | null;
 }
 
 /**
- * Hört auf GM_NAVIGATE vom Push-Worker (Klick auf eine Meldung bei offener
- * App) und navigiert im Router. Muss innerhalb des Routers laufen.
+ * Nachricht vom Push-Worker verarbeiten: GM_NAVIGATE (Klick auf eine Meldung
+ * bei offener App) navigiert zu App-internen Pfaden,
+ * GM_PUSH_SUBSCRIPTION_CHANGE (Browser hat das Push-Abo erneuert) holt
+ * sofort einen neuen Token.
+ */
+export function handlePushWorkerMessage(
+  data: unknown,
+  deps: { navigate: (url: string) => void; resync: () => void },
+): void {
+  const msg = data as { type?: unknown; url?: unknown } | null;
+  if (msg?.type === "GM_PUSH_SUBSCRIPTION_CHANGE") {
+    deps.resync();
+    return;
+  }
+  if (msg?.type !== "GM_NAVIGATE" || typeof msg.url !== "string") return;
+  // Nur App-interne Pfade.
+  if (!msg.url.startsWith("/") || msg.url.startsWith("//")) return;
+  deps.navigate(msg.url);
+}
+
+/**
+ * Hört auf Nachrichten vom Push-Worker (handlePushWorkerMessage) und
+ * navigiert im Router. Muss innerhalb des Routers laufen.
  */
 export function usePushNavigation(): void {
   const navigate = useNavigate();
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
-    const onMessage = (event: MessageEvent) => {
-      const data = event.data as { type?: unknown; url?: unknown } | null;
-      if (data?.type !== "GM_NAVIGATE" || typeof data.url !== "string") return;
-      // Nur App-interne Pfade.
-      if (!data.url.startsWith("/") || data.url.startsWith("//")) return;
-      navigate(data.url);
-    };
+    const onMessage = (event: MessageEvent) =>
+      handlePushWorkerMessage(event.data, {
+        navigate,
+        resync: () => void syncPushToken({ force: true }),
+      });
     navigator.serviceWorker.addEventListener("message", onMessage);
     return () => navigator.serviceWorker.removeEventListener("message", onMessage);
   }, [navigate]);

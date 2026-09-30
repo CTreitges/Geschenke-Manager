@@ -85,13 +85,21 @@ function loadWorker(opts: { windows?: FakeWindow[]; failRichNotification?: boole
     }).then(() => closed);
   };
 
-  return { listeners, shown, opened, matchAllArgs, push, click };
+  const subscriptionChange = () => dispatch("pushsubscriptionchange", {});
+
+  return { listeners, shown, opened, matchAllArgs, push, click, subscriptionChange };
 }
 
 describe("firebase-messaging-sw.js", () => {
-  it("registriert push/notificationclick/install/activate beim ersten Auswerten, ohne importScripts", () => {
+  it("registriert push/notificationclick/pushsubscriptionchange/install/activate beim ersten Auswerten, ohne importScripts", () => {
     const w = loadWorker();
-    expect([...w.listeners.keys()].sort()).toEqual(["activate", "install", "notificationclick", "push"]);
+    expect([...w.listeners.keys()].sort()).toEqual([
+      "activate",
+      "install",
+      "notificationclick",
+      "push",
+      "pushsubscriptionchange",
+    ]);
     const code = readFileSync(SW_FILE, "utf8");
     expect(code).not.toMatch(/importScripts\s*\(/);
   });
@@ -132,6 +140,24 @@ describe("firebase-messaging-sw.js", () => {
     const w = loadWorker({ failRichNotification: true });
     await w.push({ data: { title: "T", body: "B", tag: "x" } });
     expect(w.shown).toEqual([{ title: "T", options: { body: "B" } }]);
+  });
+
+  // Regression PUSH-07: rotiert der Browser das Abo, muss die offene App sofort neu registrieren.
+  it("meldet pushsubscriptionchange an alle offenen Fenster, ohne Meldung anzuzeigen", async () => {
+    const a = fakeWindow("https://app.example/");
+    const b = fakeWindow("https://app.example/settings", true);
+    const w = loadWorker({ windows: [a, b] });
+    await w.subscriptionChange();
+    expect(a.messages).toEqual([{ type: "GM_PUSH_SUBSCRIPTION_CHANGE" }]);
+    expect(b.messages).toEqual([{ type: "GM_PUSH_SUBSCRIPTION_CHANGE" }]);
+    expect(w.matchAllArgs[0]).toEqual({ type: "window", includeUncontrolled: true });
+    expect(w.shown).toEqual([]);
+  });
+
+  it("pushsubscriptionchange ohne offenes Fenster läuft fehlerfrei durch", async () => {
+    const w = loadWorker();
+    await expect(w.subscriptionChange()).resolves.toBeUndefined();
+    expect(w.opened).toEqual([]);
   });
 
   it("Klick fokussiert ein offenes Fenster und schickt GM_NAVIGATE statt neues Fenster", async () => {

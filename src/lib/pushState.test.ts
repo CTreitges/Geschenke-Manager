@@ -42,9 +42,9 @@ const MAC = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.1
 describe("gespeicherter Token", () => {
   it("schreibt, liest und löscht den Eintrag unter gm:push-token", () => {
     const s = memoryStorage();
-    writeStoredToken({ token: "t1", uid: "u1", syncedAt: 5 }, s);
+    writeStoredToken({ token: "t1", uid: "u1", syncedAt: 5, endpoint: "https://push/e1" }, s);
     expect(s.map.has(PUSH_TOKEN_KEY)).toBe(true);
-    expect(readStoredToken(s)).toEqual({ token: "t1", uid: "u1", syncedAt: 5 });
+    expect(readStoredToken(s)).toEqual({ token: "t1", uid: "u1", syncedAt: 5, endpoint: "https://push/e1" });
     clearStoredToken(s);
     expect(readStoredToken(s)).toBeNull();
   });
@@ -53,12 +53,18 @@ describe("gespeicherter Token", () => {
     expect(parseStoredToken(null)).toBeNull();
     expect(parseStoredToken("{kaputt")).toBeNull();
     expect(parseStoredToken(JSON.stringify({ token: "t" }))).toBeNull();
-    expect(parseStoredToken(JSON.stringify({ token: "t", uid: "u" }))).toEqual({ token: "t", uid: "u", syncedAt: 0 });
+    // Alt-Einträge ohne Endpoint (vor PUSH-07) bleiben lesbar.
+    expect(parseStoredToken(JSON.stringify({ token: "t", uid: "u" }))).toEqual({
+      token: "t",
+      uid: "u",
+      syncedAt: 0,
+      endpoint: null,
+    });
   });
 
   it("wirft nie, auch wenn localStorage gesperrt ist", () => {
     expect(readStoredToken(throwingStorage)).toBeNull();
-    expect(() => writeStoredToken({ token: "t", uid: "u", syncedAt: 1 }, throwingStorage)).not.toThrow();
+    expect(() => writeStoredToken({ token: "t", uid: "u", syncedAt: 1, endpoint: null }, throwingStorage)).not.toThrow();
     expect(() => clearStoredToken(throwingStorage)).not.toThrow();
     expect(readStoredToken(null)).toBeNull();
   });
@@ -66,19 +72,35 @@ describe("gespeicherter Token", () => {
 
 describe("needsTokenSync", () => {
   const now = 1_000_000_000_000;
+  const ep = "https://push.example/ep-1";
   it("synchronisiert ohne Eintrag oder bei anderer UID", () => {
-    expect(needsTokenSync(null, "u1", now)).toBe(true);
-    expect(needsTokenSync({ token: "t", uid: "u0", syncedAt: now }, "u1", now)).toBe(true);
+    expect(needsTokenSync(null, "u1", now, ep)).toBe(true);
+    expect(needsTokenSync({ token: "t", uid: "u0", syncedAt: now, endpoint: ep }, "u1", now, ep)).toBe(true);
   });
 
   it("höchstens einmal pro Tag", () => {
-    const fresh = { token: "t", uid: "u1", syncedAt: now - PUSH_SYNC_INTERVAL_MS + 1 };
-    expect(needsTokenSync(fresh, "u1", now)).toBe(false);
-    expect(needsTokenSync({ ...fresh, syncedAt: now - PUSH_SYNC_INTERVAL_MS }, "u1", now)).toBe(true);
+    const fresh = { token: "t", uid: "u1", syncedAt: now - PUSH_SYNC_INTERVAL_MS + 1, endpoint: ep };
+    expect(needsTokenSync(fresh, "u1", now, ep)).toBe(false);
+    expect(needsTokenSync({ ...fresh, syncedAt: now - PUSH_SYNC_INTERVAL_MS }, "u1", now, ep)).toBe(true);
   });
 
   it("Zeitstempel in der Zukunft (Uhr verstellt) erzwingt Sync", () => {
-    expect(needsTokenSync({ token: "t", uid: "u1", syncedAt: now + 5000 }, "u1", now)).toBe(true);
+    expect(needsTokenSync({ token: "t", uid: "u1", syncedAt: now + 5000, endpoint: ep }, "u1", now, ep)).toBe(true);
+  });
+
+  // Regression PUSH-07: rotiert der Browser das Push-Abo, ist der Token tot —
+  // sofort neu registrieren statt bis zu 24 Std zu warten.
+  it("geänderter oder verlorener Endpoint erzwingt Sync trotz Tages-Takt", () => {
+    const fresh = { token: "t", uid: "u1", syncedAt: now - 1000, endpoint: ep };
+    expect(needsTokenSync(fresh, "u1", now, "https://push.example/ep-2")).toBe(true);
+    expect(needsTokenSync(fresh, "u1", now, null)).toBe(true);
+  });
+
+  it("Alt-Eintrag ohne Endpoint synchronisiert einmal, danach nur im Tages-Takt", () => {
+    const legacy = { token: "t", uid: "u1", syncedAt: now - 1000, endpoint: null };
+    expect(needsTokenSync(legacy, "u1", now, ep)).toBe(true);
+    // Endpoint nicht lesbar (null) und nie bekannt: keine Dauerschleife.
+    expect(needsTokenSync(legacy, "u1", now, null)).toBe(false);
   });
 });
 

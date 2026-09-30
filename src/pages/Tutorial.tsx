@@ -158,6 +158,9 @@ export default function Tutorial() {
           role="region"
           aria-roledescription="Karussell"
           aria-label="Tutorial"
+          // Scrollbarer Bereich muss per Tastatur erreichbar sein (axe
+          // scrollable-region-focusable); Pfeiltasten steuert der Pager selbst.
+          tabIndex={0}
           className="flex min-h-0 flex-1 snap-x snap-mandatory overflow-x-auto overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
         >
           {pages.map((p, i) => {

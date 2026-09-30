@@ -158,6 +158,67 @@ async function shot(page, name) {
   console.log(`[emu-shots] ${file} (${w}px)`);
 }
 
+/** Screenshot nur des Viewports (390×844) – für offene Sheets, die unten am Bildschirm kleben. */
+async function sheetShot(page, name) {
+  const file = path.join(OUT_DIR, `${name}.png`);
+  await wait(600);
+  await page.screenshot({ path: file });
+  shots.push(file);
+  console.log(`[emu-shots] ${file} (${pngWidth(file)}px)`);
+}
+
+/** Abstimmungs-Sheets (Start, Abstimmen, Ergebnis mit Sieger bzw. Gleichstand) in beiden Themes. */
+async function pollShots(page, g) {
+  const HOUR = 3_600_000;
+  const pollDoc = (giftId) => getDb().doc(`groups/${GROUP_ID}/polls/${giftId}`);
+  const closedPoll = (votes, startedAt) => ({
+    giftId: g.christof,
+    status: "closed",
+    startedAt,
+    startedBy: "ben",
+    endsAt: startedAt + 48 * HOUR,
+    closedAt: startedAt + 30 * HOUR,
+    closedBy: "ben",
+    closedReason: "manual",
+    votes,
+  });
+  let round = Date.now() - 3 * 24 * HOUR;
+  for (const theme of ["dark", "light"]) {
+    await setDarkMode(theme === "dark");
+
+    // Start-Sheet: Christof-Geschenk ohne Abstimmung, als Ben
+    await pollDoc(g.christof).delete();
+    await setIdentity(page, "ben");
+    await open(page, `/gift/${g.christof}`, "Ideen gesammelt");
+    await page.getByRole("region", { name: "Jetzt" }).getByRole("button", { name: "Abstimmung starten" }).click();
+    await sheetShot(page, `20-startsheet-${theme}`);
+    await page.keyboard.press("Escape");
+
+    // VoteSheet per Deeplink und die gesperrte Ideen-Liste dahinter
+    await open(page, `/gift/${g.anna}?vote=1`, "Tippe alles an");
+    await sheetShot(page, `21-votesheet-${theme}`);
+    await page.keyboard.press("Escape");
+    await open(page, `/gift/${g.anna}`, "pausiert");
+    await shot(page, `22-gift-anna-ideen-gesperrt-${theme}`);
+
+    // Ergebnis-Sheet: klarer Sieger, dann Gleichstand (je neue Runde), als Anna
+    await setIdentity(page, "anna");
+    round += HOUR;
+    await pollDoc(g.christof).set(
+      closedPoll({ anna: ["s-christof-1"], ben: ["s-christof-1", "s-christof-2"], max: ["s-christof-3"] }, round),
+    );
+    await open(page, `/gift/${g.christof}?vote=1`, "Entscheidung festlegen");
+    await sheetShot(page, `23-decisionsheet-sieger-${theme}`);
+    await page.keyboard.press("Escape");
+    round += HOUR;
+    await pollDoc(g.christof).set(closedPoll({ anna: ["s-christof-1"], ben: ["s-christof-2"] }, round));
+    await open(page, `/gift/${g.christof}?vote=1`, "Gleichstand");
+    await sheetShot(page, `24-decisionsheet-gleichstand-${theme}`);
+    await page.keyboard.press("Escape");
+  }
+  await setDarkMode(true);
+}
+
 /** Offene/bestätigte Geschenk-IDs pro Person aus dem Emulator lesen. */
 async function readGiftIds() {
   const snap = await getDb().collection(`groups/${GROUP_ID}/gifts`).get();
@@ -226,7 +287,7 @@ export async function runShots({ giftIds } = {}) {
 
     // ── Identität Christof (Spoiler-Fall) ──
     await setIdentity(page, "christof");
-    await open(page, `/gift/${g.christof}`, "Geschenk für Christof");
+    await open(page, `/gift/${g.christof}`, "Christof · Geburtstag");
     await shot(page, "09-gift-christof-als-christof-dark");
     await open(page, "/", "Anna");
     await shot(page, "10-home-als-christof-dark");
@@ -249,7 +310,7 @@ export async function runShots({ giftIds } = {}) {
     // 17 Share-Dialog im Geschenk für Anna — als Ben (Anna wäre die Beschenkte)
     await setIdentity(page, "ben");
     await open(page, `/gift/${g.anna}`, "Keramik");
-    await page.locator('[title="Geschenk teilen"]').first().click();
+    await page.locator('[title="Link teilen"]').first().click();
     await wait(900);
     await shot(page, "17-share-dialog-dark");
 
@@ -282,6 +343,9 @@ export async function runShots({ giftIds } = {}) {
     await open(page, "/settings", "Anna");
     await shot(page, "12-settings-light");
     await setDarkMode(true);
+
+    // ── Abstimmung (F1): Sheets in beiden Themes ──
+    await pollShots(page, g);
   } finally {
     if (browser) await browser.close().catch(() => {});
     if (vite.exitCode === null) vite.kill();

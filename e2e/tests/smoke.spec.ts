@@ -8,8 +8,10 @@ test("Ben meldet sich an und öffnet das Geschenk für Anna", async ({ page }, t
 
   // Stack-Karte „Anna · …" auf Home.
   await page.getByRole("button", { name: /^Anna\b/ }).click();
-  await expect(page).toHaveURL(/\/gift\/anna_\d{4}$/);
-  await expect(page.getByRole("heading", { name: "Geschenk für Anna" })).toBeVisible();
+  // Ben hat in Annas laufender Abstimmung noch nicht gewählt → das VoteSheet
+  // öffnet sich einmal von selbst (Zustand in der URL: ?vote=1).
+  await expect(page).toHaveURL(/\/gift\/anna_\d{4}(\?vote=1)?$/);
+  await expect(page.getByRole("heading", { name: "Anna · Geburtstag" })).toBeVisible();
   const giftA11y = await seriousA11yViolations(page);
 
   // axe vorerst nur protokollieren (Baseline), nicht failen.

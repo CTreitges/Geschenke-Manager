@@ -216,10 +216,14 @@ export async function seed() {
     });
   });
 
-  // ── Abstimmungen (poll-doc-id = giftId, siehe storage.setPollStatus) ──
+  // ── Abstimmungen (poll-doc-id = giftId, siehe storage.startPoll) ──
+  const HOUR = 3_600_000;
   batch.set(db.doc(`groups/${GROUP_ID}/polls/${giftId("anna")}`), {
+    giftId: giftId("anna"),
     status: "active",
-    startedAt: now - 26 * 3_600_000,
+    startedAt: now - 26 * HOUR,
+    startedBy: "lena",
+    endsAt: now + 22 * HOUR,
     votes: {
       christof: ["s-anna-1"],
       lena: ["s-anna-1", "s-anna-3"],
@@ -227,9 +231,13 @@ export async function seed() {
     },
   });
   batch.set(db.doc(`groups/${GROUP_ID}/polls/${giftId("christof")}`), {
+    giftId: giftId("christof"),
     status: "closed",
     startedAt: now - 4 * DAY,
-    closedAt: now - 1 * DAY,
+    startedBy: "anna",
+    endsAt: now - 2 * DAY,
+    closedAt: now - 2 * DAY,
+    closedReason: "timeout",
     votes: {
       anna: ["s-christof-1"],
       ben: ["s-christof-1", "s-christof-2"],

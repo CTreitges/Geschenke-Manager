@@ -42,6 +42,8 @@ describe.each(Object.entries(themes))("Design-Tokens %s", (_name, t) => {
     expect(contrastRatio(t.fg, t.canvas)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(t["fg-soft"], t["surface-2"])).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(t["accent-text"], t.surface)).toBeGreaterThanOrEqual(4.5);
+    expect(contrastRatio(t["accent-text"], t["accent-soft"])).toBeGreaterThanOrEqual(4.5); // Chips, Badges
+    expect(contrastRatio(t["fg-soft"], t.surface)).toBeGreaterThanOrEqual(4.5);
     expect(contrastRatio(t.danger, t["danger-soft"])).toBeGreaterThanOrEqual(4.5);
     for (const s of ["open", "vote", "done", "received"]) {
       expect(contrastRatio(t[`status-${s}`], t[`status-${s}-soft`]), s).toBeGreaterThanOrEqual(4.5);

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui";
+import { GlowScreen } from "@/components/GlowScreen";
 import { addKnownGroup, setAuthed, setGroupId, setIdentity } from "@/lib/auth";
 import { consumeMagicTokenCF, setActiveGroup } from "@/lib/storage";
 import { markEntryLink } from "@/lib/onboarding";
@@ -64,38 +65,24 @@ export default function MagicLink() {
 
   if (state.kind === "loading") {
     return (
-      <div
-        className="min-h-screen flex items-center justify-center text-stone-500 dark:text-stone-400 text-sm"
-        style={{
-          background:
-            "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
-        }}
-      >
-        Öffne Wunschliste…
-      </div>
+      <GlowScreen className="flex items-center justify-center text-sm text-fg-muted">
+        <span role="status">Öffne Wunschliste …</span>
+      </GlowScreen>
     );
   }
 
   return (
-    <div
-      className="min-h-screen flex items-center justify-center px-6"
-      style={{
-        background:
-          "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
-      }}
-    >
-      <div className="max-w-sm w-full bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] p-6 text-center">
-        <div className="text-3xl mb-2">🔗</div>
-        <h1 className="text-lg font-bold text-stone-900 dark:text-stone-50 mb-2">
-          Link nicht einlösbar
-        </h1>
-        <p className="text-sm text-stone-600 dark:text-stone-300 leading-snug mb-5">
-          {state.message}
-        </p>
+    <GlowScreen className="flex items-center justify-center">
+      <div className="w-full max-w-sm rounded-card border border-line-subtle bg-surface p-6 text-center shadow-card">
+        <div aria-hidden className="mb-2 text-3xl">
+          🔗
+        </div>
+        <h1 className="mb-2 text-lg font-bold text-fg">Link nicht einlösbar</h1>
+        <p className="mb-5 text-sm leading-snug text-fg-soft">{state.message}</p>
         <Button onClick={() => nav("/login", { replace: true })} className="w-full">
           Zur Anmeldung
         </Button>
       </div>
-    </div>
+    </GlowScreen>
   );
 }

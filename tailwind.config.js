@@ -52,6 +52,8 @@ export default {
       backgroundImage: {
         "grad-primary": "var(--gm-grad-primary)",
         "grad-hero": "var(--gm-grad-hero)",
+        // Violetter Schein oben (Login, Boot, Links) – dunkel über --gm-glow gedämpft.
+        "glow-top": "radial-gradient(120% 60% at 50% 0%, rgb(var(--gm-glow)) 0%, rgb(var(--gm-canvas)) 55%)",
       },
       boxShadow: {
         card: "var(--gm-shadow-card)",

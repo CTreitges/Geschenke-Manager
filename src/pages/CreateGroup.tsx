@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Button, Icon, Input } from "@/components/ui";
+import { Button, Icon, Input, Overline } from "@/components/ui";
+import { GlowScreen, LogoTile } from "@/components/GlowScreen";
 import { addKnownGroup, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
 import { createGroupCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
@@ -59,61 +60,38 @@ export default function CreateGroup() {
   }
 
   return (
-    <div
-      className="min-h-screen flex flex-col justify-center px-6"
-      style={{
-        background:
-          "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
-      }}
-    >
-      <div className="text-center mb-7">
-        <div
-          className="w-[78px] h-[78px] mx-auto mb-4 rounded-3xl flex items-center justify-center text-[38px]"
-          style={{
-            background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
-            boxShadow:
-              "0 12px 28px -8px rgba(124,58,237,0.5), inset 0 0 0 1px rgba(255,255,255,0.2)",
-          }}
-        >
-          ✨
-        </div>
-        <h1 className="m-0 text-[26px] font-extrabold tracking-tight text-stone-900 dark:text-stone-50">
-          Neue Gruppe
-        </h1>
-        <p className="mt-1.5 text-sm leading-[1.5] text-stone-500 dark:text-stone-400">
-          Wähle eine ID + ein Passwort.<br />
+    <GlowScreen className="flex flex-col justify-center">
+      <div className="mb-7 text-center">
+        <LogoTile emoji="✨" />
+        <h1 className="m-0 text-title font-extrabold tracking-tight text-fg">Neue Gruppe</h1>
+        <p className="mt-1.5 text-sm leading-normal text-fg-muted">
+          Wähle eine ID + ein Passwort.
+          <br />
           Beides teilst du danach mit deinen Freunden.
         </p>
       </div>
 
       {showSaved && (
         <div className="mb-5">
-          <div className="text-[10px] font-bold tracking-[0.05em] uppercase text-stone-400 mb-1.5 pl-1">
-            Zurück zu deinen Gruppen
-          </div>
-          <div className="rounded-2xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 overflow-hidden">
-            {knownGroups.map((g, i) => (
+          <Overline className="mb-1.5 pl-1">Zurück zu deinen Gruppen</Overline>
+          <div className="overflow-hidden rounded-card border border-line bg-surface">
+            {knownGroups.map((g) => (
               <button
                 key={g}
+                type="button"
                 onClick={() => {
                   setGroupId(g);
                   nav("/");
                 }}
-                className={`w-full px-3.5 py-2.5 flex items-center gap-2 hover:bg-stone-50 dark:hover:bg-stone-700/40 ${
-                  i > 0 ? "border-t border-stone-100 dark:border-stone-700" : ""
-                }`}
+                className="flex min-h-12 w-full items-center gap-2 border-t border-line-subtle px-3.5 py-2.5 first:border-t-0 hover:bg-surface-2/60"
               >
-                <Icon.users size={14} className="text-stone-400" />
-                <span className="flex-1 text-left text-sm font-semibold text-stone-900 dark:text-stone-50">
-                  {g}
-                </span>
-                <Icon.chev size={14} className="text-stone-400" />
+                <Icon.users size={14} className="text-fg-muted" />
+                <span className="flex-1 text-left text-sm font-semibold text-fg">{g}</span>
+                <Icon.chev size={14} className="text-fg-muted" />
               </button>
             ))}
           </div>
-          <div className="text-[10px] font-bold tracking-[0.05em] uppercase text-stone-400 mt-4 mb-1.5 pl-1">
-            Oder eine neue Gruppe anlegen
-          </div>
+          <Overline className="mb-1.5 mt-4 pl-1">Oder eine neue Gruppe anlegen</Overline>
         </div>
       )}
 
@@ -123,12 +101,14 @@ export default function CreateGroup() {
       <form onSubmit={submit} className="flex flex-col gap-3">
         <div>
           <div className="relative">
-            <div className="absolute left-3 top-3.5 text-stone-400 pointer-events-none">
+            <div className="pointer-events-none absolute left-3 top-3.5 text-fg-muted">
               <Icon.users />
             </div>
             <Input
               type="text"
               placeholder="Gruppen-ID (z. B. familie-mueller)"
+              aria-label="Gruppen-ID"
+              aria-describedby="group-id-rules"
               value={groupIdInput}
               onChange={(e) => setGroupIdInput(e.target.value)}
               className="pl-11"
@@ -136,39 +116,42 @@ export default function CreateGroup() {
               spellCheck={false}
             />
           </div>
-          <div className="text-[11px] text-stone-400 mt-1.5 pl-1">
+          <div id="group-id-rules" className="mt-1.5 pl-1 text-2xs text-fg-muted">
             3–30 Zeichen · a–z, A–Z, 0–9, Bindestrich. Erstes Zeichen kein Bindestrich.
           </div>
         </div>
 
         <div className="relative">
-          <div className="absolute left-3 top-3.5 text-stone-400 pointer-events-none">
+          <div className="pointer-events-none absolute left-3 top-3.5 text-fg-muted">
             <Icon.lock />
           </div>
           <Input
             type={show ? "text" : "password"}
             placeholder="Passwort"
+            aria-label="Passwort"
             value={pw}
             onChange={(e) => setPw(e.target.value)}
-            className="pl-11 pr-20"
+            className="pl-11 pr-24"
             autoComplete="new-password"
           />
           <button
             type="button"
             onClick={() => setShow((s) => !s)}
-            className="absolute right-2 top-2 px-2.5 py-1.5 text-xs font-semibold text-stone-500 dark:text-stone-400"
+            aria-pressed={show}
+            className="absolute right-1 top-1/2 min-h-tap -translate-y-1/2 px-3 text-xs font-semibold text-fg-muted"
           >
             {show ? "Verbergen" : "Zeigen"}
           </button>
         </div>
 
         <div className="relative">
-          <div className="absolute left-3 top-3.5 text-stone-400 pointer-events-none">
+          <div className="pointer-events-none absolute left-3 top-3.5 text-fg-muted">
             <Icon.lock />
           </div>
           <Input
             type={show ? "text" : "password"}
             placeholder="Passwort wiederholen"
+            aria-label="Passwort wiederholen"
             value={pw2}
             onChange={(e) => setPw2(e.target.value)}
             className="pl-11"
@@ -177,7 +160,7 @@ export default function CreateGroup() {
         </div>
 
         {pw && pw2 && !pwMatches && (
-          <div className="text-xs text-red-600 dark:text-red-400 pl-1">
+          <div role="alert" className="pl-1 text-xs text-danger">
             Passwörter stimmen nicht überein
           </div>
         )}
@@ -188,19 +171,17 @@ export default function CreateGroup() {
         </Button>
       </form>
 
-      <div className="text-center mt-5">
-        <Link
-          to="/login"
-          className="text-sm font-semibold text-violet-700 dark:text-violet-300"
-        >
+      <div className="mt-4 text-center">
+        <Link to="/login" className="inline-flex min-h-tap items-center px-3 text-sm font-semibold text-accent-text">
           ← Zurück zum Login
         </Link>
       </div>
 
-      <p className="text-center text-xs mt-6 leading-[1.5] text-stone-400 dark:text-stone-500">
-        Vertrauensbasis, kein Account.<br />
+      <p className="mt-4 text-center text-xs leading-normal text-fg-muted">
+        Vertrauensbasis, kein Account.
+        <br />
         Jeder mit ID + Passwort hat vollen Zugriff.
       </p>
-    </div>
+    </GlowScreen>
   );
 }

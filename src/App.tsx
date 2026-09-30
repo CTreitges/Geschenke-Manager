@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { GlowScreen } from "@/components/GlowScreen";
 import { Layout } from "@/components/Layout";
 import { OnboardingFlow } from "@/components/OnboardingFlow";
 import { useIdentityPrompt } from "@/components/IdentitySheet";
@@ -197,15 +198,9 @@ export default function App() {
       <GoogleRedirectHandler />
       <PushBridge groupId={groupId} />
       {!bootDone ? (
-        <div
-          className="min-h-screen flex items-center justify-center text-stone-500 dark:text-stone-400 text-sm"
-          style={{
-            background:
-              "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
-          }}
-        >
-          Lade Gruppendaten…
-        </div>
+        <GlowScreen className="flex items-center justify-center text-sm text-fg-muted">
+          <span role="status">Lade Gruppendaten…</span>
+        </GlowScreen>
       ) : (
         <AppRoutes />
       )}

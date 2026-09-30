@@ -25,7 +25,7 @@ export default defineConfig({
         orientation: "portrait",
         lang: "de",
         background_color: "#673EB7",
-        theme_color: "#F59E0B",
+        theme_color: "#6D28D9",
         categories: ["lifestyle", "productivity", "social"],
         icons: [
           {

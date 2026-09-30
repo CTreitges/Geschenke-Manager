@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui";
 import { addKnownGroup, setAuthed, setGroupId, setIdentity } from "@/lib/auth";
 import { consumeMagicTokenCF, setActiveGroup } from "@/lib/storage";
+import { markEntryLink } from "@/lib/onboarding";
 
 type State =
   | { kind: "loading" }
@@ -26,6 +27,8 @@ export default function MagicLink() {
 
   useEffect(() => {
     if (consumed.current) return;
+    // Einstieg per Mail-Link: in dieser Sitzung kein Tutorial/Onboarding.
+    markEntryLink();
     if (!token || !/^[a-f0-9]{64}$/.test(token)) {
       setState({ kind: "error", message: "Dieser Link sieht nicht richtig aus." });
       return;

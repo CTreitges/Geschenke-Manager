@@ -27,6 +27,7 @@ import {
   useGroupId,
 } from "@/lib/auth";
 import { consumeGoogleRedirectResult } from "@/lib/firebase";
+import { isEntryLinkSession } from "@/lib/onboarding";
 import { useStore } from "@/lib/hooks";
 import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
@@ -141,6 +142,8 @@ function FirstRunTutorial() {
   useEffect(() => {
     if (location.pathname === "/tutorial") return;
     if ((location.state as Record<string, unknown>)?.fromShareLink) return;
+    // Share-/Magic-Link-Einstieg unterbricht nie (B14: Mail-Link → Wunschliste).
+    if (isEntryLinkSession()) return;
     if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "yes") return;
     localStorage.setItem(TUTORIAL_SEEN_KEY, "yes");
     nav("/tutorial");

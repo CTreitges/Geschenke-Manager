@@ -1,3 +1,5 @@
+import type { PollDoc } from "@shared/poll";
+
 export type ID = string;
 
 export interface Person {
@@ -71,16 +73,16 @@ export interface WishlistItem {
   createdAt: number;
 }
 
-export type PollStatus = "none" | "active" | "closed";
+export type { PollCloseReason, PollStatus } from "@shared/poll";
 
-export interface Poll {
+/**
+ * Poll-Doc unter /groups/{gid}/polls/{giftId} (Doc-ID = giftId), gelesen
+ * über normalizePoll. Neu seit v1.8: startedBy, endsAt (gilt nur, wenn
+ * > startedAt), closedBy, closedReason. `votes`: personId → suggestionId[]
+ * (frühere Version Record<ID, ID> wird beim Lesen normalisiert).
+ */
+export interface Poll extends PollDoc {
   giftId: ID;
-  status: PollStatus;
-  startedAt?: number;
-  closedAt?: number;
-  /** Mehrfach-Stimmen pro Person: personId → suggestionId[].
-   *  (Frühere Version war Record<ID, ID> — wird beim Lesen normalisiert.) */
-  votes: Record<ID, ID[]>;
 }
 
 export interface Feedback {

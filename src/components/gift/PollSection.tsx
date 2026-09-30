@@ -1,5 +1,5 @@
 import { Button, Icon } from "@/components/ui";
-import { setPollStatus } from "@/lib/storage";
+import { closePoll, discardPoll, extendPoll, startPoll } from "@/lib/storage";
 import { toast } from "sonner";
 import type { Gift, Poll, Suggestion } from "@/lib/types";
 import { ClosedPollSummary } from "./ClosedPollSummary";
@@ -9,6 +9,7 @@ import { Section } from "./Section";
 export function PollSection({
   gift,
   poll,
+  myId,
   pollStatus,
   giftSuggestions,
   voteTally,
@@ -19,6 +20,7 @@ export function PollSection({
 }: {
   gift: Gift;
   poll: Poll | undefined;
+  myId: string | null;
   pollStatus: Poll["status"] | "none";
   giftSuggestions: Suggestion[];
   voteTally: Record<string, string[]>;
@@ -37,8 +39,13 @@ export function PollSection({
                 toast.error("Erst Vorschläge anlegen");
                 return;
               }
-              setPollStatus(gift.id, "active");
-              toast.success("Abstimmung gestartet");
+              if (!myId) {
+                toast.error("Wähle erst, wer du bist");
+                return;
+              }
+              startPoll(gift.id, { durationMs: 48 * 3_600_000, startedBy: myId })
+                .then(() => toast.success("Abstimmung gestartet"))
+                .catch((e: Error) => toast.error(e.message));
             }}
             className="w-full"
           >
@@ -71,7 +78,7 @@ export function PollSection({
           <Button
             variant="secondary"
             onClick={() => {
-              setPollStatus(gift.id, "closed");
+              closePoll(gift.id, { closedBy: myId, reason: "manual" });
               toast.success("Abstimmung beendet");
             }}
             className="w-full"
@@ -92,13 +99,13 @@ export function PollSection({
           onAdoptWinner={onAdoptWinner}
           onReopen={() => {
             if (confirm("Abstimmung wieder öffnen? Bestehende Stimmen bleiben erhalten.")) {
-              setPollStatus(gift.id, "active");
+              extendPoll(gift.id, 24 * 3_600_000);
               toast.success("Abstimmung erneut geöffnet");
             }
           }}
           onClear={() => {
             if (confirm("Abstimmung komplett verwerfen? Stimmen gehen verloren.")) {
-              setPollStatus(gift.id, "none");
+              discardPoll(gift.id);
               toast.success("Abstimmung verworfen");
             }
           }}

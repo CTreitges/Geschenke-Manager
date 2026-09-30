@@ -3,9 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Avatar, Chip, EmptyState, Icon, PageHeader } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import {
-  castVote,
+  clearMyVotes,
   deleteSuggestion,
-  removeVote,
+  setMyVote,
   setGiftSelections,
   updateSuggestion,
 } from "@/lib/storage";
@@ -206,7 +206,7 @@ export default function GiftDetail() {
               .map((sid) => giftSuggestions.find((s) => s.id === sid))
               .filter((s): s is Suggestion => !!s)}
             onClearAll={() => {
-              removeVote(giftId, myId);
+              clearMyVotes(giftId, myId);
               toast.success("Alle Stimmen zurückgenommen");
             }}
           />
@@ -240,7 +240,7 @@ export default function GiftDetail() {
                 onVote={() => {
                   if (myId) {
                     const was = myVotes.includes(s.id);
-                    castVote(giftId, myId, s.id);
+                    setMyVote(giftId, myId, s.id, !was);
                     toast.success(was ? "Stimme entfernt" : "Stimme gespeichert");
                   }
                 }}
@@ -282,6 +282,7 @@ export default function GiftDetail() {
         <PollSection
           gift={gift}
           poll={poll}
+          myId={myId}
           pollStatus={pollStatus}
           giftSuggestions={giftSuggestions}
           voteTally={voteTally}

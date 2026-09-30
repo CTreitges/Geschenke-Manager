@@ -5,6 +5,7 @@ import {
   linkedPollSheet,
   markPrompted,
   markPushAsked,
+  openPollSheetKind,
   PUSH_ASK_INTERVAL_MS,
   pushAskKey,
   shouldAskPush,
@@ -120,5 +121,24 @@ describe("autoPollSheet", () => {
   it("nie für die beschenkte Person", () => {
     const g = { ...gift, participantIds: [...gift.participantIds, "anna"] };
     expect(autoPollSheet({ ...ctx, gift: g, myId: "anna" })).toBeNull();
+  });
+});
+
+describe("openPollSheetKind", () => {
+  it("läuft → VoteSheet, abgelaufen oder beendet → Ergebnis", () => {
+    expect(openPollSheetKind(gift, running, NOW)).toBe("vote");
+    expect(openPollSheetKind(gift, expired, NOW)).toBe("decision");
+    expect(openPollSheetKind(gift, { ...running, status: "closed" }, NOW)).toBe("decision");
+  });
+
+  it("genau an der Frist wechselt das offene Sheet ins Ergebnis", () => {
+    expect(openPollSheetKind(gift, running, NOW + HOUR - 1)).toBe("vote");
+    expect(openPollSheetKind(gift, running, NOW + HOUR)).toBe("decision");
+  });
+
+  it("verworfen (kein Doc) oder Geschenk entschieden → nichts mehr zu zeigen", () => {
+    expect(openPollSheetKind(gift, null, NOW)).toBeNull();
+    expect(openPollSheetKind({ status: "confirmed" }, running, NOW)).toBeNull();
+    expect(openPollSheetKind({ status: "received" }, expired, NOW)).toBeNull();
   });
 });

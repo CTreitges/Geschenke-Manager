@@ -109,3 +109,19 @@ export function autoPollSheet(
   if (target === "decision") return ctx.resultPrompted ? null : "decision";
   return null;
 }
+
+/**
+ * Art eines bereits offenen Abstimmungs-Sheets: läuft die Wahl → VoteSheet,
+ * ist sie vorbei → Ergebnis. null = nichts mehr zu zeigen (verworfen oder
+ * Geschenk schon entschieden) → Sheet schließen.
+ */
+export function openPollSheetKind(
+  gift: Pick<GiftLike, "status">,
+  poll: PollDoc | null | undefined,
+  now: number,
+): PollSheetKind | null {
+  if (gift.status !== "open") return null;
+  const phase = pollPhase(poll, now);
+  if (phase === "running") return "vote";
+  return phase === "none" ? null : "decision";
+}

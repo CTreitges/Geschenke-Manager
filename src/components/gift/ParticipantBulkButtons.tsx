@@ -15,7 +15,7 @@ export function ParticipantBulkButtons({
         if (allActive) onSet([]);
         else onSet(personIds);
       }}
-      className="text-xs font-semibold text-violet-700 dark:text-violet-400 px-2 py-1 rounded-md hover:bg-violet-50 dark:hover:bg-violet-950"
+      className="min-h-9 rounded-md px-2 text-xs font-semibold text-accent-text hover:bg-accent-soft"
     >
       {allActive ? "Alle entfernen" : "Alle hinzufügen"}
     </button>

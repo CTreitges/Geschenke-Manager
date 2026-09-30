@@ -237,7 +237,10 @@ function StackCard({
   return (
     <div className="relative rounded-card border border-line-subtle bg-surface shadow-card">
       <button type="button" onClick={() => onOpen()} className="flex w-full items-start gap-2.5 py-3 pl-3 pr-3 text-left">
-        <Avatar person={person} size={42} />
+        {/* Initialen nicht mitlesen: der Button-Name beginnt mit dem Namen */}
+        <span aria-hidden>
+          <Avatar person={person} size={42} />
+        </span>
         <span className="min-w-0 flex-1">
           <span className="flex items-baseline gap-2 pr-10">
             <span className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-fg">
@@ -364,7 +367,7 @@ function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void
             type="checkbox"
             checked={useCustomDate}
             onChange={(e) => setUseCustomDate(e.target.checked)}
-            className="mt-0.5 h-4 w-4 accent-violet-600"
+            className="mt-0.5 h-4 w-4 accent-accent"
           />
           <span className="text-sm text-fg-soft">Anderes Datum (statt Geburtstag)</span>
         </label>

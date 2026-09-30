@@ -19,7 +19,7 @@ export function WhatsappLinkSection({ gift }: { gift: Gift }) {
   if (gift.whatsappLink && !editing) {
     return (
       <div className="px-4 pb-3">
-        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900">
+        <div className="flex items-center gap-2 rounded-xl border border-status-received/30 bg-status-received-soft px-3.5 py-2.5">
           <span className="text-lg shrink-0">💬</span>
           <a
             href={gift.whatsappLink}
@@ -35,7 +35,7 @@ export function WhatsappLinkSection({ gift }: { gift: Gift }) {
               setEditing(true);
             }}
             aria-label="Link bearbeiten"
-            className="text-emerald-700 dark:text-emerald-400 p-1.5 shrink-0"
+            className="flex min-h-tap min-w-tap shrink-0 items-center justify-center text-status-received"
           >
             <Icon.pencil />
           </button>
@@ -47,7 +47,7 @@ export function WhatsappLinkSection({ gift }: { gift: Gift }) {
   if (editing) {
     return (
       <div className="px-4 pb-3">
-        <div className="px-3.5 py-3 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-2">
+        <div className="space-y-2 rounded-xl border border-line bg-surface px-3.5 py-3">
           <Input
             label="Gruppen-Link (z.B. WhatsApp-Einladung)"
             type="url"

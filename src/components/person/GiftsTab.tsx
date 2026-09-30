@@ -169,7 +169,7 @@ export function GiftsTab({ person, stack, past, isMe }: { person: Person; stack:
               type="checkbox"
               checked={useCustomDate}
               onChange={(e) => setUseCustomDate(e.target.checked)}
-              className="mt-0.5 h-4 w-4 accent-violet-600"
+              className="mt-0.5 h-4 w-4 accent-accent"
             />
             <span className="text-sm text-fg-soft">Anderes Datum (statt {person.name}s Geburtstag)</span>
           </label>

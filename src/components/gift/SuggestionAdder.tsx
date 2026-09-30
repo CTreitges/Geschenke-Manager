@@ -57,7 +57,7 @@ export function SuggestionAdder({
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && void add()}
           placeholder="Idee teilen…"
-          className="flex-1 min-w-0 outline-none bg-transparent px-1 py-1.5 text-stone-900 dark:text-stone-50"
+          className="min-w-0 flex-1 bg-transparent px-1 py-1.5 text-fg outline-none placeholder:text-fg-muted"
         />
         <Button
           size="sm"

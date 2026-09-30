@@ -30,7 +30,7 @@ export function ParticipantsSection({
       }
     >
       {!me && (
-        <div className="text-xs text-violet-700 dark:text-violet-400 bg-violet-50 dark:bg-violet-950 rounded-xl px-3 py-2 mb-2.5">
+        <div className="mb-2.5 rounded-xl bg-accent-soft px-3 py-2 text-xs text-accent-text">
           Wähle in den Einstellungen, wer du bist, bevor du teilnimmst oder abstimmst.
         </div>
       )}

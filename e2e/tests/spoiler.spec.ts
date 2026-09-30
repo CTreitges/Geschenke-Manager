@@ -125,7 +125,7 @@ test("Christof sieht von seinem Geschenk nichts, Anna sieht alles", async ({ pag
   // Eigenes Profil: Überraschung ohne Zahlen, Status, Löschen oder „Neues Geschenk“.
   await page.goto("/person/christof");
   await expect(page.locator("main")).toContainText("Überraschung läuft");
-  await page.getByRole("button", { name: "Geschenke", exact: true }).click();
+  await page.getByRole("tab", { name: "Geschenke", exact: true }).click();
   await expect(page.locator("main")).toContainText("Überraschung in Planung");
   await expect(page.getByRole("button", { name: /Neues Geschenk anlegen/ })).toHaveCount(0);
   await expect(page.locator("main")).toContainText("Geschenke für dich legen deine Freunde an.");

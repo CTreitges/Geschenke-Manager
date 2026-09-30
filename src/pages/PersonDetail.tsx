@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader, Skeleton, useConfirm } from "@/components/ui";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { FlaskConical } from "lucide-react";
+import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader, Segmented, Skeleton, useConfirm } from "@/components/ui";
 import { BirthdayPicker } from "@/components/BirthdayPicker";
 import { GiftsTab } from "@/components/person/GiftsTab";
 import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
@@ -12,11 +13,7 @@ import {
   sendTestMailCF,
   updatePerson,
 } from "@/lib/storage";
-import {
-  ageOnNextBirthday,
-  daysUntilBirthday,
-  formatBirthday,
-} from "@/lib/birthdays";
+import { ageOnNextBirthday, daysUntilBirthday, formatBirthday, formatDaysUntil } from "@/lib/birthdays";
 import type { Person } from "@/lib/types";
 import { getIdentity, setIdentity, useIdentity } from "@/lib/auth";
 import { useBack, useLeave } from "@/lib/nav";
@@ -25,6 +22,11 @@ import { isSkipped } from "@/lib/stack";
 import { toast } from "sonner";
 
 type Tab = "wishlist" | "gifts" | "profile";
+const TABS: { value: Tab; label: string }[] = [
+  { value: "wishlist", label: "Wunschliste" },
+  { value: "gifts", label: "Geschenke" },
+  { value: "profile", label: "Profil" },
+];
 
 export default function PersonDetail() {
   const { id } = useParams<{ id: string }>();
@@ -32,7 +34,10 @@ export default function PersonDetail() {
   const nav = useNavigate();
   const back = useBack("/people");
   const person = persons.find((p) => p.id === id);
-  const [tab, setTab] = useState<Tab>("wishlist");
+  // Tab steht in der URL (?tab=gifts), damit Zurück vom Geschenk wieder dort landet.
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = TABS.find((t) => t.value === params.get("tab"))?.value ?? "wishlist";
+  const setTab = (t: Tab) => setParams(t === "wishlist" ? {} : { tab: t }, { replace: true });
   const isMe = useIdentity() === id;
 
   // Bis die Personen geladen sind: Platzhalter statt „nicht gefunden“ (B28).
@@ -72,29 +77,24 @@ export default function PersonDetail() {
   const past = myGifts.filter((g) => g.status === "received");
   const activeCount = stack.filter((g) => !isSkipped(g)).length;
 
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "wishlist", label: "Wunschliste" },
-    { id: "gifts", label: "Geschenke" },
-    { id: "profile", label: "Profil" },
-  ];
-
   return (
     <div>
       <PageHeader
         onBack={back}
         title={person.name}
-        subtitle={`${formatBirthday(person)} · in ${daysUntilBirthday(person)} Tagen`}
+        subtitle={`${formatBirthday(person)} · ${formatDaysUntil(daysUntilBirthday(person))}`}
       />
 
       {/* Hero strip */}
-      <div className="px-5 pb-3.5 flex items-center gap-3.5">
+      <div className="flex items-center gap-3.5 px-5 pb-3.5">
         <Avatar person={person} size={64} />
-        <div className="flex-1 min-w-0">
-          <div className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">
-            {ageOnNextBirthday(person) ? `wird ${ageOnNextBirthday(person)} · ` : ""}
-            {person.email || "keine Mail"}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
+        <div className="min-w-0 flex-1">
+          {(ageOnNextBirthday(person) || person.email) && (
+            <div className="truncate text-meta font-medium text-fg-muted">
+              {[ageOnNextBirthday(person) && `wird ${ageOnNextBirthday(person)}`, person.email].filter(Boolean).join(" · ")}
+            </div>
+          )}
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
             {activeCount > 0 &&
               (isMe ? <SurpriseBadge label="Überraschung läuft" /> : <Chip variant="accent">{activeCount} in Planung</Chip>)}
             <Chip variant="neutral">{myWishes.length} Wünsche</Chip>
@@ -103,22 +103,7 @@ export default function PersonDetail() {
         </div>
       </div>
 
-      {/* Tab pills */}
-      <div className="mx-5 p-1 rounded-xl bg-[#F5F1ED] dark:bg-stone-800 flex gap-0.5">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
-              tab === t.id
-                ? "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 shadow-sm"
-                : "text-stone-500 dark:text-stone-400"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Segmented label={`Bereiche von ${person.name}`} value={tab} onChange={setTab} options={TABS} className="mx-5" />
 
       <div className="px-4 py-4 pb-24">
         {tab === "wishlist" && <WishlistView person={person} isOwner={isMe} />}
@@ -212,10 +197,10 @@ function ProfileTab({ person }: { person: Person }) {
                 onChange={(e) => setRemindersOn(e.target.checked)}
                 className="mt-0.5 w-4 h-4 accent-violet-600"
               />
-              <span className="text-[13px] text-stone-600 dark:text-stone-300 leading-snug">
+              <span className="text-meta leading-snug text-fg-soft">
                 <b>Geburtstags-Erinnerung per Mail</b>
                 <br />
-                <span className="text-stone-500 dark:text-stone-400">
+                <span className="text-fg-muted">
                   60 / 30 / 14 Tage vor dem Geburtstag — Folge-Erinnerungen entfallen, solange eigene Wünsche aus den letzten 4 Monaten auf der Liste stehen.
                 </span>
               </span>
@@ -237,7 +222,8 @@ function ProfileTab({ person }: { person: Person }) {
           disabled={testing}
           className="w-full mt-3"
         >
-          {testing ? "Sende Test-Mail…" : `🧪 Test-Mail an ${person.email} senden`}
+          <FlaskConical size={16} aria-hidden />
+          {testing ? "Sende Test-Mail…" : `Test-Mail an ${person.email} senden`}
         </Button>
       )}
       <Button variant="danger" onClick={() => void remove()} className="w-full mt-3.5">

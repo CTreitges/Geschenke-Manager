@@ -49,7 +49,7 @@ export function SuggestionAdder({
   }
 
   return (
-    <div className="mt-2 p-2.5 bg-stone-50 dark:bg-stone-800/50 rounded-xl border border-[#F0EBE6] dark:border-[#3A3633]">
+    <div className="mt-2 rounded-xl border border-line-subtle bg-surface-2/60 p-2.5">
       <div className="flex items-center gap-2">
         <span className="text-base pl-1 shrink-0">💡</span>
         <input
@@ -72,7 +72,7 @@ export function SuggestionAdder({
       {!showExtra && text && (
         <button
           onClick={() => setShowExtra(true)}
-          className="block w-full mt-1 py-1 pl-7 text-left text-[12px] font-semibold text-violet-700 dark:text-violet-400"
+          className="mt-1 block min-h-9 w-full pl-7 text-left text-xs font-semibold text-accent-text"
         >
           + Link / Preis
         </button>

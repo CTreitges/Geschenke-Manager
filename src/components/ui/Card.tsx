@@ -2,17 +2,10 @@ import type { CSSProperties, ReactNode } from "react";
 import { cn } from "@/lib/cn";
 
 // ── Card ───────────────────────────────────────────────────────
-export function Card({ className, children, onClick, style }: { className?: string; children: ReactNode; onClick?: () => void; style?: CSSProperties }) {
+// Nicht klickbar: Tippbare Karten sind <button>s (kein <div onClick>).
+export function Card({ className, children, style }: { className?: string; children: ReactNode; style?: CSSProperties }) {
   return (
-    <div
-      onClick={onClick}
-      className={cn(
-        "bg-surface rounded-card border border-line-subtle shadow-card", // gleiche Werte wie zuvor, jetzt als Tokens
-        onClick && "cursor-pointer",
-        className,
-      )}
-      style={style}
-    >
+    <div className={cn("bg-surface rounded-card border border-line-subtle shadow-card", className)} style={style}>
       {children}
     </div>
   );

@@ -172,7 +172,7 @@ export default function Home() {
         <PastGiftsLink count={gifts.filter((g) => g.status === "received").length} />
       </div>
 
-      <FAB onClick={() => setAddOpen(true)} label="Geschenk hinzufügen" />
+      <FAB onClick={() => setAddOpen(true)} label="Geschenk hinzufügen" text="Geschenk" />
       <AddManualDialog open={addOpen} onClose={() => setAddOpen(false)} />
     </div>
   );

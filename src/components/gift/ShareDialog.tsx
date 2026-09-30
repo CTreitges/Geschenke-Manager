@@ -48,21 +48,21 @@ export function ShareDialog({
   return (
     <Dialog open={open} onClose={onClose} title="Geschenk teilen">
       <div className="space-y-4">
-        <p className="text-[13px] text-stone-500 dark:text-stone-400 leading-[1.5]">
+        <p className="m-0 text-meta leading-normal text-fg-muted">
           Schick diesen Link an Personen, die beim Geschenk mitmachen sollen. Sie werden direkt
           zum Geschenk weitergeleitet — nach Login falls nötig.
         </p>
         {shareUrl ? (
           <>
-            <div
-              className="flex items-center gap-2 px-3.5 py-3 rounded-xl bg-stone-50 dark:bg-stone-800 border border-stone-200 dark:border-stone-700 cursor-pointer"
+            <button
+              type="button"
               onClick={copyLink}
+              aria-label={`Link kopieren: ${shareUrl}`}
+              className="flex w-full items-center gap-2 rounded-xl border border-line bg-surface-2/60 px-3.5 py-3 text-left"
             >
-              <Icon.link size={14} className="text-stone-400 shrink-0" />
-              <span className="flex-1 text-[13px] font-mono text-stone-600 dark:text-stone-300 truncate">
-                {shareUrl}
-              </span>
-            </div>
+              <Icon.link size={14} className="shrink-0 text-fg-muted" />
+              <span className="flex-1 truncate font-mono text-meta text-fg-soft">{shareUrl}</span>
+            </button>
             <Button onClick={copyLink} className="w-full" variant={copied ? "secondary" : "primary"}>
               {copied ? <><Icon.check size={16} /> Kopiert!</> : <><Icon.copy size={16} /> Link kopieren</>}
             </Button>
@@ -73,7 +73,7 @@ export function ShareDialog({
             )}
           </>
         ) : (
-          <p className="text-[13px] text-red-500">Kein aktiver Gruppenkontext.</p>
+          <p className="m-0 text-meta text-danger">Kein aktiver Gruppenkontext.</p>
         )}
       </div>
     </Dialog>

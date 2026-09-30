@@ -77,15 +77,15 @@ export default function PastGifts() {
                 <button
                   key={g.id}
                   onClick={() => nav(`/gift/${g.id}`)}
-                  className="text-left px-3.5 py-3 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-3 active:scale-[0.99] transition-transform"
+                  type="button"
+                  className="flex items-center gap-3 rounded-card border border-line-subtle bg-surface px-3.5 py-3 text-left shadow-card transition-transform active:scale-[0.99]"
                 >
                   {p && <Avatar person={p} size={36} />}
                   <div className="flex-1 min-w-0">
-                    <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 truncate">
-                      {p?.name ?? "Unbekannt"}
-                    </div>
-                    <div className="text-[12px] text-stone-500 dark:text-stone-400 truncate">
-                      {occ} {g.year} · {formatDate(g.receivedAt)}
+                    <div className="truncate text-body font-bold text-fg">{p?.name ?? "Unbekannt"}</div>
+                    <div className="text-xs text-fg-muted">
+                      {occ} {g.year}
+                      {g.receivedAt ? ` · ${formatDate(g.receivedAt)}` : ""}
                     </div>
                   </div>
                   <div className="text-right shrink-0">
@@ -94,13 +94,13 @@ export default function PastGifts() {
                         <SurpriseBadge label="für dich" />
                       </div>
                     ) : (
-                      <div className="text-[14px] font-bold tabular-nums text-violet-700 dark:text-violet-300">
+                      <div className="text-sm font-bold tabular-nums text-accent-text">
                         {formatEuro(total)}
                       </div>
                     )}
                     <Chip variant="success" className="mt-0.5">erhalten</Chip>
                   </div>
-                  <Icon.chev />
+                  <Icon.chev className="shrink-0 text-fg-muted" />
                 </button>
               );
             })}

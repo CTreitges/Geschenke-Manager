@@ -25,7 +25,7 @@ export function WhatsappLinkSection({ gift }: { gift: Gift }) {
             href={gift.whatsappLink}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex-1 min-w-0 text-[14px] font-semibold text-emerald-800 dark:text-emerald-300 truncate"
+            className="min-w-0 flex-1 truncate text-sm font-semibold text-status-received"
           >
             Gruppen-Chat öffnen
           </a>
@@ -48,10 +48,8 @@ export function WhatsappLinkSection({ gift }: { gift: Gift }) {
     return (
       <div className="px-4 pb-3">
         <div className="px-3.5 py-3 rounded-xl bg-white dark:bg-stone-800 border border-stone-200 dark:border-stone-700 space-y-2">
-          <label className="text-[12px] font-semibold text-stone-500 dark:text-stone-400">
-            Gruppen-Link (z.B. WhatsApp-Einladung)
-          </label>
           <Input
+            label="Gruppen-Link (z.B. WhatsApp-Einladung)"
             type="url"
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
@@ -74,7 +72,7 @@ export function WhatsappLinkSection({ gift }: { gift: Gift }) {
     <div className="px-4 pb-3">
       <button
         onClick={() => setEditing(true)}
-        className="w-full text-left px-3.5 py-2.5 rounded-xl border border-dashed border-stone-300 dark:border-stone-700 text-[13px] text-stone-500 dark:text-stone-400 hover:border-violet-400 hover:text-violet-700 dark:hover:text-violet-300"
+        className="w-full rounded-xl border border-dashed border-line-control px-3.5 py-2.5 text-left text-meta text-fg-muted hover:border-accent hover:text-accent-text"
       >
         💬 Gruppen-Link hinzufügen (WhatsApp o.ä.)
       </button>

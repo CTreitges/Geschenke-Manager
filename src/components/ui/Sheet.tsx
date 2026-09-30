@@ -97,6 +97,7 @@ function SheetPanel({ onClose, title, description, children, footer, initialFocu
   const safeBottom = "pb-[max(16px,env(safe-area-inset-bottom))]";
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center animate-fadeIn">
+      {/* design-ok: Backdrop – Klick schließt, per Tastatur über Esc bzw. ✕ */}
       <div aria-hidden onClick={() => onCloseRef.current()} className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
       <div
         ref={panelRef}

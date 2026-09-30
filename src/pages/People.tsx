@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Button, Chip, Dialog, EmptyState, FAB, Input, PageHeader } from "@/components/ui";
+import { Avatar, Button, Chip, Dialog, EmptyState, FAB, Input, PageHeader, Segmented } from "@/components/ui";
 import { BirthdayPicker } from "@/components/BirthdayPicker";
 import { useStore } from "@/lib/hooks";
 import { addPerson } from "@/lib/storage";
@@ -28,29 +28,25 @@ export default function People() {
       <PageHeader title="Personen" subtitle={`${persons.length} im Freundeskreis`} />
 
       <div className="px-4 pb-3">
-        <div className="p-1 rounded-xl bg-[#F5F1ED] dark:bg-stone-800 flex gap-0.5">
-          {[
-            { k: "birthday", l: "Nächster Geburtstag" },
-            { k: "alpha", l: "A–Z" },
-          ].map((t) => (
-            <button
-              key={t.k}
-              onClick={() => setSort(t.k as "birthday" | "alpha")}
-              className={`flex-1 py-1.5 rounded-lg text-[13px] font-semibold ${
-                sort === t.k
-                  ? "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 shadow-sm"
-                  : "text-stone-500 dark:text-stone-400"
-              }`}
-            >
-              {t.l}
-            </button>
-          ))}
-        </div>
+        <Segmented
+          label="Sortierung"
+          value={sort}
+          onChange={setSort}
+          options={[
+            { value: "birthday", label: "Nächster Geburtstag" },
+            { value: "alpha", label: "A–Z" },
+          ]}
+        />
       </div>
 
       {sorted.length === 0 ? (
         <div className="px-4">
-          <EmptyState emoji="👥" title="Noch niemand" subtitle="Lege die erste Person an." />
+          <EmptyState
+            emoji="👥"
+            title="Noch niemand"
+            subtitle="Lege die erste Person an."
+            action={<Button onClick={() => setOpen(true)}>Person anlegen</Button>}
+          />
         </div>
       ) : (
         <div className="px-4 pb-24 grid grid-cols-2 gap-2.5">
@@ -61,17 +57,16 @@ export default function People() {
               <button
                 key={p.id}
                 onClick={() => nav(`/person/${p.id}`)}
-                className="text-left p-3.5 bg-white dark:bg-stone-800 rounded-[18px] border border-[#F0EBE6] dark:border-[#3A3633] flex flex-col items-start gap-2 min-h-[130px]"
+                type="button"
+                className="flex min-h-[130px] flex-col items-start gap-2 rounded-card border border-line-subtle bg-surface p-3.5 text-left shadow-card"
               >
                 <Avatar person={p} size={40} />
                 <div className="flex-1">
-                  <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
+                  <div className="text-body font-bold tracking-tight text-fg">
                     {p.name}
-                    {p.id === myId && (
-                      <span className="text-[11px] text-violet-700 dark:text-violet-400 font-semibold ml-1">· du</span>
-                    )}
+                    {p.id === myId && <span className="ml-1 text-2xs font-semibold text-accent-text">· du</span>}
                   </div>
-                  <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 font-medium">
+                  <div className="mt-0.5 text-xs font-medium text-fg-muted">
                     {formatBirthday(p)}
                   </div>
                 </div>
@@ -84,7 +79,7 @@ export default function People() {
         </div>
       )}
 
-      <FAB onClick={() => setOpen(true)} />
+      <FAB onClick={() => setOpen(true)} label="Person hinzufügen" />
       <AddPersonDialog open={open} onClose={() => setOpen(false)} />
     </>
   );
@@ -118,7 +113,7 @@ function AddPersonDialog({ open, onClose }: { open: boolean; onClose: () => void
         <BirthdayPicker value={bd} onChange={setBd} />
         <Input label="E-Mail (optional)" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         {email.trim() && (
-          <p className="text-[12px] text-stone-500 dark:text-stone-400 leading-snug px-1 -mt-1">
+          <p className="-mt-1 px-1 text-xs leading-snug text-fg-muted">
             Mit Mail bekommt die Person automatisch eine Erinnerung 60/30/14 Tage vor ihrem Geburtstag, eine Wunschliste zu schreiben. Abbestellen ist in jeder Mail möglich.
           </p>
         )}

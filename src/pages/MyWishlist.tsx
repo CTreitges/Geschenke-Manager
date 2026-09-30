@@ -20,10 +20,8 @@ export default function MyWishlist() {
         <PageHeader title="Meine Wunschliste" />
         <div className="px-4 pb-24">
           <Card className="p-4">
-            <div className="text-[15px] font-bold text-stone-900 dark:text-stone-50 mb-1">
-              Wer bist du?
-            </div>
-            <div className="text-[13px] text-stone-500 dark:text-stone-400 mb-3 leading-snug">
+            <h2 className="m-0 mb-1 text-body font-bold text-fg">Wer bist du?</h2>
+            <div className="mb-3 text-meta leading-snug text-fg-muted">
               Wähle dich aus, dann kannst du deine Wünsche pflegen — alle anderen sehen sie automatisch.
             </div>
             {persons.length === 0 ? (
@@ -48,7 +46,7 @@ export default function MyWishlist() {
                 Ich wähle mich aus
               </Button>
             )}
-            <div className="text-[11px] text-stone-400 mt-3">
+            <div className="mt-3 text-2xs text-fg-muted">
               Du kannst die Identität jederzeit in den Einstellungen wechseln.
             </div>
           </Card>

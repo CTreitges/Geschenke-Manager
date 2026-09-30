@@ -288,7 +288,7 @@ export async function runShots({ giftIds } = {}) {
     await shot(page, "03-people-dark");
     await open(page, "/person/ben", "JBL");
     await shot(page, "04-person-ben-wunschliste-dark");
-    await page.getByRole("button", { name: "Geschenke", exact: true }).first().click();
+    await page.getByRole("tab", { name: "Geschenke", exact: true }).click();
     await wait(900);
     await shot(page, "05-person-ben-geschenke-dark");
 

@@ -43,7 +43,7 @@ export function ParticipantsSection({
               <button
                 key={p.id}
                 onClick={() => toggleParticipant(gift.id, p.id)}
-                className="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-[13px] font-semibold border transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-full border py-1 pl-1 pr-2.5 text-meta font-semibold transition-colors"
                 style={
                   joined
                     ? {

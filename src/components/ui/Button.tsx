@@ -101,16 +101,22 @@ export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(
 IconButton.displayName = "IconButton";
 
 // ── FAB ────────────────────────────────────────────────────────
-export function FAB({ onClick, label = "Hinzufügen" }: { onClick: () => void; label?: string }) {
+/** Schwebender Plus-Knopf; mit `text` als beschrifteter „Extended FAB“. */
+export function FAB({ onClick, label = "Hinzufügen", text }: { onClick: () => void; label?: string; text?: string }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-label={label}
       title={label}
       // Abstand wie bisher (bottom-24), plus Safe-Area – sonst überlappt die Tab-Bar auf iPhones.
-      className="fixed right-5 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 w-14 h-14 rounded-full text-white border-none flex items-center justify-center bg-grad-primary shadow-[0_14px_28px_-8px_rgba(124,58,237,0.55),inset_0_0_0_1px_rgba(255,255,255,0.2)]"
+      className={cn(
+        "fixed right-5 bottom-[calc(6rem+env(safe-area-inset-bottom))] z-40 h-14 rounded-full text-white border-none flex items-center justify-center gap-1.5 bg-grad-primary shadow-[0_14px_28px_-8px_rgba(124,58,237,0.55),inset_0_0_0_1px_rgba(255,255,255,0.2)]",
+        text ? "pl-4 pr-5 text-body font-semibold" : "w-14",
+      )}
     >
-      <Icon.plus size={26} />
+      <Icon.plus size={text ? 22 : 26} />
+      {text}
     </button>
   );
 }

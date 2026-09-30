@@ -18,22 +18,23 @@ export const personId = (personName: string) => personName.toLowerCase();
  * Meldet sich über die UI in der Demo-Gruppe an (joinGroup-Function im
  * Emulator) und setzt vorher per localStorage die „Wer bin ich?"-Identität
  * sowie die Onboarding-Keys — für jede Seite dieses Browser-Kontexts.
- * `keys: {}` lässt das Onboarding zu (First-Run-Tests).
+ * `keys: {}` lässt das Onboarding zu (First-Run-Tests), `null` als Name
+ * meldet ohne Identität an.
  */
 export async function loginAs(
   page: Page,
-  personName: string,
+  personName: string | null,
   { keys = SUPPRESS_KEYS }: { keys?: Record<string, string> } = {},
 ): Promise<void> {
   await page.context().addInitScript(
     ({ keys, identityKey, identity }) => {
       for (const [k, v] of Object.entries(keys)) localStorage.setItem(k, v);
-      localStorage.setItem(identityKey, identity);
+      if (identity) localStorage.setItem(identityKey, identity);
     },
     {
       keys,
       identityKey: `gm:identity:v1:${GROUP_ID}`,
-      identity: personId(personName),
+      identity: personName ? personId(personName) : null,
     },
   );
   await page.goto("/login");
@@ -52,9 +53,13 @@ export interface A11yViolation {
   targets: string[];
 }
 
+// @axe-core/playwright ist gegen das hochgezogene playwright-core typisiert,
+// @playwright/test bringt eine eigene Version mit – zur Laufzeit dieselbe Page.
+type AxePage = ConstructorParameters<typeof AxeBuilder>[0]["page"];
+
 /** axe-Scan der aktuellen Seite; liefert nur Verstöße der Stufe serious/critical. */
 export async function seriousA11yViolations(page: Page): Promise<A11yViolation[]> {
-  const { violations } = await new AxeBuilder({ page }).analyze();
+  const { violations } = await new AxeBuilder({ page: page as unknown as AxePage }).analyze();
   return violations
     .filter((v) => v.impact === "serious" || v.impact === "critical")
     .map((v) => ({

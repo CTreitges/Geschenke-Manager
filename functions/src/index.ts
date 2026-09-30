@@ -6,6 +6,7 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
+import { birthdayYearFor, daysUntil } from "./shared/dates";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -454,49 +455,6 @@ const REMINDER_STAGES: ReminderStage[] = [
 const REMINDER_TOLERANCE_DAYS = 2;
 const MAGIC_TOKEN_TTL_MS = 7 * 86_400_000;
 const UNSUB_TOKEN_TTL_MS = 365 * 86_400_000;
-
-function parseBirthday(bd: string): { month: number; day: number } | null {
-  const parts = bd.split("-");
-  if (parts.length === 3) {
-    const m = +parts[1];
-    const d = +parts[2];
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return { month: m, day: d };
-    return null;
-  }
-  if (parts.length === 2) {
-    const m = +parts[0];
-    const d = +parts[1];
-    if (m >= 1 && m <= 12 && d >= 1 && d <= 31) return { month: m, day: d };
-    return null;
-  }
-  return null;
-}
-
-function startOfDay(d: Date): Date {
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-}
-
-function nextBirthdayDate(bd: string, ref: Date): Date | null {
-  const parsed = parseBirthday(bd);
-  if (!parsed) return null;
-  const today = startOfDay(ref);
-  const candidate = new Date(today.getFullYear(), parsed.month - 1, parsed.day);
-  if (candidate.getTime() < today.getTime()) {
-    return new Date(today.getFullYear() + 1, parsed.month - 1, parsed.day);
-  }
-  return candidate;
-}
-
-function daysUntil(bd: string, ref: Date): number | null {
-  const next = nextBirthdayDate(bd, ref);
-  if (!next) return null;
-  return Math.round((next.getTime() - startOfDay(ref).getTime()) / 86_400_000);
-}
-
-function birthdayYearFor(bd: string, ref: Date): number | null {
-  const next = nextBirthdayDate(bd, ref);
-  return next ? next.getFullYear() : null;
-}
 
 function escapeHtml(s: string): string {
   return s

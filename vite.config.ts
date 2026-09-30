@@ -95,6 +95,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Reine Logik, die Frontend und Cloud Functions teilen (kein firebase-admin).
+      "@shared": path.resolve(__dirname, "./functions/src/shared"),
     },
   },
 });

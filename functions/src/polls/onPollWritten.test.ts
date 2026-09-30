@@ -87,12 +87,12 @@ describe("handlePollWrite (onPollWritten)", () => {
     expect(messages[0].tokens).toEqual(["t-ben"]);
   });
 
-  it("alter Client ohne startedBy/endsAt: alle Wahlberechtigten, Text ohne Ende, TTL 1 Tag", async () => {
+  it("alter Client ohne startedBy/endsAt: alle Wahlberechtigten, Frist = Start + 48 Std", async () => {
     const { write, messages } = setup();
     await write(undefined, { status: "active", startedAt: T0, votes: {} });
     expect([...messages[0].tokens].sort()).toEqual(["t-ben", "t-christof", "t-lea"]);
-    expect(messages[0].data?.body).toBe("2 Ideen stehen zur Wahl.");
-    expect(messages[0].webpush?.headers?.TTL).toBe("86400");
+    expect(messages[0].data?.body).toBe("2 Ideen stehen zur Wahl – endet Fr 10:00.");
+    expect(messages[0].webpush?.headers?.TTL).toBe(String(48 * 3600));
   });
 
   it("nichts, wenn das Geschenk fehlt, nicht offen ist oder die Runde schon abgelaufen ist", async () => {

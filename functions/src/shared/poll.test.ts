@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_DURATION_PRESET,
   DURATION_PRESETS,
+  LEGACY_POLL_DURATION_MS,
   POLL_LOCK_REASON,
   canVote,
   classifyTransition,
@@ -111,19 +112,30 @@ describe("effectiveEndsAt / pollPhase", () => {
     expect(pollPhase(p, T0 + 49 * HOUR)).toBe("expired");
   });
 
-  it("ignoriert endsAt ≤ startedAt (Rest aus der Vorrunde) → läuft ohne Frist", () => {
+  it("endsAt ≤ startedAt (Rest aus der Vorrunde) → Frist startedAt + 48 Std (Regression KOR-03)", () => {
     const stale = poll({ endsAt: T0 - HOUR });
-    expect(effectiveEndsAt(stale)).toBeNull();
-    expect(effectiveEndsAt(poll({ endsAt: T0 }))).toBeNull();
-    expect(pollPhase(stale, T0 + 1000 * HOUR)).toBe("running");
+    expect(LEGACY_POLL_DURATION_MS).toBe(48 * HOUR);
+    expect(effectiveEndsAt(stale)).toBe(T0 + 48 * HOUR);
+    expect(effectiveEndsAt(poll({ endsAt: T0 }))).toBe(T0 + 48 * HOUR);
+    expect(pollPhase(stale, T0 + 48 * HOUR - 1)).toBe("running");
+    expect(pollPhase(stale, T0 + 48 * HOUR)).toBe("expired");
+    expect(pollPhase(stale, T0 + 1000 * HOUR)).toBe("expired");
   });
 
-  it("Frist ohne startedAt oder ohne endsAt zählt nicht", () => {
-    expect(effectiveEndsAt(poll({ startedAt: undefined }))).toBeNull();
-    expect(effectiveEndsAt(poll({ endsAt: undefined }))).toBeNull();
-    expect(effectiveEndsAt(poll({ endsAt: Number.NaN }))).toBeNull();
-    expect(effectiveEndsAt(undefined)).toBeNull();
+  it("Alt-Runde ohne endsAt (oder mit kaputtem) endet ebenfalls nach 48 Std", () => {
+    expect(effectiveEndsAt(poll({ endsAt: undefined }))).toBe(T0 + 48 * HOUR);
+    expect(effectiveEndsAt(poll({ endsAt: Number.NaN }))).toBe(T0 + 48 * HOUR);
+    expect(pollPhase(poll({ endsAt: undefined }), T0 + HOUR)).toBe("running");
+    expect(pollPhase(poll({ endsAt: undefined }), T0 + 48 * HOUR)).toBe("expired");
     expect(effectiveEndsAt(poll())).toBe(T0 + 48 * HOUR);
+    expect(effectiveEndsAt(poll({ endsAt: T0 + 24 * HOUR }))).toBe(T0 + 24 * HOUR);
+  });
+
+  it("ohne startedAt: keine Frist, aber aktive Runde gilt als abgelaufen (Beginn unbekannt)", () => {
+    expect(effectiveEndsAt(poll({ startedAt: undefined }))).toBeNull();
+    expect(effectiveEndsAt(undefined)).toBeNull();
+    expect(pollPhase(poll({ startedAt: undefined }), T0)).toBe("expired");
+    expect(pollPhase(poll({ startedAt: undefined, endsAt: undefined }), T0)).toBe("expired");
   });
 
   it("closed bleibt closed, auch nach der Frist", () => {
@@ -336,9 +348,13 @@ describe("reminderDueAt", () => {
     expect(reminderDueAt(w)).toBe(at("2026-10-01T08:00:00+02:00"));
   });
 
-  it("null ohne gültige Frist oder wenn die Erinnerung nicht mehr vor das Ende passt", () => {
-    expect(reminderDueAt({ startedAt: T0 })).toBeNull();
-    expect(reminderDueAt({ startedAt: T0, endsAt: T0 - HOUR })).toBeNull();
+  it("null ohne startedAt oder wenn die Erinnerung nicht mehr vor das Ende passt", () => {
+    // Ohne gültige Frist gilt Start + 48 Std – wie bei einer normalen 48-Std-Runde.
+    const regular = reminderDueAt({ startedAt: T0, endsAt: T0 + 48 * HOUR });
+    expect(regular).not.toBeNull();
+    expect(reminderDueAt({ startedAt: T0 })).toBe(regular);
+    expect(reminderDueAt({ startedAt: T0, endsAt: T0 - HOUR })).toBe(regular);
+    expect(reminderDueAt({ endsAt: T0 + HOUR })).toBeNull();
     expect(reminderDueAt(span("2026-09-30T10:00:00+02:00", 10 * MIN))).toBeNull();
     // Start 21:55, Ende 23:00: Start + 10 Min = 22:05 (Ruhe) → 8 Uhr liegt nach dem Ende
     expect(

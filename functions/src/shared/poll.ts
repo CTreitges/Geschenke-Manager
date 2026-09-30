@@ -12,7 +12,7 @@ export interface PollDoc {
   /** Runden-Schlüssel: identifiziert die laufende Runde. */
   startedAt?: number;
   startedBy?: string;
-  /** Ende (ms epoch). Gilt nur, wenn > startedAt – alte Clients lassen es beim Neustart stehen. */
+  /** Ende (ms epoch). Gilt nur, wenn > startedAt – sonst startedAt + 48 Std (effectiveEndsAt). */
   endsAt?: number;
   closedAt?: number;
   closedBy?: string;
@@ -152,14 +152,25 @@ export function eligibleVoters(gift: GiftLike): string[] {
   return out;
 }
 
-/** Frist der Runde oder null (keine Frist, oder `endsAt` ≤ `startedAt` aus einer Vorrunde). */
+/**
+ * Laufzeit einer Runde ohne gültige Frist: Alt-Runden ohne `endsAt` und
+ * Neustarts alter Clients, die ein `endsAt` der Vorrunde stehen lassen.
+ * Gleicher Wert in firestore.rules (isRunningPoll).
+ */
+export const LEGACY_POLL_DURATION_MS = 48 * HOUR;
+
+/**
+ * Frist der Runde: `endsAt`, wenn es nach `startedAt` liegt, sonst
+ * `startedAt` + 48 Std (Alt-Runde bzw. Rest einer Vorrunde). null nur ohne
+ * `startedAt` – pollPhase wertet so eine aktive Runde als abgelaufen.
+ */
 export function effectiveEndsAt(
   poll: Pick<PollDoc, "startedAt" | "endsAt"> | null | undefined,
 ): number | null {
   const startedAt = finiteNumber(poll?.startedAt);
+  if (startedAt === undefined) return null;
   const endsAt = finiteNumber(poll?.endsAt);
-  if (startedAt === undefined || endsAt === undefined) return null;
-  return endsAt > startedAt ? endsAt : null;
+  return endsAt !== undefined && endsAt > startedAt ? endsAt : startedAt + LEGACY_POLL_DURATION_MS;
 }
 
 export function pollPhase(poll: PollDoc | null | undefined, now: number): PollPhase {
@@ -167,7 +178,9 @@ export function pollPhase(poll: PollDoc | null | undefined, now: number): PollPh
   if (poll.status === "closed") return "closed";
   if (poll.status !== "active") return "none";
   const end = effectiveEndsAt(poll);
-  return end !== null && now >= end ? "expired" : "running";
+  // Ohne startedAt ist der Beginn unbekannt: als abgelaufen werten, damit der
+  // Sweep die Runde schließt, statt dass sie Ideen für immer sperrt.
+  return end === null || now >= end ? "expired" : "running";
 }
 
 export function canVote(

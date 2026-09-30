@@ -56,9 +56,14 @@ describe("closeFields", () => {
     expect(closeFields(running, { reason: "manual" }, T0 + 48 * H).closedReason).toBe("timeout");
   });
 
-  it("Altlast ohne gültige Frist (endsAt ≤ startedAt) schließt normal", () => {
+  it("Altlast ohne gültige Frist (endsAt ≤ startedAt): Frist = Start + 48 Std", () => {
     const legacy: PollDoc = { status: "active", startedAt: T0, endsAt: T0 - H, votes: {} };
-    expect(closeFields(legacy, { reason: "manual" }, T0 + 99 * H).closedReason).toBe("manual");
+    expect(closeFields(legacy, { reason: "manual" }, T0 + 5 * H).closedReason).toBe("manual");
+    expect(closeFields(legacy, { reason: "manual" }, T0 + 99 * H)).toEqual({
+      status: "closed",
+      closedAt: T0 + 48 * H,
+      closedReason: "timeout",
+    });
   });
 });
 
@@ -76,9 +81,10 @@ describe("extendedEndsAt", () => {
     expect(extendedEndsAt(closed, 24 * H, T0 + 60 * H)).toEqual({ endsAt: T0 + 84 * H, reopen: true });
   });
 
-  it("ohne Frist: ab jetzt", () => {
+  it("ohne Frist (Altlast): ab Start + 48 Std, danach ab jetzt", () => {
     const legacy: PollDoc = { status: "active", startedAt: T0, votes: {} };
-    expect(extendedEndsAt(legacy, H, T0 + 5 * H).endsAt).toBe(T0 + 6 * H);
+    expect(extendedEndsAt(legacy, H, T0 + 5 * H).endsAt).toBe(T0 + 49 * H);
+    expect(extendedEndsAt(legacy, H, T0 + 50 * H).endsAt).toBe(T0 + 51 * H);
   });
 });
 

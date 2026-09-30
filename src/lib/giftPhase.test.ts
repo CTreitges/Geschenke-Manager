@@ -78,10 +78,11 @@ describe("giftPhase – Abstimmung", () => {
     expect(info.badge).toBe("du-fehlst");
   });
 
-  it("ohne gültige Frist (Legacy) keine Zeitangabe", () => {
+  it("ohne gültige Frist (Legacy) endet die Runde 48 Std nach dem Start", () => {
+    const end = NOW - HOUR + 48 * HOUR;
     const info = giftPhase(gift(), poll({ endsAt: undefined }), ideas, "ben", NOW);
-    expect(info.label).toBe("⏱ Abstimmung · 0/3");
-    expect(info.endsAt).toBeUndefined();
+    expect(info.label).toBe(`⏱ Abstimmung · 0/3 · ${formatEndsAt(end, NOW)}`);
+    expect(info.endsAt).toBe(end);
   });
 });
 

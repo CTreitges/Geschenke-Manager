@@ -207,15 +207,27 @@ describe("groups/{g}/suggestions – Sperre während der Abstimmung", () => {
     await assertFails(addIdea());
   });
 
-  it("Alt-Abstimmung ohne endsAt gilt als laufend", async () => {
+  it("Alt-Abstimmung ohne endsAt läuft 48 Std ab Start (KOR-03)", async () => {
     await seedPoll({ status: "active", startedAt: Date.now() - HOUR });
     await assertFails(addIdea());
   });
 
-  it("endsAt ≤ startedAt (Rest einer Vorrunde) gilt nicht als Frist → läuft", async () => {
+  it("Alt-Abstimmung ohne endsAt ist nach 48 Std vorbei und gibt Ideen frei (KOR-03)", async () => {
+    await seedPoll({ status: "active", startedAt: Date.now() - 49 * HOUR });
+    await assertSucceeds(addIdea());
+  });
+
+  it("endsAt ≤ startedAt (Rest einer Vorrunde) → Frist startedAt + 48 Std (KOR-03)", async () => {
     const now = Date.now();
     await seedPoll({ status: "active", startedAt: now - HOUR, endsAt: now - 2 * HOUR });
     await assertFails(addIdea());
+    await seedPoll({ status: "active", startedAt: now - 49 * HOUR, endsAt: now - 50 * HOUR });
+    await assertSucceeds(addIdea());
+  });
+
+  it("aktive Runde ohne startedAt gilt als abgelaufen und sperrt nicht (KOR-03)", async () => {
+    await seedPoll({ status: "active", endsAt: Date.now() + HOUR });
+    await assertSucceeds(addIdea());
   });
 
   it("abgelaufene Frist gibt Ideen frei, auch bevor der Server schließt", async () => {

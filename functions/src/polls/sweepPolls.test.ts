@@ -46,9 +46,12 @@ describe("sweepAction", () => {
     expect(sweepAction(p, gift, at("2026-10-02T08:00:00+02:00"))).toEqual({ kind: "remind" });
   });
 
-  it("ohne gültige Frist (alter Client) weder Ende noch Erinnerung, geschlossene Polls bleiben", () => {
+  it("ohne gültige Frist (alter Client) endet die Runde nach 48 Std, geschlossene Polls bleiben", () => {
     const legacy = normalizePoll({ status: "active", startedAt: T0, endsAt: T0 - HOUR, votes: {} });
-    expect(sweepAction(legacy, gift, T0 + 400 * HOUR)).toEqual({ kind: "none" });
+    expect(sweepAction(legacy, gift, END - 1)).not.toEqual({ kind: "close", reason: "timeout" });
+    expect(sweepAction(legacy, gift, T0 + 400 * HOUR)).toEqual({ kind: "close", reason: "timeout" });
+    // Beginn unbekannt → gilt als abgelaufen und wird geschlossen.
+    expect(sweepAction(normalizePoll({ status: "active", votes: {} }), gift, T0)).toEqual({ kind: "close", reason: "timeout" });
     expect(sweepAction(normalizePoll(activePoll({ status: "closed" })), null, END + HOUR)).toEqual({ kind: "none" });
   });
 });
@@ -115,6 +118,15 @@ describe("runPollSweep", () => {
     expect(messages).toHaveLength(0); // kein Ergebnis-Push
     // Nächster Lauf findet die Abstimmung nicht mehr (status != active).
     expect(await sweep(END + 8 * MIN)).toMatchObject({ active: 0, closed: {} });
+  });
+
+  it("Alt-Runde ohne gültige Frist wird nach Start + 48 Std geschlossen (Regression KOR-03)", async () => {
+    const { sweep, poll, messages } = setup({
+      "groups/g1/polls/gift1": { status: "active", startedAt: T0, endsAt: T0 - HOUR, votes: VOTES },
+    });
+    expect(await sweep(T0 + 400 * HOUR)).toMatchObject({ closed: { timeout: 1 } });
+    expect(poll()).toMatchObject({ status: "closed", closedAt: T0 + 48 * HOUR, closedReason: "timeout" });
+    expect(messages).toHaveLength(0);
   });
 
   it("Legacy-Top-Level /polls und fremde Pfade bleiben unberührt", async () => {

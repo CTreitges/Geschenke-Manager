@@ -32,20 +32,26 @@ service cloud.firestore {
     }
 
     // Läuft die Abstimmung zum Geschenk `giftId`? Wie pollPhase() in
-    // functions/src/shared/poll.ts: aktiv und Frist offen. Eine Frist gilt
-    // nur, wenn endsAt > startedAt (alte Clients lassen beim Neustart ein
-    // altes endsAt stehen) – ohne gültige Frist läuft die Wahl.
+    // functions/src/shared/poll.ts: aktiv und Frist (Server-Uhr) offen.
     function pollRunning(groupId, giftId) {
       let path = /databases/$(database)/documents/groups/$(groupId)/polls/$(giftId);
       return exists(path) && isRunningPoll(get(path).data);
     }
 
+    // Ohne startedAt ist der Beginn unbekannt → gilt als abgelaufen.
     function isRunningPoll(poll) {
       return poll.status == 'active'
-        && (!('endsAt' in poll)
-          || !('startedAt' in poll)
-          || poll.endsAt <= poll.startedAt
-          || poll.endsAt > request.time.toMillis());
+        && 'startedAt' in poll
+        && pollEnd(poll) > request.time.toMillis();
+    }
+
+    // Wie effectiveEndsAt(): endsAt nur, wenn > startedAt (alte Clients lassen
+    // beim Neustart ein altes endsAt stehen); sonst startedAt + 48 Std
+    // (LEGACY_POLL_DURATION_MS) – auch für Alt-Runden ganz ohne endsAt.
+    function pollEnd(poll) {
+      return ('endsAt' in poll && poll.endsAt > poll.startedAt)
+        ? poll.endsAt
+        : poll.startedAt + 172800000;
     }
 
     // Poll-Doc: Status nur active/closed, endsAt (falls gesetzt) ganzzahlig.

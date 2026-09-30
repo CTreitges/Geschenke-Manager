@@ -11,7 +11,6 @@ import { ParticipantsSection } from "@/components/gift/ParticipantsSection";
 import { PaymentDialog } from "@/components/gift/PaymentDialog";
 import { ShareDialog } from "@/components/gift/ShareDialog";
 import { WhatsappLinkSection } from "@/components/gift/WhatsappLinkSection";
-import { WishlistAdoptSection } from "@/components/gift/WishlistAdoptSection";
 import { DecisionSheet } from "@/components/poll/DecisionSheet";
 import { NowCard } from "@/components/poll/NowCard";
 import { StartSheet } from "@/components/poll/StartSheet";
@@ -19,6 +18,7 @@ import { IdentityGate } from "@/components/surprise/IdentityGate";
 import { SurpriseScreen } from "@/components/surprise/SurpriseScreen";
 import { usePollSheets } from "@/components/poll/usePollSheets";
 import { VoteSheet } from "@/components/poll/VoteSheet";
+import { GiftWishlist } from "@/components/wishlist/WishAdoptSheet";
 import { useGroupId, useIdentity } from "@/lib/auth";
 import { giftDate, giftDateLine } from "@/lib/birthdays";
 import { useStore } from "@/lib/hooks";
@@ -35,7 +35,7 @@ import { useNow } from "@/lib/useNow";
 
 // ── Geschenkseite ─────────────────────────────────────────────
 // Kopf „Anna · Geburtstag“ + Datum, Phasen-Stepper, Jetzt-Karte mit dem
-// nächsten Schritt, Ideen, Wunschliste, Organisation. Abstimmen und
+// nächsten Schritt, Ideen (mit Wunschliste-Streifen), Organisation. Abstimmen und
 // Entscheiden passieren in Sheets (src/components/poll/).
 export default function GiftDetail() {
   const { id } = useParams<{ id: string }>();
@@ -86,7 +86,7 @@ export default function GiftDetail() {
 }
 
 function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack: () => void }) {
-  const { persons, suggestions, polls, wishlist } = useStore();
+  const { persons, suggestions, polls } = useStore();
   const myId = useIdentity();
   const groupId = useGroupId();
   const nav = useNavigate();
@@ -95,10 +95,6 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
   const now = useNow(30_000, effectiveEndsAt(poll));
 
   const ideas = useMemo(() => sortIdeas(suggestions.filter((s) => s.giftId === gift.id)), [suggestions, gift.id]);
-  const personWishes = useMemo(
-    () => wishlist.filter((w) => w.personId === gift.personId).sort((a, b) => b.createdAt - a.createdAt),
-    [wishlist, gift.personId],
-  );
   const personsById = useMemo(() => Object.fromEntries(persons.map((p) => [p.id, p])), [persons]);
   const model = pollModel(gift, poll, ideas, myId, now);
 
@@ -238,18 +234,17 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
         />
       </div>
 
-      <IdeasSection gift={gift} ideas={ideas} model={model} personsById={personsById} myId={myId} onOpenVote={sheets.open} />
-
-      {gift.status === "open" && (
-        <WishlistAdoptSection
-          gift={gift}
-          person={person}
-          personWishes={personWishes}
-          giftSuggestions={ideas}
-          myId={myId}
-          blockedReason={adoptBlocked}
-        />
-      )}
+      <IdeasSection
+        gift={gift}
+        ideas={ideas}
+        model={model}
+        personsById={personsById}
+        myId={myId}
+        onOpenVote={sheets.open}
+        wishStrip={
+          gift.status === "open" && <GiftWishlist gift={gift} person={person} myId={myId} lockReason={adoptBlocked} />
+        }
+      />
 
       <ParticipantsSection
         gift={gift}

@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { toast } from "sonner";
 import { Button, EmptyState, Section } from "@/components/ui";
 import type { PollModel } from "@/lib/pollModel";
@@ -11,7 +12,7 @@ function errorText(e: unknown, fallback: string): string {
   return e instanceof PollLockedError ? e.message : fallback;
 }
 
-// ── Ideen: Liste (stabil sortiert) + Eingabe bzw. Sperr-Hinweis ─
+// ── Ideen: Wunschliste-Streifen, Liste (stabil sortiert) + Eingabe bzw. Sperr-Hinweis ─
 export function IdeasSection({
   gift,
   ideas,
@@ -19,6 +20,7 @@ export function IdeasSection({
   personsById,
   myId,
   onOpenVote,
+  wishStrip,
 }: {
   gift: Gift;
   ideas: readonly Suggestion[];
@@ -26,6 +28,8 @@ export function IdeasSection({
   personsById: Record<string, Person>;
   myId: string | null;
   onOpenVote: () => void;
+  /** Streifen „Wunschliste von Anna“ über den Ideen (nur solange offen). */
+  wishStrip?: ReactNode;
 }) {
   const locked = model.locks.addIdea.locked;
   const editable = gift.status === "open" && !locked;
@@ -55,6 +59,7 @@ export function IdeasSection({
 
   return (
     <Section title="Ideen" count={ideas.length} hint={locked ? "🔒 pausiert" : undefined}>
+      {wishStrip}
       {ideas.length === 0 ? (
         <EmptyState emoji="💡" title="Noch keine Ideen" />
       ) : (

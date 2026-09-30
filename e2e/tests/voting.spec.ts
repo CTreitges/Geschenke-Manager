@@ -75,7 +75,9 @@ test("Teilnehmer startet, stimmt ab, beendet und legt die Entscheidung fest", as
   await expect(page.getByText("Neue Ideen sind pausiert, bis die Abstimmung endet")).toBeVisible();
   await expect(page.getByPlaceholder("Idee teilen…")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Bearbeiten" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Übernehmen" }).first()).toBeDisabled();
+  await expect(page.getByRole("button", { name: /Wunschliste von Christof/ })).toContainText(
+    "während der Abstimmung gesperrt",
+  );
   await expect(nowCard(page)).toContainText("1 von 4");
 
   // Jetzt beenden (mit Rückfrage) → Ergebnis mit vorausgewähltem Sieger.

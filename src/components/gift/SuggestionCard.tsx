@@ -58,7 +58,7 @@ export function SuggestionCard({
       <span className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-xs text-fg-muted">
         {s.price != null && <span className="font-semibold text-accent-text">{formatEuro(s.price)}</span>}
         <span>von {author?.name ?? "?"}</span>
-        {s.fromWishItemId && <span className="font-semibold text-status-vote">🎁 Wunschliste</span>}
+        {s.fromWishItemId && <span className="font-semibold text-wish-text">🎁 Wunschliste</span>}
       </span>
     </>
   );

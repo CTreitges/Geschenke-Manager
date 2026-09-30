@@ -8,6 +8,7 @@ import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { shouldArchive } from "./archive";
 import { runBirthdayPush } from "./push/birthdayJob";
+import { runTestPush } from "./push/testPush";
 import { birthdayYearFor, daysUntil } from "./shared/dates";
 
 admin.initializeApp();
@@ -746,6 +747,19 @@ Abbestellen: ${unsubLink}`,
     return { ok: true };
   },
 );
+
+// ─── sendTestPush (manueller Push-Check) ─────────────────
+// Einstellungen → Mitteilungen → „Test-Push senden“: schickt an alle Geräte-
+// Tokens des Aufrufers (pushTokens/{uid}) eine Test-Meldung und liefert die
+// Anzahl zugestellter Meldungen. Aufrufer muss Mitglied der Gruppe sein.
+export const sendTestPush = onCall({ region: REGION }, async (request) => {
+  const uid = requireAuth(request.auth);
+  const groupId = requireGroupId(
+    (request.data as { groupId?: unknown })?.groupId,
+  );
+  await requireMember(groupId, uid);
+  return runTestPush(db, uid, groupId);
+});
 
 function renderHtmlPage(title: string, body: string): string {
   return `<!DOCTYPE html>

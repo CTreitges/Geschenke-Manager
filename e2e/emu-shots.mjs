@@ -186,6 +186,42 @@ async function tutorialShots(page, theme) {
   await sheetShot(page, `13b-tutorial-seite4-${theme}`);
 }
 
+/** Home als Ben (Phasenzeilen, „Du fehlst“) und das ⋯-Menü „Diesmal aussetzen“ (Christof-Karte). */
+async function homeShots(page, theme) {
+  await setIdentity(page, "ben");
+  await open(page, "/", "Du fehlst");
+  await shot(page, `26-home-phasen-als-ben-${theme}`);
+  await page.getByRole("button", { name: "Mehr zu Christof" }).click();
+  await page.getByRole("dialog", { name: "Geschenk für Christof" }).waitFor();
+  await sheetShot(page, `27-home-menue-aussetzen-${theme}`);
+  await page.keyboard.press("Escape");
+}
+
+/** Einstellungen → Gefahrenzone → „Passwort ändern“ (Sheet). */
+async function passwordShot(page, theme) {
+  await open(page, "/settings", "Gefahrenzone");
+  await page.getByRole("button", { name: /Passwort ändern/ }).click();
+  await page.getByRole("dialog", { name: "Passwort ändern" }).waitFor();
+  await sheetShot(page, `28-passwort-sheet-${theme}`);
+  await page.keyboard.press("Escape");
+}
+
+/** Header bei 360 px: mit Identität (Logo + Schriftzug) und ohne („Wer bist du?“). */
+async function narrowHeaderShots(browser, theme) {
+  for (const [label, identity] of [["mit-identitaet", "anna"], ["ohne-identitaet", null]]) {
+    const p = await newPage(browser, { label: `360-${label}` });
+    await p.setViewportSize({ width: 360, height: 740 });
+    await login(p);
+    if (identity) await setIdentity(p, identity);
+    await open(p, "/", "Christof");
+    const file = path.join(OUT_DIR, `29-header-360-${label}-${theme}.png`);
+    await p.screenshot({ path: file, clip: { x: 0, y: 0, width: 360, height: 320 } });
+    shots.push(file);
+    console.log(`[emu-shots] ${file}`);
+    await p.context().close();
+  }
+}
+
 /** Abstimmungs-Sheets (Start, Abstimmen, Ergebnis mit Sieger bzw. Gleichstand) in beiden Themes. */
 async function pollShots(page, g) {
   const HOUR = 3_600_000;
@@ -336,6 +372,12 @@ export async function runShots({ giftIds } = {}) {
     await setIdentity(page, "anna");
     await helpShot(page, "dark");
 
+    // 26–29 Home-Phasen, ⋯-Menü, Passwort-Sheet, Header bei 360 px
+    await homeShots(page, "dark");
+    await setIdentity(page, "anna");
+    await passwordShot(page, "dark");
+    await narrowHeaderShots(browser, "dark");
+
     // 19 First-Run: frischer Kontext ohne Keys und ohne Identität → Tutorial,
     // nach „Überspringen“ das IdentitySheet (Onboarding-Schritt „Wer bist du?“).
     const fresh = await newPage(browser, { suppress: false, label: "first-run" });
@@ -369,6 +411,12 @@ export async function runShots({ giftIds } = {}) {
     await shot(page, "12-settings-light");
     await tutorialShots(page, "light");
     await helpShot(page, "light");
+    await open(page, "/people", "Sophie");
+    await shot(page, "03-people-light");
+    await homeShots(page, "light");
+    await setIdentity(page, "anna");
+    await passwordShot(page, "light");
+    await narrowHeaderShots(browser, "light");
     await open(noId, "/", "Christof");
     await shot(noId, "25-home-ohne-identitaet-light");
     await noId.context().close();

@@ -19,6 +19,7 @@ import {
 } from "@/lib/birthdays";
 import type { Person } from "@/lib/types";
 import { getIdentity, setIdentity, useIdentity } from "@/lib/auth";
+import { isNewEmail } from "@/lib/onboarding";
 import { toast } from "sonner";
 
 type Tab = "wishlist" | "gifts" | "profile";
@@ -112,6 +113,8 @@ function ProfileTab({ person }: { person: Person }) {
   const [email, setEmail] = useState(person.email ?? "");
   const [remindersOn, setRemindersOn] = useState(person.emailOptIn !== false);
   const [testing, setTesting] = useState(false);
+  // Kontext-Hinweis statt des früheren Test-Mail-Dialogs in der First-Run-Kette.
+  const [testMailHint, setTestMailHint] = useState(false);
 
   async function sendTest() {
     if (testing) return;
@@ -138,6 +141,7 @@ function ProfileTab({ person }: { person: Person }) {
       emailOptIn: trimmedEmail ? remindersOn : undefined,
     });
     toast.success("Gespeichert");
+    setTestMailHint(isNewEmail(person.email, trimmedEmail));
   }
 
   async function remove() {
@@ -194,6 +198,12 @@ function ProfileTab({ person }: { person: Person }) {
           <Button onClick={save} className="w-full mt-1">Speichern</Button>
         </div>
       </Card>
+      {testMailHint && (
+        <p role="status" className="m-0 mt-3 rounded-tile border border-accent/30 bg-accent-soft px-3 py-2.5 text-meta text-fg-soft">
+          <strong className="text-accent-text">Tipp:</strong> Schick einmal eine Test-Mail und markiere sie als „Kein Spam“ –
+          dann landen die Geburtstags-Erinnerungen sicher im Posteingang.
+        </p>
+      )}
       {person.email && (
         <Button
           variant="secondary"

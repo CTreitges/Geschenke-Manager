@@ -17,12 +17,12 @@ const PORT = 5174;
 const BASE = `http://127.0.0.1:${PORT}`;
 const MAX_WIDTH = 1200;
 
-// Tutorial + Tipp-Dialoge unterdrücken (Keys aus App.tsx,
-// PwaInstallTipDialog.tsx, TestMailTipDialog.tsx).
+// Onboarding (Tutorial, Identität, Install-Tipp) unterdrücken – Keys wie in
+// src/lib/onboarding.ts (ONBOARDING_KEYS, TUTORIAL_VERSION).
 const SUPPRESS_KEYS = {
-  "gm:tutorial-seen:v5": "yes",
+  "gm:onboarding:tutorial": "6",
+  "gm:onboarding:identity-asked": "yes",
   "gm:pwa-install-tip-seen:v1": "yes",
-  "gm:test-mail-tip-seen:v1": "yes",
 };
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));

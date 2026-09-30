@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
-import { PwaInstallTipDialog } from "@/components/PwaInstallTipDialog";
-import { TestMailTipDialog } from "@/components/TestMailTipDialog";
+import { OnboardingFlow } from "@/components/OnboardingFlow";
 import Login from "@/pages/Login";
 import CreateGroup from "@/pages/CreateGroup";
 import Home from "@/pages/Home";
@@ -27,7 +26,6 @@ import {
   useGroupId,
 } from "@/lib/auth";
 import { consumeGoogleRedirectResult } from "@/lib/firebase";
-import { isEntryLinkSession } from "@/lib/onboarding";
 import { useStore } from "@/lib/hooks";
 import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
@@ -130,27 +128,6 @@ function PushBridge({ groupId }: { groupId: string | null }) {
   return null;
 }
 
-const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v5";
-
-/**
- * Auto-open the tutorial on first visit per browser. Marks itself as
- * seen via localStorage so it never auto-opens again on this device.
- */
-function FirstRunTutorial() {
-  const nav = useNavigate();
-  const location = useLocation();
-  useEffect(() => {
-    if (location.pathname === "/tutorial") return;
-    if ((location.state as Record<string, unknown>)?.fromShareLink) return;
-    // Share-/Magic-Link-Einstieg unterbricht nie (B14: Mail-Link → Wunschliste).
-    if (isEntryLinkSession()) return;
-    if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "yes") return;
-    localStorage.setItem(TUTORIAL_SEEN_KEY, "yes");
-    nav("/tutorial");
-  }, [location.pathname, nav]);
-  return null;
-}
-
 export default function App() {
   const groupId = useGroupId();
   const { settings } = useStore();
@@ -243,9 +220,7 @@ function AppRoutes() {
         path="/*"
         element={
           <RequireAuth>
-            <FirstRunTutorial />
-            <PwaInstallTipDialog />
-            <TestMailTipDialog />
+            <OnboardingFlow />
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />

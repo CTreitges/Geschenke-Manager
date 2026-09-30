@@ -192,6 +192,44 @@ describe("weitere Onboarding-Regeln", () => {
     expect(ob.getWhatsNewSeen()).toBe("v1.8.0");
   });
 
+  it("Wiederholen ohne gesehene Version markiert „Was ist neu“ nicht nachträglich", () => {
+    local.setItem("gm:onboarding:tutorial", "6"); // Tutorial früher schon abgeschlossen
+    ob.markTutorialSeen(VERSION);
+    expect(ob.getWhatsNewSeen()).toBeNull();
+    expect(ob.hasUnseenVersion(VERSION)).toBe(true);
+  });
+
+  it("direkt nach dem First-Run-Tutorial folgt die Identität – trotz gezeigtem Schritt", () => {
+    ob.markStepShown();
+    ob.markTutorialSeen(VERSION);
+    expect(ob.nextOnboardingStep(ctx({ afterTutorial: true }))).toBe("identity");
+    // ohne afterTutorial bleibt es bei einem Schritt pro App-Start
+    expect(ob.nextOnboardingStep(ctx())).toBeNull();
+  });
+
+  it("nach dem Tutorial mit Identität, ohne Personen oder nach „Später“ → nichts (kein Install-Tipp)", () => {
+    ob.markStepShown();
+    ob.markTutorialSeen(VERSION);
+    expect(ob.nextOnboardingStep(ctx({ afterTutorial: true, hasIdentity: true }))).toBeNull();
+    expect(ob.nextOnboardingStep(ctx({ afterTutorial: true, personsCount: 0 }))).toBeNull();
+    ob.markIdentityAsked();
+    expect(ob.nextOnboardingStep(ctx({ afterTutorial: true }))).toBeNull();
+  });
+
+  it("afterTutorial sticht weder Entry-Link noch andere Pfade", () => {
+    expect(ob.nextOnboardingStep(ctx({ afterTutorial: true, pathname: "/wishlist" }))).toBeNull();
+    ob.markEntryLink();
+    expect(ob.nextOnboardingStep(ctx({ afterTutorial: true }))).toBeNull();
+  });
+
+  it("Test-Mail-Tipp nur nach neuer bzw. geänderter E-Mail", () => {
+    expect(ob.isNewEmail(undefined, "lea@example.org")).toBe(true);
+    expect(ob.isNewEmail("alt@example.org", "neu@example.org")).toBe(true);
+    expect(ob.isNewEmail("lea@example.org", " Lea@Example.org ")).toBe(false);
+    expect(ob.isNewEmail("lea@example.org", "")).toBe(false);
+    expect(ob.isNewEmail(null, "   ")).toBe(false);
+  });
+
   it("funktioniert ohne window (kein Event, kein Fehler)", () => {
     vi.stubGlobal("window", undefined);
     expect(() => ob.markWhatsNewSeen(VERSION)).not.toThrow();

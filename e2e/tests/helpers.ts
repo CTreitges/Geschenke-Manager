@@ -1,14 +1,14 @@
 import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { GROUP_ID, GROUP_PASSWORD } from "../emu-seed.mjs";
+import { ONBOARDING_KEYS, TUTORIAL_VERSION } from "../../src/lib/onboarding";
 
-// Tutorial + Tipp-Dialoge unterdrücken (Keys aus App.tsx,
-// PwaInstallTipDialog.tsx, TestMailTipDialog.tsx). Beim neuen Tutorial-Key
-// (src/lib/onboarding.ts) hier nachziehen.
+// Onboarding unterdrücken (Tutorial gesehen, Identität gefragt, Install-Tipp
+// erledigt). Keys direkt aus src/lib/onboarding.ts, damit nichts auseinanderläuft.
 export const SUPPRESS_KEYS: Record<string, string> = {
-  "gm:tutorial-seen:v5": "yes",
-  "gm:pwa-install-tip-seen:v1": "yes",
-  "gm:test-mail-tip-seen:v1": "yes",
+  [ONBOARDING_KEYS.tutorial]: TUTORIAL_VERSION,
+  [ONBOARDING_KEYS.identityAsked]: "yes",
+  [ONBOARDING_KEYS.installTip]: "yes",
 };
 
 /** Person-ID in der Demo-Gruppe (e2e/emu-seed.mjs): Name in Kleinbuchstaben. */
@@ -17,16 +17,21 @@ export const personId = (personName: string) => personName.toLowerCase();
 /**
  * Meldet sich über die UI in der Demo-Gruppe an (joinGroup-Function im
  * Emulator) und setzt vorher per localStorage die „Wer bin ich?"-Identität
- * sowie die Tutorial-/Tipp-Keys — für jede Seite dieses Browser-Kontexts.
+ * sowie die Onboarding-Keys — für jede Seite dieses Browser-Kontexts.
+ * `keys: {}` lässt das Onboarding zu (First-Run-Tests).
  */
-export async function loginAs(page: Page, personName: string): Promise<void> {
+export async function loginAs(
+  page: Page,
+  personName: string,
+  { keys = SUPPRESS_KEYS }: { keys?: Record<string, string> } = {},
+): Promise<void> {
   await page.context().addInitScript(
     ({ keys, identityKey, identity }) => {
       for (const [k, v] of Object.entries(keys)) localStorage.setItem(k, v);
       localStorage.setItem(identityKey, identity);
     },
     {
-      keys: SUPPRESS_KEYS,
+      keys,
       identityKey: `gm:identity:v1:${GROUP_ID}`,
       identity: personId(personName),
     },

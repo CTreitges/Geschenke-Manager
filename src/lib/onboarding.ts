@@ -79,11 +79,12 @@ export function markWhatsNewSeen(version: string): void {
 
 /**
  * Beim Verlassen des Tutorials aufrufen (Überspringen, „Los geht's“, Zurück).
- * Neu-Nutzer (kein Alt-Key, noch nie „Was ist neu“ gesehen) bekommen die
- * aktuelle Version als gesehen – kein Neu-Punkt für die ganze Historie.
+ * Neu-Nutzer (erster Abschluss, kein Alt-Key, noch nie „Was ist neu“
+ * gesehen) bekommen die aktuelle Version als gesehen – kein Neu-Punkt für
+ * die ganze Historie. Wiederholungen ändern „Was ist neu“ nie.
  */
 export function markTutorialSeen(currentVersion: string): void {
-  const isNewUser = !isLegacyUser() && getWhatsNewSeen() === null;
+  const isNewUser = !isTutorialDone() && !isLegacyUser() && getWhatsNewSeen() === null;
   write("local", ONBOARDING_KEYS.tutorial, TUTORIAL_VERSION);
   if (isNewUser) markWhatsNewSeen(currentVersion);
 }
@@ -111,6 +112,15 @@ export function markStepShown(): void {
   write("session", ONBOARDING_KEYS.stepShown, "1");
 }
 
+/**
+ * Test-Mail-Tipp (Kontext statt Dialog): nur, wenn gerade eine neue bzw.
+ * geänderte E-Mail gespeichert wurde – nicht beim Leeren, nicht bei gleicher.
+ */
+export function isNewEmail(previous: string | null | undefined, saved: string): boolean {
+  const next = saved.trim().toLowerCase();
+  return next.length > 0 && next !== (previous ?? "").trim().toLowerCase();
+}
+
 // ─── Entscheidung ───────────────────────────────────────
 
 export type OnboardingStep = "tutorial" | "identity" | "install-tip" | null;
@@ -129,6 +139,11 @@ export interface OnboardingContext extends OnboardingFlags {
   personsCount: number;
   /** läuft als installierte App oder war schon einmal installiert */
   installed: boolean;
+  /**
+   * Gerade aus dem First-Run-Tutorial zurück: Die Frage nach der Identität
+   * gehört noch zum selben Schritt („Danach IdentitySheet“, Spec §1).
+   */
+  afterTutorial?: boolean;
 }
 
 /** Liest die gespeicherten Flags; den Rest des Kontexts liefert die App. */
@@ -147,9 +162,13 @@ export function readOnboardingFlags(): OnboardingFlags {
  * und nie in einer Sitzung, die per Share- oder Magic-Link begann.
  */
 export function nextOnboardingStep(c: OnboardingContext): OnboardingStep {
-  if (c.entryLink || c.pathname !== "/" || c.stepShownThisSession) return null;
+  if (c.entryLink || c.pathname !== "/") return null;
+  const needsIdentity = !c.hasIdentity && !c.identityAsked && c.personsCount > 0;
+  // Direkt nach dem Tutorial höchstens noch die Identität, sonst nichts.
+  if (c.afterTutorial) return needsIdentity ? "identity" : null;
+  if (c.stepShownThisSession) return null;
   if (!c.tutorialDone) return "tutorial";
-  if (!c.hasIdentity && !c.identityAsked && c.personsCount > 0) return "identity";
+  if (needsIdentity) return "identity";
   if (!c.installed && !c.installTipDone) return "install-tip";
   return null;
 }

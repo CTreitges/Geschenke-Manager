@@ -116,8 +116,17 @@ export function formatDaysShort(days: number): string {
 export function giftDateLine(g: Gift, p: Person | undefined, ref: Date = new Date()): string {
   const date = giftDate(g, p, ref);
   if (!date) return "";
-  const day = `${WEEKDAYS_SHORT[date.getDay()]}, ${date.getDate()}. ${MONTHS_SHORT[date.getMonth()]}`;
-  return `${day} · ${formatDaysUntil(daysUntilForGift(g, p, ref))}`;
+  const day = (d: Date) => `${WEEKDAYS_SHORT[d.getDay()]}, ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`;
+  // Erhalten: der Anlass im Jahr des Geschenks, ohne Countdown zum nächsten Geburtstag.
+  if (g.status === "received") {
+    let past = date;
+    if (!g.customDate && p) {
+      const { month, day: d } = parseBD(p.birthday);
+      past = new Date(g.year, month - 1, d);
+    }
+    return `${day(past)} ${past.getFullYear()} · erhalten`;
+  }
+  return `${day(date)} · ${formatDaysUntil(daysUntilForGift(g, p, ref))}`;
 }
 
 /** Sort gifts in the stack (open + confirmed) by upcoming relevant date

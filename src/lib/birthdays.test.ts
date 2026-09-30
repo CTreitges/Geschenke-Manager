@@ -160,6 +160,15 @@ describe("giftDate / giftDateLine", () => {
     expect(giftDate(gift("g", "x"), undefined, REF)).toBeNull();
     expect(giftDateLine(gift("g", "x"), undefined, REF)).toBe("");
   });
+
+  it("erhalten: Anlass im Jahr des Geschenks statt Countdown zum nächsten Geburtstag", () => {
+    const p = person("max", "1988-11-14");
+    expect(giftDateLine(gift("g", "max", { year: 2025, status: "received" }), p, REF)).toBe("Fr, 14. Nov 2025 · erhalten");
+    // Dieses Jahr schon überreicht, der Geburtstag ist vorbei
+    expect(giftDateLine(gift("g", "max", { status: "received" }), p, REF)).toBe("Sa, 14. Nov 2026 · erhalten");
+    const wedding = gift("g", "max", { status: "received", customDate: "2026-06-06" });
+    expect(giftDateLine(wedding, p, REF)).toBe("Sa, 6. Jun 2026 · erhalten");
+  });
 });
 
 describe("formatShortDate / formatDaysShort", () => {

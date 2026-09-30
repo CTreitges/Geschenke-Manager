@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { CURRENT_VERSION, CURRENT_DATE, formatPatchDate } from "@/lib/patchnotes";
 import { Avatar, Button, Card, Chip, Dialog, Icon, Input, PageHeader, Toggle } from "@/components/ui";
+import { HelpEntries } from "@/components/HelpMenu";
 import { useStore } from "@/lib/hooks";
 import { useIdentityPrompt } from "@/components/IdentitySheet";
 import {
@@ -375,12 +376,10 @@ export default function Settings() {
         </Group>
 
         <Group title="Hilfe">
-          <Row label="So funktioniert's" hint="Step-by-Step Tutorial" icon={<Icon.gift />} onClick={() => nav("/tutorial")}>
-            <Icon.chev className="text-stone-400" />
-          </Row>
-          <Row label="Feedback" hint="Wünsche, Ideen, Bugs" icon={<Icon.mail />} onClick={() => nav("/feedback")}>
-            <Icon.chev className="text-stone-400" />
-          </Row>
+          {/* dieselben Einträge wie im Hilfe-Sheet („?“); Installieren steht unter „App“ */}
+          <div className="p-1.5">
+            <HelpEntries go={(to) => nav(to)} />
+          </div>
         </Group>
 
         <PwaInstallGroup />

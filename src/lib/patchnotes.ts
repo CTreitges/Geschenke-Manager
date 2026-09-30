@@ -2,14 +2,33 @@ export interface PatchNote {
   version: string;
   /** ISO date: YYYY-MM-DD */
   date: string;
+  /** Optionale Überschrift der Version (nur „Was ist neu“). */
+  title?: string;
   highlights: string[];
+  /** Optionaler Knopf unter den Punkten, z. B. zum Tutorial. */
+  action?: { label: string; to: string };
 }
 
 /**
- * Newest at the top. The first entry is treated as the "current" version
- * and shown prominently in the tutorial header.
+ * Neueste oben. Der erste Eintrag gilt als aktuelle Version: Er steht unter
+ * „Was ist neu“ aufgeklappt und steuert den Neu-Punkt am „?“.
  */
 export const PATCH_NOTES: PatchNote[] = [
+  {
+    version: "v1.8.0",
+    date: "2026-09-30",
+    title: "Abstimmen mit Frist & neue Hilfe",
+    highlights: [
+      "🗳️ Abstimmen im eigenen Fenster: Beim Start legt ihr eine Frist fest (24 Std bis 1 Woche), danach endet die Abstimmung von selbst",
+      "⏸️ Solange abgestimmt wird, sind neue Ideen pausiert – so stimmen alle über dasselbe ab",
+      "🔔 Push-Nachricht, wenn eine Abstimmung startet, und eine Erinnerung, falls du noch nicht abgestimmt hast. Einstellbar unter Einstellungen → Mitteilungen",
+      "🤫 Überraschungs-Schutz: Wer beschenkt wird, sieht von den Plänen nichts mehr",
+      "📝 Wunschliste neu: Wünsche bearbeiten, als Herzenswunsch markieren und mit Notiz versehen. Wünsche, die andere eintragen, zeigen „notiert von …“",
+      "❓ Neues Tutorial mit Bildern und ein Hilfe-Menü hinter dem „?“ oben rechts – mit häufigen Fragen",
+      "🎨 Frischeres, besser lesbares Design",
+    ],
+    action: { label: "Tutorial ansehen", to: "/tutorial" },
+  },
   {
     version: "v1.7.3",
     date: "2026-05-25",
@@ -70,7 +89,7 @@ export const PATCH_NOTES: PatchNote[] = [
     date: "2026-05-13",
     highlights: [
       "📲 App ist jetzt installierbar — eigenes Icon, eigener Splashscreen, läuft ohne Browser-Leiste",
-      "🔔 Push-Benachrichtigungen aufs Handy: sobald jemand in den 30-Tage-Stack rutscht, kommt eine Push (Toggle in Einstellungen → Konto)",
+      "🔔 Push-Benachrichtigungen aufs Handy: sobald jemand in den 30-Tage-Stack rutscht, kommt eine Push (Schalter in Einstellungen → Mitteilungen)",
       "App ist offline-tauglich — Daten bleiben lokal verfügbar",
       "Update-Hinweis erscheint automatisch, sobald eine neue Version live ist",
       "Google-Login klappt jetzt zuverlässig auch in der installierten App",

@@ -2,6 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import type { ReactNode } from "react";
 import { IdentityChip } from "./IdentityChip";
 import { GroupSwitcher } from "./GroupSwitcher";
+import { HelpMenu } from "./HelpMenu";
 import { Icon } from "./ui";
 import { cn } from "@/lib/cn";
 
@@ -26,14 +27,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </Link>
           <div className="flex items-center gap-1.5">
             <GroupSwitcher />
-            <Link
-              to="/tutorial"
-              aria-label="Tutorial"
-              title="So funktioniert's"
-              className="w-8 h-8 rounded-full border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-800 text-stone-600 dark:text-stone-300 flex items-center justify-center text-sm font-bold"
-            >
-              ?
-            </Link>
+            <HelpMenu />
             <IdentityChip />
           </div>
         </div>

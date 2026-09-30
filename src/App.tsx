@@ -14,6 +14,8 @@ import MyWishlist from "@/pages/MyWishlist";
 import PastGifts from "@/pages/PastGifts";
 import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
+import WhatsNew from "@/pages/WhatsNew";
+import Help from "@/pages/Help";
 import MagicLink from "@/pages/MagicLink";
 import ShareGift from "@/pages/ShareGift";
 import {
@@ -230,6 +232,8 @@ function AppRoutes() {
                 <Route path="/wishlist" element={<MyWishlist />} />
                 <Route path="/past" element={<PastGifts />} />
                 <Route path="/tutorial" element={<Tutorial />} />
+                <Route path="/whats-new" element={<WhatsNew />} />
+                <Route path="/help" element={<Help />} />
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

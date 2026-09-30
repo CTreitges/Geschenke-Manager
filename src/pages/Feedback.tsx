@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
+import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader, useConfirm } from "@/components/ui";
 import { useStore } from "@/lib/hooks";
 import { addFeedback, deleteFeedback, updateFeedback } from "@/lib/storage";
 import { useIdentity } from "@/lib/auth";
@@ -206,6 +206,7 @@ function FeedbackCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(fb.text);
+  const confirm = useConfirm();
 
   function save() {
     const t = draft.trim();
@@ -218,10 +219,12 @@ function FeedbackCard({
     toast.success("Aktualisiert");
   }
 
-  function remove() {
-    if (!confirm("Feedback löschen?")) return;
-    deleteFeedback(fb.id);
-    toast.success("Gelöscht");
+  async function remove() {
+    const ok = await confirm({ title: "Feedback löschen?", confirmLabel: "Löschen", tone: "danger" });
+    if (!ok) return;
+    deleteFeedback(fb.id)
+      .then(() => toast.success("Gelöscht"))
+      .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal"));
   }
 
   return (
@@ -293,7 +296,7 @@ function FeedbackCard({
                 >
                   <Icon.pencil />
                 </button>
-                <button onClick={remove} className="text-stone-400 hover:text-red-500 px-1.5 py-0.5" title="Löschen">
+                <button onClick={() => void remove()} className="text-stone-400 hover:text-red-500 px-1.5 py-0.5" title="Löschen">
                   <Icon.trash size={14} />
                 </button>
               </div>

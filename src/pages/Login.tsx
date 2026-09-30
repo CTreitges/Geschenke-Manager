@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Button, Icon, Input } from "@/components/ui";
+import { Button, Icon, Input, useConfirm } from "@/components/ui";
 import { addKnownGroup, getGroupId, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
 import { loginTarget } from "@/lib/nav";
@@ -17,6 +17,7 @@ export default function Login() {
   // Nach dem Login zurück dorthin, wo RequireAuth abgefangen hat (inkl. ?vote=1).
   const returnTo = loginTarget(useLocation().state);
   const goToTarget = () => nav(returnTo, { replace: true });
+  const confirm = useConfirm();
   const knownGroups = useKnownGroups();
   const showSaved = isAuthed() && knownGroups.length > 0;
   const fbUser = useFirebaseUser();
@@ -123,7 +124,12 @@ export default function Login() {
   }
 
   async function handleGoogleSignOut() {
-    if (!confirm("Bei Google abmelden? Du wirst dann wieder anonym auf diesem Gerät.")) return;
+    const ok = await confirm({
+      title: "Bei Google abmelden?",
+      body: "Du bist danach wieder anonym auf diesem Gerät.",
+      confirmLabel: "Abmelden",
+    });
+    if (!ok) return;
     setBusy(true);
     try {
       setActiveGroup(null);

@@ -9,7 +9,7 @@ import {
   useKnownGroups,
 } from "@/lib/auth";
 import { setActiveGroup } from "@/lib/storage";
-import { Dialog, Icon } from "./ui";
+import { Dialog, Icon, useConfirm } from "./ui";
 import { cn } from "@/lib/cn";
 
 export function GroupSwitcher() {
@@ -17,20 +17,22 @@ export function GroupSwitcher() {
   const activeId = useGroupId();
   const known = useKnownGroups();
   const nav = useNavigate();
+  const confirm = useConfirm();
 
   function pick(id: string) {
     if (id !== activeId) setGroupId(id);
     setOpen(false);
   }
 
-  function remove(id: string, e: React.MouseEvent) {
+  async function remove(id: string, e: React.MouseEvent) {
     e.stopPropagation();
-    if (
-      !confirm(
-        `Gruppe „${id}" aus deiner Liste entfernen?\n\nDie Daten bleiben auf dem Server — du kannst dich später mit ID + Passwort wieder einloggen.`,
-      )
-    )
-      return;
+    const ok = await confirm({
+      title: `Gruppe „${id}“ aus deiner Liste entfernen?`,
+      body: "Die Daten bleiben auf dem Server – du kannst dich später mit ID + Passwort wieder einloggen.",
+      confirmLabel: "Entfernen",
+      tone: "danger",
+    });
+    if (!ok) return;
     removeKnownGroup(id);
     if (id === activeId) {
       const remaining = getKnownGroups();
@@ -102,7 +104,7 @@ export function GroupSwitcher() {
                     </span>
                   )}
                   <button
-                    onClick={(e) => remove(g, e)}
+                    onClick={(e) => void remove(g, e)}
                     className="text-stone-400 hover:text-red-500 p-1.5 -mr-1 shrink-0"
                     aria-label={`Gruppe ${g} entfernen`}
                     title="Aus Liste entfernen"

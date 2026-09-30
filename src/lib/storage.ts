@@ -22,6 +22,7 @@ import { getGiftLocks, normalizePoll, pollPhase, type PollCloseReason } from "@s
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
 import { auth, authReady, db, functions } from "./firebase";
+import { dedupPlan, personDeletion } from "./cascade";
 import { isFeedbackOwner } from "./feedback-owner";
 import {
   closeFields,
@@ -513,54 +514,38 @@ export async function updatePerson(id: ID, patch: Partial<Person>) {
   await updateDoc(gdoc("persons", id), clean(patch as Record<string, unknown>));
 }
 
+/** Löscht die Person samt ihrer Geschenke, deren Ideen und Abstimmungen und ihrer Wünsche (B30). */
 export async function deletePerson(id: ID) {
   if (!state.activeGroupId) throw new Error("No active group");
+  const plan = personDeletion(id, state);
   const batch = writeBatch(db);
   batch.delete(gdoc("persons", id));
-  state.gifts
-    .filter((g) => g.personId === id)
-    .forEach((g) => batch.delete(gdoc("gifts", g.id)));
-  state.wishlist
-    .filter((w) => w.personId === id)
-    .forEach((w) => batch.delete(gdoc("wishlist", w.id)));
+  plan.gifts.forEach((gid) => batch.delete(gdoc("gifts", gid)));
+  plan.suggestions.forEach((sid) => batch.delete(gdoc("suggestions", sid)));
+  plan.polls.forEach((pid) => batch.delete(gdoc("polls", pid)));
+  plan.wishlist.forEach((wid) => batch.delete(gdoc("wishlist", wid)));
   await batch.commit();
 }
 
 /**
  * Deduplicate open gifts: same (personId, year) → keep richest, drop rest.
+ * Ideen der Doppel wandern zum behaltenen Geschenk, ihre Polls fallen weg (B30).
  */
 let dedupRunning = false;
 export async function deduplicateOpenGifts(): Promise<number> {
   if (dedupRunning) return 0;
   dedupRunning = true;
   try {
-    const groups = new Map<string, Gift[]>();
-    state.gifts
-      .filter((g) => g.status === "open")
-      .forEach((g) => {
-        const key = `${g.personId}:${g.year}`;
-        const arr = groups.get(key);
-        if (arr) arr.push(g);
-        else groups.set(key, [g]);
-      });
-    const toDelete: string[] = [];
-    for (const arr of groups.values()) {
-      if (arr.length < 2) continue;
-      arr.sort((a, b) => {
-        const da =
-          a.participantIds.length + (a.selectedSuggestionIds?.length ?? 0) * 0.5;
-        const db =
-          b.participantIds.length + (b.selectedSuggestionIds?.length ?? 0) * 0.5;
-        if (db !== da) return db - da;
-        return a.enteredStackAt - b.enteredStackAt;
-      });
-      toDelete.push(...arr.slice(1).map((g) => g.id));
-    }
-    if (toDelete.length === 0) return 0;
+    const plan = dedupPlan(state.gifts, state.suggestions);
+    if (plan.gifts.length === 0) return 0;
     const batch = writeBatch(db);
-    toDelete.forEach((id) => batch.delete(gdoc("gifts", id)));
+    plan.gifts.forEach((id) => {
+      batch.delete(gdoc("gifts", id));
+      batch.delete(gdoc("polls", id));
+    });
+    plan.moves.forEach((m) => batch.update(gdoc("suggestions", m.id), { giftId: m.giftId }));
     await batch.commit();
-    return toDelete.length;
+    return plan.gifts.length;
   } finally {
     dedupRunning = false;
   }

@@ -1,6 +1,7 @@
 import { initializeApp } from "firebase/app";
 import {
   GoogleAuthProvider,
+  connectAuthEmulator,
   getAuth,
   getRedirectResult,
   linkWithPopup,
@@ -16,11 +17,12 @@ import {
 } from "firebase/auth";
 import { isStandalonePWA } from "./pwa";
 import {
+  connectFirestoreEmulator,
   initializeFirestore,
   persistentLocalCache,
   persistentMultipleTabManager,
 } from "firebase/firestore";
-import { getFunctions } from "firebase/functions";
+import { connectFunctionsEmulator, getFunctions } from "firebase/functions";
 import { useEffect, useState } from "react";
 
 const firebaseConfig = {
@@ -48,6 +50,14 @@ export const db = initializeFirestore(app, {
 
 export const auth = getAuth(app);
 export const functions = getFunctions(app, "europe-west1");
+
+// Lokale Emulatoren (npm run emu:shots, Mode "emulator" mit Projekt
+// demo-geschenke) — muss vor dem ersten Auth-/Firestore-Zugriff passieren.
+if (import.meta.env.VITE_USE_EMULATOR === "1") {
+  connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+  connectFirestoreEmulator(db, "127.0.0.1", 8080);
+  connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+}
 
 /**
  * Resolves once Anonymous Auth has assigned this browser a UID. All

@@ -8,7 +8,10 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "generate-pwa-assets": "pwa-assets-generator"
+    "generate-pwa-assets": "pwa-assets-generator",
+    "preemu:shots": "node e2e/emu-cleanup.mjs",
+    "emu:shots": "firebase emulators:exec --only auth,firestore,functions --project demo-geschenke \"node e2e/emu-run.mjs\"",
+    "postemu:shots": "node e2e/emu-cleanup.mjs"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.1.0",

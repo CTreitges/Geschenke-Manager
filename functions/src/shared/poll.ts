@@ -344,6 +344,11 @@ function isQuietHour(hour: number): boolean {
   return hour >= QUIET_START_HOUR || hour < QUIET_END_HOUR;
 }
 
+/** Liegt `ts` in der Ruhezeit 22–8 Uhr (Europe/Vienna)? Dann keine Erinnerungen. */
+export function isQuietTime(ts: number): boolean {
+  return isQuietHour(zonedParts(ts, REMINDER_ZONE).hour);
+}
+
 /**
  * Zeitpunkt der einmaligen Erinnerung: `endsAt` − clamp(25 % der Dauer,
  * 30 Min, 12 Std). Fällt das in 22–8 Uhr (Europe/Vienna), wird auf 21:30

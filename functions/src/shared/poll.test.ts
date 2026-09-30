@@ -11,6 +11,7 @@ import {
   formatEndsAt,
   formatRemaining,
   getGiftLocks,
+  isQuietTime,
   normalizePoll,
   normalizeVotes,
   pollPhase,
@@ -361,6 +362,25 @@ describe("reminderDueAt", () => {
         expect(due!).toBeLessThan(startedAt + preset.ms);
       }
     }
+  });
+});
+
+describe("isQuietTime", () => {
+  const at = (iso: string) => Date.parse(iso);
+
+  it("22:00 bis 7:59 Wiener Zeit ist Ruhezeit, 8:00 bis 21:59 nicht", () => {
+    expect(isQuietTime(at("2026-09-30T21:59:00+02:00"))).toBe(false);
+    expect(isQuietTime(at("2026-09-30T22:00:00+02:00"))).toBe(true);
+    expect(isQuietTime(at("2026-10-01T03:00:00+02:00"))).toBe(true);
+    expect(isQuietTime(at("2026-10-01T07:59:00+02:00"))).toBe(true);
+    expect(isQuietTime(at("2026-10-01T08:00:00+02:00"))).toBe(false);
+  });
+
+  it("rechnet in Europe/Vienna, auch im Winter (UTC+1)", () => {
+    // 21:30 UTC = 22:30 Wien (Winterzeit)
+    expect(isQuietTime(Date.UTC(2026, 10, 10, 21, 30))).toBe(true);
+    // 07:30 UTC = 08:30 Wien
+    expect(isQuietTime(Date.UTC(2026, 10, 10, 7, 30))).toBe(false);
   });
 });
 

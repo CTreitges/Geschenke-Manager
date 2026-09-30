@@ -278,9 +278,14 @@ describe("groups/{g}/polls – Validierung", () => {
     await assertSucceeds(setDoc(pollRef(), fresh));
   });
 
-  it("Status außerhalb von active/closed ist verboten (Verwerfen = löschen)", async () => {
-    await assertFails(setDoc(pollRef(), { ...fresh, status: "none" }));
+  it("Status außerhalb von active/closed/none ist verboten", async () => {
     await assertFails(setDoc(pollRef(), { ...fresh, status: "paused" }));
+    await assertFails(setDoc(pollRef(), { ...fresh, status: 1 }));
+  });
+
+  it("alter Client verwirft per merge mit status none (KOR-02)", async () => {
+    await assertSucceeds(setDoc(pollRef(), fresh));
+    await assertSucceeds(setDoc(pollRef(), { status: "none" }, { merge: true }));
   });
 
   it("endsAt muss eine ganze Zahl sein", async () => {
@@ -298,5 +303,59 @@ describe("groups/{g}/polls – Validierung", () => {
 
   it("Nicht-Mitglieder dürfen keine Abstimmung starten", async () => {
     await assertFails(setDoc(pollRef("bob"), fresh));
+  });
+});
+
+describe("groups/{g}/polls – Stimmen nur in der laufenden Runde (KOR-10)", () => {
+  const HOUR = 3_600_000;
+  const pollRef = () => doc(dbAs("alice"), `groups/${G}/polls/gift1`);
+  const vote = () => updateDoc(pollRef(), new FieldPath("votes", "p2"), arrayUnion("s1"));
+  const unvote = () => updateDoc(pollRef(), new FieldPath("votes", "p2"), deleteField());
+
+  async function seedPoll(data: Record<string, unknown>) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `groups/${G}/polls/gift1`), {
+        giftId: "gift1",
+        votes: { p2: ["s0"] },
+        ...data,
+      });
+    });
+  }
+
+  it("laufende Runde: Stimme setzen und zurücknehmen", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - HOUR, endsAt: now + HOUR });
+    await assertSucceeds(vote());
+    await assertSucceeds(unvote());
+  });
+
+  it("Frist abgelaufen, Server hat noch nicht geschlossen: keine Stimmen mehr", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - 3 * HOUR, endsAt: now - HOUR });
+    await assertFails(vote());
+    await assertFails(unvote());
+  });
+
+  it("beendete Runde: Stimmen bleiben, wie sie sind", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "closed", startedAt: now - HOUR, endsAt: now + HOUR, closedAt: now });
+    await assertFails(vote());
+    await assertFails(unvote());
+  });
+
+  it("Alt-Runde ohne gültige Frist: 48 Std ab Start abstimmbar, danach nicht", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - HOUR, endsAt: now - 2 * HOUR });
+    await assertSucceeds(vote());
+    await seedPoll({ status: "active", startedAt: now - 49 * HOUR });
+    await assertFails(vote());
+  });
+
+  it("Beenden und Verlängern einer abgelaufenen Runde bleiben erlaubt", async () => {
+    const now = Date.now();
+    await seedPoll({ status: "active", startedAt: now - 3 * HOUR, endsAt: now - HOUR });
+    await assertSucceeds(updateDoc(pollRef(), { endsAt: now + HOUR }));
+    await seedPoll({ status: "active", startedAt: now - 3 * HOUR, endsAt: now - HOUR });
+    await assertSucceeds(updateDoc(pollRef(), { status: "closed", closedAt: now - HOUR, closedReason: "timeout" }));
   });
 });

@@ -54,11 +54,17 @@ service cloud.firestore {
         : poll.startedAt + 172800000;
     }
 
-    // Poll-Doc: Status nur active/closed, endsAt (falls gesetzt) ganzzahlig.
-    // Verwerfen = Doc löschen (kein Status "none" mehr).
+    // Poll-Doc: Status active/closed, endsAt (falls gesetzt) ganzzahlig.
+    // Verwerfen = Doc löschen; "none" bleibt erlaubt, weil alte, gecachte
+    // Clients so verwerfen (normalizePoll/pollPhase werten es als „kein Poll“).
     function validPoll(data) {
-      return data.status in ['active', 'closed']
+      return data.status in ['active', 'closed', 'none']
         && (!('endsAt' in data) || data.endsAt is int);
+    }
+
+    // Update, das nur Stimmen ändert (votes.{personId}).
+    function onlyVotesChanged() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes']);
     }
 
     function isFeedbackOwner() {
@@ -131,9 +137,13 @@ service cloud.firestore {
           && !pollRunning(groupId, request.resource.data.giftId);
       }
       match /wishlist/{doc}     { allow read, write: if isMember(groupId); }
+      // Stimmen ändern geht nur, solange die Runde läuft – auch alte Clients
+      // oder falsch gehende Uhren kippen so kein beendetes Ergebnis.
       match /polls/{doc}        {
         allow read, delete: if isMember(groupId);
-        allow create, update: if isMember(groupId) && validPoll(request.resource.data);
+        allow create: if isMember(groupId) && validPoll(request.resource.data);
+        allow update: if isMember(groupId) && validPoll(request.resource.data)
+          && (!onlyVotesChanged() || isRunningPoll(resource.data));
       }
 
       // Archiv-Verlauf für Restore. Schreibt die archiveGroupDocChange-

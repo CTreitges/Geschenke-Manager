@@ -150,6 +150,23 @@ test("Gleichstand: Ergebnis öffnet einmal von selbst, ohne Vorauswahl, „Beide
   await expect(result).toBeHidden();
 });
 
+test("„Ohne Auswahl abschließen“ leert eine alte Auswahl (Regression KOR-06)", async ({ page }) => {
+  const giftId = giftIds.christof;
+  // Nach „Entscheidung ändern“: wieder offen, die Auswahl steht noch (ohne
+  // Abstimmung, damit kein Ergebnis-Sheet von selbst aufgeht).
+  await pollRef(giftId).delete();
+  await giftRef(giftId).update({ selectedSuggestionIds: ["s-christof-1"] });
+  await loginAs(page, "Ben");
+  await page.goto(`/gift/${giftId}`);
+  await expect(page.getByRole("heading", { name: "Christof · Geburtstag" })).toBeVisible();
+  await page.getByRole("button", { name: "Weitere Aktionen" }).click();
+  await page.getByRole("dialog", { name: "Geschenk für Christof" }).getByRole("button", { name: /Ohne Auswahl abschließen/ }).click();
+  await page.getByRole("dialog", { name: "Ohne Auswahl abschließen?" }).getByRole("button", { name: "Abschließen" }).click();
+  await expect
+    .poll(async () => (await giftRef(giftId).get()).data())
+    .toMatchObject({ status: "received", selectedSuggestionIds: [] });
+});
+
 test("Deep-Link ?vote=1 öffnet das VoteSheet, Zurück schließt es", async ({ page }) => {
   const giftId = giftIds.anna;
   await loginAs(page, "Christof"); // hat schon abgestimmt → kein automatisches Öffnen

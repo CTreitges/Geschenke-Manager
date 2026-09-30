@@ -38,7 +38,7 @@ export function GiftMenu({
     });
     if (!ok) return;
     nav("/", { replace: true });
-    markReceived(gift.id, myId)
+    markReceived(gift.id, myId, { withoutSelection: true })
       .then(() => toast.success("Geschenk abgeschlossen ✓"))
       .catch(() => toast.error("Abschließen hat nicht geklappt – bitte nochmal"));
   }

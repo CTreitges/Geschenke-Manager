@@ -726,14 +726,20 @@ function closeActivePollInBatch(
 /**
  * Geschenk erhalten; eine noch aktive Abstimmung endet im selben Batch.
  * Wünsche hinter ausgewählten Ideen gelten ab jetzt als bekommen.
+ * `withoutSelection` („Ohne Auswahl abschließen“): eine alte Auswahl (z. B.
+ * nach „Entscheidung ändern“) wird im selben Batch geleert.
  */
-export async function markReceived(giftId: ID, closedBy?: ID | null) {
+export async function markReceived(giftId: ID, closedBy?: ID | null, opts: { withoutSelection?: boolean } = {}) {
   const now = Date.now();
   const batch = writeBatch(db);
-  batch.update(gdoc("gifts", giftId), { status: "received", receivedAt: now });
+  batch.update(gdoc("gifts", giftId), {
+    status: "received",
+    receivedAt: now,
+    ...(opts.withoutSelection ? { selectedSuggestionIds: [] } : {}),
+  });
   closeActivePollInBatch(batch, giftId, { closedBy, reason: "gift-received" }, now);
   const gift = state.gifts.find((g) => g.id === giftId);
-  if (gift) {
+  if (gift && !opts.withoutSelection) {
     const wishIds = new Set(state.wishlist.map((w) => w.id));
     for (const wid of fulfilledWishIds(gift, state.suggestions, wishIds)) {
       batch.update(gdoc("wishlist", wid), { fulfilledAt: now, fulfilledGiftId: giftId });

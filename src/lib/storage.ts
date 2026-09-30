@@ -799,6 +799,12 @@ export async function updateSuggestion(id: ID, patch: Partial<Suggestion>) {
   await updateDoc(gdoc("suggestions", id), clean(patch as Record<string, unknown>));
 }
 
+/** Rückgängig nach dem Löschen: gleiche ID, gleiche Felder (setDoc). */
+export async function restoreSuggestion(s: Suggestion) {
+  const { id, ...data } = s;
+  await setDoc(gdoc("suggestions", id), clean(data as Record<string, unknown>));
+}
+
 /** „Bezahlt von“ setzen oder entfernen (null löscht das Feld). */
 export async function setPaidBy(suggestionId: ID, personId: ID | null) {
   await updateDoc(gdoc("suggestions", suggestionId), { paidBy: personId ?? deleteField() });

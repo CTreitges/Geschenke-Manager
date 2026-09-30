@@ -1,10 +1,9 @@
-import { Avatar, Icon } from "@/components/ui";
+import { Avatar, Icon, Section } from "@/components/ui";
 import { setAllParticipants, toggleParticipant } from "@/lib/storage";
 import { pickColor } from "@/lib/colors";
 import type { Gift, Person } from "@/lib/types";
 import { BudgetEditor } from "./BudgetEditor";
 import { ParticipantBulkButtons } from "./ParticipantBulkButtons";
-import { Section } from "./Section";
 
 // ── Teilnehmer + Budget ───────────────────────────────────────
 export function ParticipantsSection({

@@ -1,4 +1,5 @@
-import { Icon } from "@/components/ui";
+import { Lock } from "lucide-react";
+import { Button, Icon } from "@/components/ui";
 import { formatRelativeDate } from "@/lib/dates";
 import type { WishlistItem } from "@/lib/types";
 
@@ -6,10 +7,13 @@ import type { WishlistItem } from "@/lib/types";
 export function WishlistRow({
   wish,
   taken,
+  disabled = false,
   onAdopt,
 }: {
   wish: WishlistItem;
   taken: boolean;
+  /** Übernehmen gesperrt (Grund steht über der Liste). */
+  disabled?: boolean;
   onAdopt: () => void;
 }) {
   return (
@@ -55,13 +59,10 @@ export function WishlistRow({
           <Icon.check size={12} /> übernommen
         </span>
       ) : (
-        <button
-          onClick={onAdopt}
-          className="px-2.5 py-1.5 rounded-lg text-[12px] font-semibold text-white shrink-0 mt-0.5 active:scale-[0.98] transition-transform"
-          style={{ background: "linear-gradient(135deg, #4F46E5, #7C3AED)" }}
-        >
+        <Button size="sm" disabled={disabled} onClick={onAdopt} className="mt-0.5 shrink-0">
+          {disabled && <Lock size={14} aria-hidden />}
           Übernehmen
-        </button>
+        </Button>
       )}
     </div>
   );

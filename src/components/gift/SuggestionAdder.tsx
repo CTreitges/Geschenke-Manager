@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { Button, Input } from "@/components/ui";
+import { parsePrice } from "@/lib/money";
+import { PollLockedError } from "@/lib/pollOps";
 import { addSuggestion } from "@/lib/storage";
 import { toast } from "sonner";
 
@@ -16,18 +18,25 @@ export function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string
       toast.error("Wähle erst in den Einstellungen, wer du bist");
       return;
     }
+    // Felder sofort leeren (die Idee erscheint gleich in der Liste, kein
+    // Erfolgs-Toast); scheitert das Speichern, kommt der Text zurück.
+    const draft = { text, url, price };
     addSuggestion({
       giftId,
       title: text.trim(),
       url: url.trim() || undefined,
-      price: price ? +price : undefined,
+      price: parsePrice(price),
       suggestedBy: myId,
+    }).catch((e) => {
+      setText(draft.text);
+      setUrl(draft.url);
+      setPrice(draft.price);
+      toast.error(e instanceof PollLockedError ? e.message : "Idee nicht gespeichert – bitte nochmal");
     });
     setText("");
     setUrl("");
     setPrice("");
     setShowExtra(false);
-    toast.success("Vorschlag hinzugefügt");
   }
 
   return (
@@ -69,7 +78,7 @@ export function SuggestionAdder({ giftId, myId }: { giftId: string; myId: string
           />
           <Input
             placeholder="€"
-            type="number"
+            inputMode="decimal"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
             className="flex-1 py-2"

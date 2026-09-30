@@ -1,56 +1,75 @@
-import { addSuggestion } from "@/lib/storage";
+import { Lock } from "lucide-react";
 import { toast } from "sonner";
+import { Section } from "@/components/ui";
+import { PollLockedError } from "@/lib/pollOps";
+import { addSuggestion } from "@/lib/storage";
 import type { Gift, Person, Suggestion, WishlistItem } from "@/lib/types";
-import { Section } from "./Section";
 import { WishlistRow } from "./WishlistRow";
 
 // ── Wunschliste der Person (mit Übernehmen) ───────────────────
+// `blockedReason` gesetzt → Übernehmen gesperrt (laufende Abstimmung oder
+// keine Identität); Lesen bleibt erlaubt.
 export function WishlistAdoptSection({
   gift,
   person,
   personWishes,
   giftSuggestions,
   myId,
+  blockedReason,
 }: {
   gift: Gift;
   person: Person;
   personWishes: WishlistItem[];
-  giftSuggestions: Suggestion[];
+  giftSuggestions: readonly Suggestion[];
   myId: string | null;
+  blockedReason: string | null;
 }) {
-  const giftId = gift.id;
+  function adopt(w: WishlistItem) {
+    // Nur mit Identität – sonst stünde die beschenkte Person als Autorin da (B21).
+    if (!myId || blockedReason) return;
+    addSuggestion({
+      giftId: gift.id,
+      title: w.title,
+      url: w.url,
+      price: w.price,
+      suggestedBy: myId,
+      fromWishItemId: w.id,
+    })
+      .then(() => toast.success("In die Ideen übernommen"))
+      .catch((e) => toast.error(e instanceof PollLockedError ? e.message : "Übernehmen hat nicht geklappt – bitte nochmal"));
+  }
 
   return (
     <Section
       title={`Wunschliste von ${person.name}`}
-      hint={personWishes.length > 0 ? `${personWishes.length}` : undefined}
+      count={personWishes.length || undefined}
+      hint={blockedReason && personWishes.length > 0 ? "🔒 pausiert" : undefined}
     >
       {personWishes.length === 0 ? (
-        <div className="text-[13px] text-stone-500 dark:text-stone-400 bg-stone-50 dark:bg-stone-800/50 rounded-xl px-3.5 py-3 border border-[#F0EBE6] dark:border-[#3A3633]">
-          Noch keine Wünsche von {person.name}. Wenn {person.name} sich was wünscht, taucht es hier
-          auf — und ihr könnt es mit einem Tipp in die Vorschläge übernehmen.
+        <div className="rounded-card border border-line-subtle bg-surface-2 px-3.5 py-3 text-meta text-fg-soft">
+          Noch keine Wünsche von {person.name}. Wenn {person.name} sich was wünscht, taucht es hier auf – und ihr könnt
+          es mit einem Tipp in die Ideen übernehmen.
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {personWishes.map((w) => (
-            <WishlistRow
-              key={w.id}
-              wish={w}
-              taken={giftSuggestions.some((s) => s.fromWishItemId === w.id)}
-              onAdopt={() => {
-                addSuggestion({
-                  giftId,
-                  title: w.title,
-                  url: w.url,
-                  price: w.price,
-                  suggestedBy: myId ?? gift.personId,
-                  fromWishItemId: w.id,
-                });
-                toast.success("In Vorschläge übernommen");
-              }}
-            />
-          ))}
-        </div>
+        <>
+          {blockedReason && (
+            <p className="m-0 mb-2 flex items-center gap-1.5 text-meta text-fg-muted">
+              <Lock size={14} aria-hidden className="shrink-0" />
+              {blockedReason}
+            </p>
+          )}
+          <div className="flex flex-col gap-2">
+            {personWishes.map((w) => (
+              <WishlistRow
+                key={w.id}
+                wish={w}
+                taken={giftSuggestions.some((s) => s.fromWishItemId === w.id)}
+                disabled={!!blockedReason}
+                onAdopt={() => adopt(w)}
+              />
+            ))}
+          </div>
+        </>
       )}
     </Section>
   );

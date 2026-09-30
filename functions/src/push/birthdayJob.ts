@@ -7,7 +7,7 @@ import {
   type BirthdayPerson,
 } from "./birthday";
 import { claimPushMarker } from "./markers";
-import type { PushMember } from "./recipients";
+import { loadPushMembers } from "./members";
 import { sendAndCleanup } from "./send";
 import { loadTokensByUid } from "./tokens";
 
@@ -39,16 +39,7 @@ export async function runBirthdayPush(
       }
       if (persons.length === 0) continue;
 
-      const membersSnap = await db.collection(`groups/${groupId}/members`).get();
-      const members: PushMember[] = membersSnap.docs.map((d) => {
-        const m = d.data() as Partial<PushMember>;
-        return {
-          uid: d.id,
-          identityPersonId: typeof m.identityPersonId === "string" ? m.identityPersonId : undefined,
-          notifyStack: m.notifyStack === true,
-          notifyPolls: typeof m.notifyPolls === "boolean" ? m.notifyPolls : undefined,
-        };
-      });
+      const members = await loadPushMembers(db, groupId);
       if (!members.some((m) => m.notifyStack)) continue;
 
       // Tokens ALLER Mitglieder laden — auch der beschenkten Person, damit

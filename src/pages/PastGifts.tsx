@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { Avatar, Chip, EmptyState, Icon, PageHeader } from "@/components/ui";
+import { formatReceivedDate } from "@/lib/birthdays";
 import { useMyId, useStore } from "@/lib/hooks";
 import { useBack } from "@/lib/nav";
 import { formatEuro } from "@/lib/money";
@@ -42,13 +43,6 @@ export default function PastGifts() {
     return gift.participantIds.length * gift.budgetPerPerson;
   }
 
-  function formatDate(ts: number | undefined): string {
-    if (!ts) return "";
-    const d = new Date(ts);
-    const months = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-    return `${d.getDate()}. ${months[d.getMonth()]} ${d.getFullYear()}`;
-  }
-
   return (
     <>
       <PageHeader
@@ -86,7 +80,7 @@ export default function PastGifts() {
                     <div className="truncate text-body font-bold text-fg">{p?.name ?? "Unbekannt"}</div>
                     <div className="text-xs text-fg-muted">
                       {occ} {g.year}
-                      {g.receivedAt ? ` · ${formatDate(g.receivedAt)}` : ""}
+                      {g.receivedAt ? ` · ${formatReceivedDate(g.receivedAt, g.year)}` : ""}
                     </div>
                   </div>
                   <div className="text-right shrink-0">

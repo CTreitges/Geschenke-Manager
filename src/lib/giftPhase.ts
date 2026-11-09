@@ -24,6 +24,11 @@ export type GiftPhaseBadge = "du-fehlst" | "bezahlung-offen";
 /** Stufen des PhaseStepper; „result“ gehört noch zur Stufe „Abstimmung“. */
 export const PHASE_STEPS = ["Ideen", "Abstimmung", "Entschieden", "Erhalten"] as const;
 
+/** Chip einer Phase (Person → Geschenke) mit den Begriffen des Steppers. */
+export function phaseChip(step: GiftPhaseInfo["step"]): { label: string; variant: "info" | "accent" | "success" } {
+  return { label: PHASE_STEPS[step], variant: step === 3 ? "success" : step === 2 ? "accent" : "info" };
+}
+
 export interface GiftPhaseInfo {
   phase: GiftPhase;
   /** Index in PHASE_STEPS */

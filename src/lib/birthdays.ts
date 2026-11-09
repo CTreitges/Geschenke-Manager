@@ -104,6 +104,13 @@ export function formatShortDate(date: Date): string {
   return `${date.getDate()}. ${MONTHS_SHORT[date.getMonth()]}`;
 }
 
+/** Übergabe-Datum zum Geschenkjahr: „15. Nov“, bei anderem Jahr „15. Nov 2025“. */
+export function formatReceivedDate(ts: number, year: number): string {
+  const date = new Date(ts);
+  const short = formatShortDate(date);
+  return date.getFullYear() === year ? short : `${short} ${date.getFullYear()}`;
+}
+
 /** Knappe Frist für Karten: „heute 🎂“, „morgen“, „in 5 T.“ */
 export function formatDaysShort(days: number): string {
   if (days === 0) return "heute 🎂";

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   daysUntilBirthday,
   formatDaysShort,
+  formatReceivedDate,
   formatShortDate,
   giftDate,
   giftDateLine,
@@ -184,5 +185,17 @@ describe("formatShortDate / formatDaysShort", () => {
     expect(formatDaysShort(1)).toBe("morgen");
     expect(formatDaysShort(12)).toBe("in 12 T.");
     expect(formatDaysShort(-2)).toBe("vor 2 T.");
+  });
+});
+
+describe("formatReceivedDate (UX-09)", () => {
+  const ts = new Date(2025, 10, 15).getTime();
+
+  it("lässt das Jahr weg, wenn es dem Geschenkjahr entspricht", () => {
+    expect(formatReceivedDate(ts, 2025)).toBe("15. Nov");
+  });
+
+  it("nennt das Jahr, wenn es abweicht", () => {
+    expect(formatReceivedDate(ts, 2024)).toBe("15. Nov 2025");
   });
 });

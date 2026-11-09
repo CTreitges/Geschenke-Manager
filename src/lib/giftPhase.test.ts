@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatEndsAt, type PollDoc } from "@shared/poll";
-import { PHASE_STEPS, giftPhase } from "./giftPhase";
+import { PHASE_STEPS, giftPhase, phaseChip } from "./giftPhase";
 import type { Gift, Suggestion } from "./types";
 
 const HOUR = 3_600_000;
@@ -160,5 +160,14 @@ describe("giftPhase – Spoiler-Schutz für die beschenkte Person", () => {
 describe("PHASE_STEPS", () => {
   it("vier Stufen in fester Reihenfolge", () => {
     expect(PHASE_STEPS).toEqual(["Ideen", "Abstimmung", "Entschieden", "Erhalten"]);
+  });
+});
+
+describe("phaseChip (UX-03)", () => {
+  it("nutzt die Phasenbegriffe statt offen/bestätigt/erhalten", () => {
+    expect(phaseChip(0)).toEqual({ label: "Ideen", variant: "info" });
+    expect(phaseChip(1)).toEqual({ label: "Abstimmung", variant: "info" });
+    expect(phaseChip(2)).toEqual({ label: "Entschieden", variant: "accent" });
+    expect(phaseChip(3)).toEqual({ label: "Erhalten", variant: "success" });
   });
 });

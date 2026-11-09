@@ -6,8 +6,9 @@ import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { useGiftMenuItems } from "@/components/gift/useGiftMenuItems";
 import { ActionMenu, Button, Card, Chip, EmptyState, Icon, Input, Overline } from "@/components/ui";
 import { useGroupId } from "@/lib/auth";
-import { birthdayYearForPerson } from "@/lib/birthdays";
+import { birthdayYearForPerson, formatReceivedDate } from "@/lib/birthdays";
 import { cn } from "@/lib/cn";
+import { giftPhase, phaseChip } from "@/lib/giftPhase";
 import { useMyId, useStore } from "@/lib/hooks";
 import { isIdentitySkipped } from "@/lib/identity";
 import { formatEuro } from "@/lib/money";
@@ -46,7 +47,7 @@ function IdentityFirst({ person }: { person: Person }) {
 
 function GiftsList({ person, stack, past, isMe }: { person: Person; stack: Gift[]; past: Gift[]; isMe: boolean }) {
   const nav = useNavigate();
-  const { settings } = useStore();
+  const { settings, polls, suggestions } = useStore();
   const menuItems = useGiftMenuItems();
   const now = useNow(60_000);
   const all = [...stack, ...past];
@@ -106,6 +107,9 @@ function GiftsList({ person, stack, past, isMe }: { person: Person; stack: Gift[
                 const skipped = isSkipped(g);
                 const active = g.status !== "received" && !skipped;
                 const items = secret ? [] : menuItems(g, person, now);
+                const chip = phaseChip(
+                  giftPhase(g, polls.find((x) => x.giftId === g.id), suggestions, isMe ? person.id : null, now).step,
+                );
                 return (
                   <div
                     key={g.id}
@@ -136,7 +140,9 @@ function GiftsList({ person, stack, past, isMe }: { person: Person; stack: Gift[
                               ? "Diesmal ausgesetzt"
                               : g.status !== "received"
                                 ? `${g.participantIds.length} Personen · ${formatEuro(g.participantIds.length * g.budgetPerPerson)}`
-                                : "erhalten"}
+                                : g.receivedAt
+                                  ? formatReceivedDate(g.receivedAt, g.year)
+                                  : ""}
                         </span>
                       </span>
                       {secret ? (
@@ -144,9 +150,7 @@ function GiftsList({ person, stack, past, isMe }: { person: Person; stack: Gift[
                       ) : skipped ? (
                         <Chip variant="neutral">ausgesetzt</Chip>
                       ) : (
-                        <Chip variant={g.status === "open" ? "info" : g.status === "confirmed" ? "accent" : "success"}>
-                          {g.status === "open" ? "offen" : g.status === "confirmed" ? "bestätigt" : "erhalten"}
-                        </Chip>
+                        <Chip variant={chip.variant}>{chip.label}</Chip>
                       )}
                     </button>
                     {items.length > 0 ? (

@@ -17,6 +17,7 @@ import {
 import {
   pollMarkerId,
   pollPushTtlSeconds,
+  pollStartThrottleId,
   pollReminderData,
   pollStartedData,
   type PollPushKind,
@@ -31,7 +32,7 @@ export interface PollPushDeps {
 export interface PollPushResult {
   sent: number;
   /** Warum nichts rausging (nur zur Diagnose/für Tests). */
-  skipped?: "no-round" | "no-voters" | "duplicate" | "no-recipients";
+  skipped?: "no-round" | "no-voters" | "duplicate" | "no-recipients" | "throttled";
 }
 
 async function personName(db: Firestore, groupId: string, personId: string | undefined): Promise<string> {
@@ -71,13 +72,20 @@ export async function sendPollPush(deps: PollPushDeps, input: PollPushInput): Pr
   if (!(await claimPushMarker(db, groupId, markerId, kind))) {
     return { sent: 0, skipped: "duplicate" };
   }
+  // Höchstens ein Start-Push je Geschenk und Zeitfenster: Löschen + neu Anlegen
+  // gibt jeder Runde ein neues startedAt und ginge sonst an der Runden-Sperre vorbei.
+  const throttleId = kind === "poll_started" ? pollStartThrottleId(giftId, input.now) : null;
   try {
+    if (throttleId && !(await claimPushMarker(db, groupId, throttleId, "poll_started_throttle"))) {
+      return { sent: 0, skipped: "throttled" };
+    }
     return await loadAndSend(deps, input, eligible);
   } catch (err) {
     // Wirft Laden oder Versand, Marker freigeben: sweepPolls holt die
     // Erinnerung im nächsten Lauf nach, eine erneut zugestellte
     // Trigger-Ausführung den Start-Push.
     await releasePushMarker(db, groupId, markerId);
+    if (throttleId) await releasePushMarker(db, groupId, throttleId);
     throw err;
   }
 }

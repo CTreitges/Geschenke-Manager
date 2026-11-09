@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { captureTransport, memoryFirestore } from "../../test/memoryFirestore";
 import { HOUR, T0, activePoll, pollSeed } from "../../test/pollFixture";
-import { handlePollWrite } from "./onPollWritten";
+import { handlePollWrite, onPollWritten } from "./onPollWritten";
 
 function setup(extra: Record<string, Record<string, unknown>> = {}) {
   const store = memoryFirestore(pollSeed(extra));
@@ -116,5 +116,33 @@ describe("handlePollWrite (onPollWritten)", () => {
     expect(await write(undefined, activePoll())).toEqual({ sent: 0, skipped: "no-voters" });
     expect(messages).toHaveLength(0);
     expect([...docs.keys()].some((k) => k.includes("/_push/"))).toBe(false);
+  });
+});
+
+describe("onPollWritten – Zustellung (R10)", () => {
+  it("läuft mit retry, sonst holt niemand einen gescheiterten Start-Push nach", () => {
+    const endpoint = (onPollWritten as unknown as { __endpoint: { eventTrigger: { retry: boolean } } }).__endpoint;
+    expect(endpoint.eventTrigger.retry).toBe(true);
+  });
+});
+
+describe("onPollWritten – Drosselung je Geschenk (S2)", () => {
+  const MIN = 60_000;
+  const round = (startedAt: number) => activePoll({ startedAt, endsAt: startedAt + 48 * HOUR });
+
+  it("zweiter Start im selben Fenster bleibt stumm", async () => {
+    const { write, messages } = setup();
+    expect((await write(undefined, round(T0), T0)).sent).toBeGreaterThan(0);
+    const res = await write(undefined, round(T0 + 1000), T0 + 1000);
+    expect(res).toEqual({ sent: 0, skipped: "throttled" });
+    expect(messages).toHaveLength(1);
+  });
+
+  it("nach dem Fenster geht wieder ein Start-Push raus", async () => {
+    const { write, messages } = setup();
+    await write(undefined, round(T0), T0);
+    const later = T0 + 11 * MIN;
+    expect((await write(undefined, round(later), later)).sent).toBeGreaterThan(0);
+    expect(messages).toHaveLength(2);
   });
 });

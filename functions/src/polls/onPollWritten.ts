@@ -37,7 +37,9 @@ export async function handlePollWrite(
 }
 
 export const onPollWritten = onDocumentWritten(
-  { document: "groups/{groupId}/polls/{giftId}", region: REGION },
+  // retry: Wirft der Versand, gibt sendPollPush den Marker frei und die erneute
+  // Zustellung holt den Start-Push nach; endet die Runde, bricht not-running ab.
+  { document: "groups/{groupId}/polls/{giftId}", region: REGION, retry: true },
   async (event) => {
     const { groupId, giftId } = event.params;
     const before = event.data?.before;

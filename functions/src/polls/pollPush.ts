@@ -31,6 +31,13 @@ function giftOf(personName: string): string {
 }
 
 /** Deeplink: öffnet das Geschenk samt VoteSheet (über ShareGift, wechselt ggf. die Gruppe). */
+const POLL_START_THROTTLE_MS = 10 * 60_000;
+
+/** Marker-ID des Zeitfensters (10 Min), in dem ein Geschenk nur einen Start-Push bekommt. */
+export function pollStartThrottleId(giftId: string, now: number): string {
+  return `poll_started_throttle-${giftId}-${Math.floor(now / POLL_START_THROTTLE_MS)}`;
+}
+
 export function pollPushUrl(groupId: string, giftId: string): string {
   return `/g/${encodeURIComponent(groupId)}/gift/${encodeURIComponent(giftId)}?vote=1`;
 }

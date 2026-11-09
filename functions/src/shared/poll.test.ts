@@ -474,3 +474,20 @@ describe("formatEndsAt", () => {
     expect(formatEndsAt(end, late, "UTC")).toBe("endet heute 22:30");
   });
 });
+
+describe("extreme Zeitstempel (S3)", () => {
+  it("formatEndsAt wirft nicht", () => {
+    expect(formatEndsAt(1e18, Date.UTC(2026, 9, 1))).toBe("beendet");
+  });
+
+  it("normalizePoll verwirft unmögliche Zeitstempel", () => {
+    const poll = normalizePoll({ status: "active", startedAt: 1000, endsAt: 1e18 });
+    expect(poll.endsAt).toBeUndefined();
+    expect(normalizePoll({ status: "active", startedAt: -1e18 }).startedAt).toBeUndefined();
+  });
+
+  it("effectiveEndsAt fällt auf 48 Std zurück", () => {
+    expect(effectiveEndsAt({ startedAt: 1000, endsAt: 1e18 })).toBe(1000 + 48 * 3_600_000);
+    expect(effectiveEndsAt({ startedAt: 1e18 })).toBeNull();
+  });
+});

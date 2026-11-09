@@ -121,13 +121,22 @@ function nonEmptyString(v: unknown): string | undefined {
 }
 
 /** Liest ein rohes Poll-Doc (Firestore-Daten) typsicher; unbekannte Werte fallen weg. */
+/** Größer kann Date nicht darstellen (±8,64e15), mit Puffer für startedAt + 48 Std. */
+const MAX_TIMESTAMP = 8e15;
+
+/** Zeitstempel nur, wenn er als Datum darstellbar ist – sonst wirft die Formatierung. */
+function timestamp(v: unknown): number | undefined {
+  const n = finiteNumber(v);
+  return n !== undefined && Math.abs(n) <= MAX_TIMESTAMP ? n : undefined;
+}
+
 export function normalizePoll(raw: unknown): PollDoc {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const status = STATUSES.find((s) => s === r.status) ?? "none";
   const poll: PollDoc = { status, votes: normalizeVotes(r.votes) };
-  const startedAt = finiteNumber(r.startedAt);
-  const endsAt = finiteNumber(r.endsAt);
-  const closedAt = finiteNumber(r.closedAt);
+  const startedAt = timestamp(r.startedAt);
+  const endsAt = timestamp(r.endsAt);
+  const closedAt = timestamp(r.closedAt);
   const startedBy = nonEmptyString(r.startedBy);
   const closedBy = nonEmptyString(r.closedBy);
   const closedReason = CLOSE_REASONS.find((c) => c === r.closedReason);
@@ -167,9 +176,9 @@ export const LEGACY_POLL_DURATION_MS = 48 * HOUR;
 export function effectiveEndsAt(
   poll: Pick<PollDoc, "startedAt" | "endsAt"> | null | undefined,
 ): number | null {
-  const startedAt = finiteNumber(poll?.startedAt);
+  const startedAt = timestamp(poll?.startedAt);
   if (startedAt === undefined) return null;
-  const endsAt = finiteNumber(poll?.endsAt);
+  const endsAt = timestamp(poll?.endsAt);
   return endsAt !== undefined && endsAt > startedAt ? endsAt : startedAt + LEGACY_POLL_DURATION_MS;
 }
 
@@ -445,6 +454,7 @@ function pad2(n: number): string {
  * `timeZone` fehlt = Zeitzone des Geräts.
  */
 export function formatEndsAt(ts: number, now: number, timeZone?: string): string {
+  if (timestamp(ts) === undefined) return "beendet";
   const end = zonedParts(ts, timeZone);
   const today = zonedParts(now, timeZone);
   const endDay = Date.UTC(end.year, end.month - 1, end.day);

@@ -171,3 +171,12 @@ describe("phaseChip (UX-03)", () => {
     expect(phaseChip(3)).toEqual({ label: "Erhalten", variant: "success" });
   });
 });
+
+describe("extreme Frist (S3)", () => {
+  it("legt die Phasenzeile nicht lahm", () => {
+    const poll = { status: "active", startedAt: NOW - HOUR, endsAt: 1e18, votes: {} } as PollDoc;
+    const info = giftPhase(gift(), poll, [], "ben", NOW);
+    expect(info.phase).toBe("voting");
+    expect(info.endsAt).toBe(NOW - HOUR + 48 * HOUR);
+  });
+});

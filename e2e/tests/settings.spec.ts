@@ -93,3 +93,15 @@ test("Feedback-Platzhalter fragt nach der App, nicht nach Wünschen (UX-11)", as
   await expect(page.getByPlaceholder("Was fehlt dir in der App? Was nervt?")).toBeVisible();
   await expect(page.getByPlaceholder(/Was wünschst du dir/)).toHaveCount(0);
 });
+
+test("Push-Link mit Gruppe wechselt in diese Gruppe (Regression R9)", async ({ page }) => {
+  await loginAs(page, "Ben");
+  await page.evaluate(() => {
+    const known = JSON.parse(localStorage.getItem("gm:groups:v1") ?? "[]") as string[];
+    localStorage.setItem("gm:groups:v1", JSON.stringify([...known, "andere-gruppe"]));
+    localStorage.setItem("gm:group:v1", "andere-gruppe");
+  });
+  await page.goto(`/g/${GROUP_ID}/wishlist`);
+  await expect(page).toHaveURL(/\/wishlist$/);
+  expect(await page.evaluate(() => localStorage.getItem("gm:group:v1"))).toBe(GROUP_ID);
+});

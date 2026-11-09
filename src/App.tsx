@@ -19,6 +19,7 @@ import Feedback from "@/pages/Feedback";
 import WhatsNew from "@/pages/WhatsNew";
 import Help from "@/pages/Help";
 import MagicLink from "@/pages/MagicLink";
+import GroupLink from "@/pages/GroupLink";
 import ShareGift from "@/pages/ShareGift";
 import {
   addKnownGroup,
@@ -220,6 +221,8 @@ function AppRoutes() {
       <Route path="/login/new" element={<CreateGroup />} />
       <Route path="/m/:token" element={<MagicLink />} />
       <Route path="/g/:groupId/gift/:giftId" element={<ShareGift />} />
+      <Route path="/g/:groupId" element={<GroupLink to="/" />} />
+      <Route path="/g/:groupId/wishlist" element={<GroupLink to="/wishlist" />} />
       {/* Tutorial ohne Header und Tab-Bar (außerhalb von Layout) */}
       <Route
         path="/tutorial"

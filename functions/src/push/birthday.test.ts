@@ -40,7 +40,7 @@ describe("birthdayPushData", () => {
       type: "birthday_stack",
       title: "🎂 Anna hat in 30 Tagen Geburtstag",
       body: "Zeit für Ideen.",
-      url: "/",
+      url: "/g/g1",
     });
   });
 
@@ -48,7 +48,7 @@ describe("birthdayPushData", () => {
     const d = birthdayPushData({ ...base, self: true });
     expect(d.title).toBe("🎂 In 30 Tagen hast du Geburtstag");
     expect(d.body).toBe("Magst du deine Wunschliste ergänzen?");
-    expect(d.url).toBe("/wishlist");
+    expect(d.url).toBe("/g/g1/wishlist");
     expect(d.tag).toBe("gm-stack-g1-p-anna");
     expect(JSON.stringify(d)).not.toContain("Anna");
   });

@@ -93,7 +93,7 @@ describe("runBirthdayPush", () => {
     expect(others?.tokens).toEqual(["t-ben"]); // t-shared gesperrt (Annas Gerät)
     expect(others?.data.title).toBe("🎂 Anna hat in 30 Tagen Geburtstag");
     expect(self?.tokens.sort()).toEqual(["t-anna", "t-shared"]);
-    expect(self?.data.url).toBe("/wishlist");
+    expect(self?.data.url).toMatch(/^\/g\/[^/]+\/wishlist$/);
     expect(docs.has("groups/g1/_push/birthday-p-anna-2026")).toBe(true);
     expect(debugPushes("g2")).toEqual([]);
   });

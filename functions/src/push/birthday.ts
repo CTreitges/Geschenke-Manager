@@ -70,13 +70,14 @@ export function birthdayPushData(opts: {
 }): Record<string, string> {
   const { groupId, personId, name, daysLeft, self } = opts;
   const common = { groupId, personId, tag: `gm-stack-${groupId}-${personId}` };
+  const groupPath = `/g/${encodeURIComponent(groupId)}`;
   if (self) {
     return {
       ...common,
       type: "birthday_self",
       title: `🎂 In ${daysLeft} Tagen hast du Geburtstag`,
       body: "Magst du deine Wunschliste ergänzen?",
-      url: "/wishlist",
+      url: `${groupPath}/wishlist`,
     };
   }
   return {
@@ -84,7 +85,7 @@ export function birthdayPushData(opts: {
     type: "birthday_stack",
     title: `🎂 ${name} hat in ${daysLeft} Tagen Geburtstag`,
     body: "Zeit für Ideen.",
-    url: "/",
+    url: groupPath,
   };
 }
 

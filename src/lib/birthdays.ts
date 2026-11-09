@@ -132,11 +132,17 @@ export function giftDateLine(g: Gift, p: Person | undefined, ref: Date = new Dat
 /** Sort gifts in the stack (open + confirmed) by upcoming relevant date
  *  (nearest first). Bestätigte Geschenke bleiben im Stack — sie verschwinden
  *  erst, wenn der Status auf "received" gewechselt wird. Ausgesetzte
- *  („Diesmal aussetzen“, skippedAt) fehlen. */
-export function sortStack(gifts: Gift[], persons: Person[]): Gift[] {
+ *  („Diesmal aussetzen“, skippedAt) fehlen – außer für die beschenkte Person
+ *  selbst (`myId`): Ihre Karte „Überraschung läuft“ bleibt, sonst verriete
+ *  das Verschwinden die Entscheidung der anderen. */
+export function sortStack(gifts: Gift[], persons: Person[], myId?: string | null): Gift[] {
   const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
   return [...gifts]
-    .filter((g) => (g.status === "open" || g.status === "confirmed") && g.skippedAt === undefined)
+    .filter(
+      (g) =>
+        (g.status === "open" || g.status === "confirmed") &&
+        (g.skippedAt === undefined || (!!myId && g.personId === myId)),
+    )
     .sort((a, b) => {
       const da = daysUntilForGift(a, personById[a.personId]);
       const db = daysUntilForGift(b, personById[b.personId]);

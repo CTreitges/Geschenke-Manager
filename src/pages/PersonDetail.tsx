@@ -75,7 +75,9 @@ export default function PersonDetail() {
   // Stack = offen + bestätigt (inkl. ausgesetzter, für „Wieder aufnehmen“); past = erhalten.
   const stack = myGifts.filter((g) => g.status === "open" || g.status === "confirmed");
   const past = myGifts.filter((g) => g.status === "received");
-  const activeCount = stack.filter((g) => !isSkipped(g)).length;
+  // Für die beschenkte Person zählt auch ein ausgesetztes Geschenk – der Chip
+  // „Überraschung läuft“ verschwände sonst und verriete die Entscheidung.
+  const activeCount = stack.filter((g) => isMe || !isSkipped(g)).length;
 
   return (
     <div>

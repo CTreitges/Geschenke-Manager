@@ -113,6 +113,12 @@ describe("sortStack", () => {
     expect(sorted.map((g) => g.id)).toEqual(["g2"]);
   });
 
+  it("die beschenkte Person sieht ihre ausgesetzte Karte weiter (Regression SPO-04)", () => {
+    const gifts = [gift("g1", "neujahr", { skippedAt: 1 }), gift("g2", "weihnachten", { skippedAt: 1 })];
+    expect(sortStack(gifts, persons, "neujahr").map((g) => g.id)).toEqual(["g1"]);
+    expect(sortStack(gifts, persons, null).map((g) => g.id)).toEqual([]);
+  });
+
   it("nutzt bei gleichem Termin die Reihenfolge des Eintritts in den Stack", () => {
     const sorted = sortStack(
       [

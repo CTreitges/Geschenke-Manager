@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { expect, test, type Browser, type Page, type TestInfo } from "@playwright/test";
+import { formatShortDate } from "../../src/lib/birthdays";
 import { GROUP_ID, GROUP_PASSWORD, getDb, seed, setDarkMode } from "../emu-seed.mjs";
 import { SUPPRESS_KEYS, formatA11y, loginAs, seriousA11yViolations } from "./helpers";
 
@@ -84,10 +85,7 @@ async function expectNoSpoiler(page: Page, where: string) {
   for (const name of ["Anna", "Ben", "Max", "Sophie"]) expect(text, `${where}: Name ${name}`).not.toContain(name);
 }
 
-const birthdayIn8Days = () => {
-  const d = new Date(Date.now() + 8 * DAY);
-  return `${d.getDate()}.${d.getMonth() + 1}.`;
-};
+const birthdayIn8Days = () => formatShortDate(new Date(Date.now() + 8 * DAY));
 
 test("Christof sieht von seinem Geschenk nichts, Anna sieht alles", async ({ page, browser }, testInfo) => {
   const axeLog: string[] = [];

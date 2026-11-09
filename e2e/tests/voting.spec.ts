@@ -72,7 +72,7 @@ test("Teilnehmer startet, stimmt ab, beendet und legt die Entscheidung fest", as
   await expect(page).toHaveURL(new RegExp(`/gift/${giftId}$`));
 
   // Sperre: keine neue Idee, kein Bearbeiten/Löschen, Hinweis statt Eingabe.
-  await expect(page.getByText("Neue Ideen sind pausiert, bis die Abstimmung endet")).toBeVisible();
+  await expect(page.getByText("Neue Ideen, Bearbeiten und Löschen sind pausiert, bis die Abstimmung endet")).toBeVisible();
   await expect(page.getByPlaceholder("Idee teilen…")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Bearbeiten" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Wunschliste von Christof/ })).toContainText(
@@ -148,6 +148,39 @@ test("Gleichstand: Ergebnis öffnet einmal von selbst, ohne Vorauswahl, „Beide
   await page.reload();
   await expect(nowCard(page)).toContainText("Gleichstand");
   await expect(result).toBeHidden();
+});
+
+test("Neuer Snapshot hebt die Vorauswahl auf, eine eigene Auswahl bleibt (Regression SPEC-01)", async ({ page }) => {
+  const giftId = giftIds.christof;
+  const now = Date.now();
+  await pollRef(giftId).set({
+    giftId,
+    status: "closed",
+    startedAt: now - 2 * 24 * HOUR,
+    startedBy: "anna",
+    endsAt: now - HOUR,
+    closedAt: now - HOUR,
+    closedReason: "timeout",
+    votes: { anna: ["s-christof-1"], max: ["s-christof-1"] },
+  });
+  await loginAs(page, "Ben");
+  await page.goto(`/gift/${giftId}`);
+
+  const result = resultSheet(page, "Christof");
+  await expect(result).toContainText("🏆");
+  await expect(result.getByRole("button", { pressed: true })).toHaveCount(1);
+
+  // Späterer Stand ohne Tipp: Gleichstand, also keine Vorauswahl mehr.
+  await pollRef(giftId).update({ votes: { anna: ["s-christof-1"], max: ["s-christof-2"] } });
+  await expect(result).toContainText("⚖ Gleichstand");
+  await expect(result.getByRole("button", { pressed: true })).toHaveCount(0);
+
+  // Nach einem eigenen Tipp gehört die Auswahl dem Nutzer.
+  await result.getByRole("button", { name: /Whisky-Tasting/ }).click();
+  await pollRef(giftId).update({ votes: { anna: ["s-christof-1"], max: ["s-christof-1"] } });
+  await expect(result).toContainText("🏆");
+  await expect(result.getByRole("button", { name: /Whisky-Tasting/ })).toHaveAttribute("aria-pressed", "true");
+  await expect(result.getByRole("button", { pressed: true })).toHaveCount(1);
 });
 
 test("„Ohne Auswahl abschließen“ leert eine alte Auswahl (Regression KOR-06)", async ({ page }) => {

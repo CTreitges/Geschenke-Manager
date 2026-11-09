@@ -36,8 +36,32 @@ export function votersLine(voted: number, total: number, missingNames: readonly 
   if (total === 0) return "Noch niemand darf abstimmen";
   const head = `${voted} von ${total}`;
   if (voted >= total) return `${head} · Alle haben abgestimmt 🎉`;
+  if (missingNames.length === 1 && missingNames[0] === "du") return `${head} · Es fehlt nur noch deine Stimme`;
   const label = missingNames.length === 1 ? "Es fehlt" : "Es fehlen";
   return missingNames.length ? `${head} · ${label}: ${joinNames(missingNames)}` : head;
+}
+
+/** Namen zu Personen-IDs; die eigene Person steht vorn und heißt „du“. */
+export function voterNames(
+  ids: readonly string[],
+  people: Record<string, { name: string } | undefined>,
+  myId: string | null,
+): string[] {
+  const others = ids.filter((id) => id !== myId).map((id) => people[id]?.name ?? "?");
+  return myId && ids.includes(myId) ? ["du", ...others] : others;
+}
+
+/** Stimmen pro Idee: „2 Stimmen“; der Nenner „x von y“ gehört zum Kopf des Sheets. */
+export function voteCountLabel(count: number, votedTotal: number): string {
+  if (votedTotal <= 0) return "noch keine Stimmen";
+  return count === 1 ? "1 Stimme" : `${count} Stimmen`;
+}
+
+/** Ränge einer nach Stimmen sortierten Liste: gleiche Stimmenzahl = gleicher Rang (1, 1, 3). */
+export function competitionRanks(ranked: readonly { votes: number }[]): number[] {
+  const ranks: number[] = [];
+  ranked.forEach((r, i) => ranks.push(i > 0 && r.votes === ranked[i - 1].votes ? ranks[i - 1] : i + 1));
+  return ranks;
 }
 
 /** Anteil der Abstimmenden (Personen, nicht Stimmen) für den Balken, 0…1. */

@@ -2,7 +2,7 @@ import { Check, ExternalLink } from "lucide-react";
 import { Avatar } from "@/components/ui";
 import { cn } from "@/lib/cn";
 import { formatEuro } from "@/lib/money";
-import { voteShare } from "@/lib/pollView";
+import { voteCountLabel, voteShare } from "@/lib/pollView";
 import { hostLabel, normalizeUrl } from "@/lib/url";
 import type { Person, Suggestion } from "@/lib/types";
 
@@ -76,7 +76,7 @@ export function ChoiceRow({
                 />
               </span>
               <span className="shrink-0 text-2xs font-semibold tabular-nums text-fg-soft">
-                {total > 0 ? `${count} von ${total}` : "noch keine Stimmen"}
+                {voteCountLabel(count, total)}
               </span>
               {count > 0 && (
                 <span aria-hidden className="flex shrink-0">

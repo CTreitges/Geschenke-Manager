@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
 import { enablePushForGroup, usePushState } from "@/lib/messaging";
 import type { PollModel } from "@/lib/pollModel";
 import { markPushAsked, shouldAskPush } from "@/lib/pollPrompts";
-import { countdown, voteChangeToast, votersLine } from "@/lib/pollView";
+import { countdown, voteChangeToast, voterNames, votersLine } from "@/lib/pollView";
 import { clearMyVotes, setMyVote } from "@/lib/storage";
 import type { Person, Suggestion } from "@/lib/types";
 import { normalizeUrl } from "@/lib/url";
@@ -106,7 +106,7 @@ export function VoteSheet({
 
   const eligiblePeople = model.eligible.map((id) => personsById[id]).filter((p): p is Person => !!p);
   const votedSet = new Set(model.eligible.filter((id) => !model.voters.missing.includes(id)));
-  const missingNames = model.voters.missing.map((id) => personsById[id]?.name ?? "?");
+  const missingNames = voterNames(model.voters.missing, personsById, myId);
   const cd = model.endsAt !== null ? countdown(model.endsAt, now) : null;
   const anyLink = ideas.some((s) => normalizeUrl(s.url));
 

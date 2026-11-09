@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { formatEndsAt, type PollDoc } from "@shared/poll";
 import {
+  competitionRanks,
   countdown,
   endedLine,
   endsTooLate,
@@ -10,6 +11,8 @@ import {
   selectionSummary,
   sortIdeas,
   voteChangeToast,
+  voteCountLabel,
+  voterNames,
   votersLine,
   voteShare,
 } from "./pollView";
@@ -177,5 +180,39 @@ describe("endsTooLate", () => {
   it("kein Hinweis ohne Datum oder für vergangene Anlässe", () => {
     expect(endsTooLate(NOW + DAY, null, NOW)).toBe(false);
     expect(endsTooLate(NOW + DAY, new Date(NOW - 5 * DAY), NOW)).toBe(false);
+  });
+});
+
+describe("eigene Person als „du“ (UX-05)", () => {
+  const people = { max: { name: "Max" }, ben: { name: "Ben" } };
+
+  it("voterNames: ich zuerst und als „du“, Unbekannte als „?“", () => {
+    expect(voterNames(["max", "ben"], people, "ben")).toEqual(["du", "Max"]);
+    expect(voterNames(["max", "weg"], people, null)).toEqual(["Max", "?"]);
+  });
+
+  it("votersLine: fehlt nur noch meine Stimme", () => {
+    expect(votersLine(3, 4, ["du"])).toBe("3 von 4 · Es fehlt nur noch deine Stimme");
+    expect(votersLine(1, 3, ["du", "Max"])).toBe("1 von 3 · Es fehlen: du und Max");
+  });
+});
+
+describe("competitionRanks (UX-07)", () => {
+  it("gleiche Stimmenzahl = gleicher Rang, danach Lücke", () => {
+    expect(competitionRanks([{ votes: 2 }, { votes: 2 }, { votes: 1 }])).toEqual([1, 1, 3]);
+    expect(competitionRanks([{ votes: 3 }, { votes: 1 }, { votes: 0 }])).toEqual([1, 2, 3]);
+    expect(competitionRanks([])).toEqual([]);
+  });
+});
+
+describe("voteCountLabel (UX-06)", () => {
+  it("zählt Stimmen pro Idee ohne zweiten Nenner", () => {
+    expect(voteCountLabel(2, 3)).toBe("2 Stimmen");
+    expect(voteCountLabel(1, 3)).toBe("1 Stimme");
+    expect(voteCountLabel(0, 3)).toBe("0 Stimmen");
+  });
+
+  it("noch niemand hat abgestimmt", () => {
+    expect(voteCountLabel(0, 0)).toBe("noch keine Stimmen");
   });
 });

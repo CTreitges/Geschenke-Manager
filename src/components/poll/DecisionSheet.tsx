@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Button, Icon, Sheet, useConfirm } from "@/components/ui";
 import type { PollModel } from "@/lib/pollModel";
-import { endedLine, initialDecisionSelection, resultHeadline, selectionSummary } from "@/lib/pollView";
+import { competitionRanks, endedLine, initialDecisionSelection, resultHeadline, selectionSummary } from "@/lib/pollView";
 import { decideGift, discardPoll, extendPoll } from "@/lib/storage";
 import type { Gift, Person, Poll, Suggestion } from "@/lib/types";
 import { normalizeUrl } from "@/lib/url";
@@ -52,25 +52,34 @@ export function DecisionSheet({
   const [busy, setBusy] = useState(false);
   const result = mode === "result" ? model.result : null;
 
-  // Vorauswahl bei jedem Öffnen neu: Sieger + bestehende Auswahl.
+  // Vorauswahl: Sieger + bestehende Auswahl, neu bei jedem Öffnen und bei
+  // neuem Ergebnis (später Snapshot, neue Runde) – nach einem eigenen Tipp
+  // gehört die Auswahl dem Nutzer.
+  const touched = useRef(false);
+  const resultKey = JSON.stringify(result);
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      touched.current = false;
+      return;
+    }
+    if (touched.current) return;
     setSelected(initialDecisionSelection(result, gift.selectedSuggestionIds ?? [], ideas.map((s) => s.id)));
-    // Bewusst nur beim Öffnen – danach gehört die Auswahl dem Nutzer.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, poll?.startedAt, resultKey]);
 
   const byId = new Map(ideas.map((s) => [s.id, s]));
   const ordered =
     mode === "result"
       ? model.ranked.map((r) => byId.get(r.id)).filter((s): s is Suggestion => !!s)
       : [...ideas];
+  const ranks = competitionRanks(ordered.map((s) => ({ votes: model.counts[s.id]?.length ?? 0 })));
   const selectedIdeas = ordered.filter((s) => selected.includes(s.id));
   const anyLink = ordered.some((s) => normalizeUrl(s.url));
   const titleOf = (id: string) => byId.get(id)?.title ?? "?";
   const nameOf = (id: string) => personsById[id]?.name;
 
   function toggle(id: string) {
+    touched.current = true;
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]));
   }
 
@@ -157,7 +166,10 @@ export function DecisionSheet({
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => setSelected((cur) => [...new Set([...cur, ...result.ids])])}
+                onClick={() => {
+                  touched.current = true;
+                  setSelected((cur) => [...new Set([...cur, ...result.ids])]);
+                }}
               >
                 {result.ids.length === 2 ? "Beide nehmen" : "Alle nehmen"}
               </Button>
@@ -191,7 +203,7 @@ export function DecisionSheet({
             author={personsById[s.suggestedBy]}
             pressed={selected.includes(s.id)}
             onToggle={() => toggle(s.id)}
-            rank={mode === "result" ? i + 1 : undefined}
+            rank={mode === "result" ? ranks[i] : undefined}
             winner={result?.kind === "winner" && result.id === s.id}
             voters={
               mode === "result"

@@ -8,7 +8,7 @@ import { PayerTotalsLine } from "@/components/gift/PayerTotalsLine";
 import { cn } from "@/lib/cn";
 import type { PollModel } from "@/lib/pollModel";
 import { startPollBlocker } from "@/lib/pollOps";
-import { countdown, endedLine, resultHeadline, selectionSummary, votersLine } from "@/lib/pollView";
+import { countdown, endedLine, resultHeadline, selectionSummary, voterNames, votersLine } from "@/lib/pollView";
 import { addParticipant, discardPoll, extendPoll, unconfirmGift } from "@/lib/storage";
 import type { Gift, Person, Poll, Suggestion } from "@/lib/types";
 import { PollOptionsMenu } from "./PollOptionsMenu";
@@ -129,7 +129,7 @@ function VotingNow({ gift, poll, model, personsById, myId, now, onOpenVote }: No
   const cd = model.endsAt !== null ? countdown(model.endsAt, now) : null;
   const eligiblePeople = model.eligible.map((id) => personsById[id]).filter((p): p is Person => !!p);
   const voted = new Set(model.eligible.filter((id) => !model.voters.missing.includes(id)));
-  const missingNames = model.voters.missing.map((id) => personsById[id]?.name ?? "?");
+  const missingNames = voterNames(model.voters.missing, personsById, myId);
   const starter = poll.startedBy ? personsById[poll.startedBy] : undefined;
   const startedBy = starter ? ` · gestartet von ${starter.name}` : "";
   const mine = model.myVotes.length;

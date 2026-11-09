@@ -88,7 +88,7 @@ export function IdeasSection({
         (locked ? (
           <div className="rounded-card border border-line-subtle bg-surface-2 p-3.5">
             <p className="m-0 text-meta text-fg-soft">
-              🔒 Neue Ideen sind pausiert, bis die Abstimmung endet – damit alle über dasselbe abstimmen.
+              🔒 Neue Ideen, Bearbeiten und Löschen sind pausiert, bis die Abstimmung endet – damit alle über dasselbe abstimmen.
             </p>
             {model.canVote && (
               <div className="mt-2 flex justify-end">

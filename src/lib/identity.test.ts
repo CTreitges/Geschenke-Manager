@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   claimedPersonIds,
+  cloudIdentityBehind,
   identitySkipKey,
   identityToRestore,
   isIdentitySkipped,
@@ -25,7 +26,7 @@ describe("liveIdentity (Regression SPO-05)", () => {
 
 describe("staleIdentity (Regression SPO-05)", () => {
   const persons = [{ id: "anna" }];
-  const base = { uid: "u1", members: [] as { uid: string; identityPersonId?: string }[], persons, ready: true };
+  const base = { uid: "u1", members: [] as { uid: string; identityPersonId?: string }[], persons, ready: true, serverConfirmed: true };
 
   it("lokale Identität einer gelöschten Person → lokal (und Cloud) leeren", () => {
     expect(staleIdentity({ ...base, localId: "anna-alt" })).toBe("local");
@@ -112,5 +113,40 @@ describe("identityToRestore", () => {
     expect(
       identityToRestore({ localId: null, uid: "me", members: [{ uid: "me", identityPersonId: "" }], persons }),
     ).toBeNull();
+  });
+});
+
+describe("staleIdentity nur mit Server-Stand (R2)", () => {
+  const base = { localId: "weg", uid: "u1", members: [], persons: [{ id: "p1" }], ready: true };
+
+  it("ein reiner Cache-Snapshot räumt nichts auf", () => {
+    expect(staleIdentity({ ...base, serverConfirmed: false })).toBeNull();
+  });
+
+  it("der Server-Stand räumt auf", () => {
+    expect(staleIdentity({ ...base, serverConfirmed: true })).toBe("local");
+  });
+});
+
+describe("cloudIdentityBehind", () => {
+  const base = {
+    localId: "p1",
+    uid: "u1",
+    persons: [{ id: "p1" }],
+    ready: true,
+    serverConfirmed: true,
+  };
+
+  it("erkennt ein Member-Doc ohne die lokale Identität (Stimmen-Regel braucht sie)", () => {
+    expect(cloudIdentityBehind({ ...base, members: [{ uid: "u1" }] })).toBe(true);
+    expect(cloudIdentityBehind({ ...base, members: [{ uid: "u1", identityPersonId: "p2" }] })).toBe(true);
+  });
+
+  it("nichts zu tun: gleich, kein Member-Doc, keine lokale oder veraltete Identität", () => {
+    expect(cloudIdentityBehind({ ...base, members: [{ uid: "u1", identityPersonId: "p1" }] })).toBe(false);
+    expect(cloudIdentityBehind({ ...base, members: [] })).toBe(false);
+    expect(cloudIdentityBehind({ ...base, localId: null, members: [{ uid: "u1" }] })).toBe(false);
+    expect(cloudIdentityBehind({ ...base, localId: "weg", members: [{ uid: "u1" }] })).toBe(false);
+    expect(cloudIdentityBehind({ ...base, ready: false, members: [{ uid: "u1" }] })).toBe(false);
   });
 });

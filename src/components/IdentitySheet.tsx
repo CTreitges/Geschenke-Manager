@@ -7,7 +7,7 @@ import { getIdentity, setIdentity, useGroupId, useIdentity } from "@/lib/auth";
 import { pickColor } from "@/lib/colors";
 import { useFirebaseUser } from "@/lib/firebase";
 import { useMyId, usePersonsReady, useStore } from "@/lib/hooks";
-import { claimedPersonIds, identityToRestore, liveIdentity, staleIdentity } from "@/lib/identity";
+import { claimedPersonIds, cloudIdentityBehind, identityToRestore, liveIdentity, staleIdentity } from "@/lib/identity";
 import { addPerson, getSnapshot, setMyIdentityCloud } from "@/lib/storage";
 import type { ID, Person } from "@/lib/types";
 
@@ -289,14 +289,16 @@ function CreateStep({ onCreated, onBack }: { onCreated: (id: ID, name: string) =
 function useStaleIdentityCleanup() {
   const localId = useIdentity();
   const user = useFirebaseUser();
-  const { members, persons } = useStore();
+  const { members, persons, personsFromServer } = useStore();
   const ready = usePersonsReady();
 
   useEffect(() => {
-    const stale = staleIdentity({ localId, uid: user?.uid, members, persons, ready });
+    const input = { localId, uid: user?.uid, members, persons, ready, serverConfirmed: personsFromServer };
+    const stale = staleIdentity(input);
     if (stale === "local") setIdentity(null);
     else if (stale === "cloud") void setMyIdentityCloud(null);
-  }, [localId, user, members, persons, ready]);
+    else if (cloudIdentityBehind(input)) void setMyIdentityCloud(localId);
+  }, [localId, user, members, persons, ready, personsFromServer]);
 }
 
 /**

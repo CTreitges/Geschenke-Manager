@@ -35,7 +35,7 @@ import type { Gift, Person } from "@/lib/types";
 
 export default function Home() {
   const store = useStore();
-  const { persons, gifts, polls, suggestions, settings, giftsHydrated, personsHydrated } = store;
+  const { persons, gifts, polls, suggestions, settings, giftsHydrated, personsHydrated, suggestionsHydrated, pollsHydrated } = store;
   const nav = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
   const now = useNow(60_000);
@@ -62,11 +62,11 @@ export default function Home() {
   // entries created by older cached bundles still running the legacy
   // random-id path on other devices.
   useEffect(() => {
-    if (!giftsHydrated || !personsHydrated) return;
+    if (!giftsHydrated || !personsHydrated || !suggestionsHydrated || !pollsHydrated) return;
     deduplicateOpenGifts().then((n) => {
       if (n > 0) console.log(`[gm] cleaned up ${n} duplicate gift(s)`);
     });
-  }, [giftsHydrated, personsHydrated]);
+  }, [giftsHydrated, personsHydrated, suggestionsHydrated, pollsHydrated]);
 
   const myId = useMyId();
   const groupId = useGroupId();

@@ -65,12 +65,33 @@ export function staleIdentity(c: {
   members: readonly Pick<Member, "uid" | "identityPersonId">[];
   persons: readonly Pick<Person, "id">[];
   ready: boolean;
+  /** Personen kamen vom Server; ein Cache-Snapshot kann unvollständig sein. */
+  serverConfirmed: boolean;
 }): "local" | "cloud" | null {
-  if (!c.ready) return null;
+  if (!c.ready || !c.serverConfirmed) return null;
   const exists = (id: ID) => c.persons.some((p) => p.id === id);
   if (c.localId) return exists(c.localId) ? null : "local";
   const cloud = c.members.find((m) => m.uid === c.uid)?.identityPersonId;
   return cloud && !exists(cloud) ? "cloud" : null;
+}
+
+/**
+ * Das eigene Member-Doc kennt die lokale Identität nicht oder eine andere
+ * (z. B. neue UID nach Konto-Wechsel). Die Rules binden Stimmen an diesen
+ * Wert, er muss also nachgezogen werden.
+ */
+export function cloudIdentityBehind(c: {
+  localId: ID | null;
+  uid: string | null | undefined;
+  members: readonly Pick<Member, "uid" | "identityPersonId">[];
+  persons: readonly Pick<Person, "id">[];
+  ready: boolean;
+  serverConfirmed: boolean;
+}): boolean {
+  if (!c.ready || !c.serverConfirmed || !c.localId) return false;
+  if (!c.persons.some((p) => p.id === c.localId)) return false;
+  const me = c.members.find((m) => m.uid === c.uid);
+  return !!me && me.identityPersonId !== c.localId;
 }
 
 /**

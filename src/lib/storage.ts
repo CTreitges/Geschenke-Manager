@@ -67,6 +67,8 @@ interface State {
   giftsHydrated: boolean;
   /** First persons snapshot has been received. */
   personsHydrated: boolean;
+  /** Persons-Stand kam mindestens einmal vom Server (nicht nur aus dem Offline-Cache). */
+  personsFromServer: boolean;
   /** First suggestions snapshot has been received. */
   suggestionsHydrated: boolean;
   /** First polls snapshot has been received. */
@@ -95,6 +97,7 @@ const emptyState = (): State => ({
   loaded: false,
   giftsHydrated: false,
   personsHydrated: false,
+  personsFromServer: false,
   suggestionsHydrated: false,
   pollsHydrated: false,
   activeGroupId: null,
@@ -259,12 +262,15 @@ export function setActiveGroup(groupId: string | null) {
       unsubscribers.push(
         onSnapshot(
           collection(db, "groups", groupId, "persons"),
+          // Sonst käme nach einem Cache-Snapshot ohne Änderung nie die Server-Bestätigung.
+          { includeMetadataChanges: true },
           (snap) => {
             state.persons = snap.docs.map((d) => ({
               id: d.id,
               ...(d.data() as Omit<Person, "id">),
             }));
             state.personsHydrated = true;
+            if (!snap.metadata.fromCache) state.personsFromServer = true;
             notify();
           },
           onErr("persons"),
@@ -524,7 +530,7 @@ export async function addPerson(p: Omit<Person, "id" | "createdAt">): Promise<ID
 }
 
 export async function updatePerson(id: ID, patch: Partial<Person>) {
-  await updateDoc(gdoc("persons", id), clean(patch as Record<string, unknown>));
+  await updateDoc(gdoc("persons", id), toUpdate(patch as Record<string, unknown>, deleteField));
 }
 
 /**
@@ -556,6 +562,8 @@ export async function deletePerson(id: ID) {
 let dedupRunning = false;
 export async function deduplicateOpenGifts(): Promise<number> {
   if (dedupRunning) return 0;
+  // Ohne Ideen verwaisten sie beim Löschen, ohne Abstimmungen träfe es auch laufende.
+  if (!state.giftsHydrated || !state.suggestionsHydrated || !state.pollsHydrated) return 0;
   dedupRunning = true;
   try {
     const now = Date.now();

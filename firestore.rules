@@ -54,17 +54,52 @@ service cloud.firestore {
         : poll.startedAt + 172800000;
     }
 
-    // Poll-Doc: Status active/closed, endsAt (falls gesetzt) ganzzahlig.
+    // Ganzzahlig, nicht negativ und höchstens `ahead` ms in der Zukunft. Ein
+    // extremer Wert ließe sich nicht als Datum formatieren.
+    function validTimestamp(value, ahead) {
+      return value is int && value >= 0 && value <= request.time.toMillis() + ahead;
+    }
+
+    // Poll-Doc: Status active/closed; endsAt höchstens 60 Tage voraus (längste
+    // Dauer 1 Woche plus Verlängern), startedAt höchstens 1 Tag (Uhrzeit-Abweichung).
     // Verwerfen = Doc löschen; "none" bleibt erlaubt, weil alte, gecachte
     // Clients so verwerfen (normalizePoll/pollPhase werten es als „kein Poll“).
     function validPoll(data) {
       return data.status in ['active', 'closed', 'none']
-        && (!('endsAt' in data) || data.endsAt is int);
+        && (!('endsAt' in data) || validTimestamp(data.endsAt, 5184000000))
+        && (!('startedAt' in data) || validTimestamp(data.startedAt, 86400000));
     }
 
-    // Update, das nur Stimmen ändert (votes.{personId}).
-    function onlyVotesChanged() {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['votes']);
+    function pollFieldChanged(field) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([field]);
+    }
+
+    function noVotes(data) {
+      return data.get('votes', {}).size() == 0;
+    }
+
+    // Die Identität ist ein selbst gewähltes Label: Das bindet Stimmen an EINE
+    // Person je Mitglied, verhindert aber nicht, die Identität zu wechseln.
+    function myPersonId(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.get('identityPersonId', '');
+    }
+
+    function onlyMyVoteChanged(groupId) {
+      return request.resource.data.get('votes', {}).diff(resource.data.get('votes', {}))
+        .affectedKeys().hasOnly([myPersonId(groupId)]);
+    }
+
+    // Stimmen ändern: nur die eigene in der laufenden Runde. Eine neue Runde
+    // darf sie leeren, aber nicht vorbelegen.
+    function votesUpdateAllowed(groupId) {
+      return !pollFieldChanged('votes')
+        || (pollFieldChanged('startedAt') && noVotes(request.resource.data))
+        || (isRunningPoll(resource.data) && onlyMyVoteChanged(groupId));
+    }
+
+    // Ein neues startedAt ist eine neue Runde (Push) – nicht über eine laufende.
+    function startedAtUpdateAllowed() {
+      return !pollFieldChanged('startedAt') || !isRunningPoll(resource.data);
     }
 
     function isFeedbackOwner() {
@@ -129,10 +164,15 @@ service cloud.firestore {
       match /gifts/{doc}        { allow read, write: if isMember(groupId); }
       // Ideen: Anlegen ist gesperrt, solange die Abstimmung des Geschenks
       // läuft – damit alle über dasselbe abstimmen (greift auch bei alten,
-      // gecachten App-Versionen). Nur create: der Batch von deleteGift
-      // (Ideen + Poll löschen) bleibt möglich.
+      // gecachten App-Versionen). Der Batch von deleteGift (Ideen + Poll
+      // löschen) bleibt möglich. Umhängen geht nur zwischen Geschenken ohne
+      // laufende Abstimmung (deduplicateOpenGifts verschiebt Ideen).
       match /suggestions/{doc}  {
-        allow read, update, delete: if isMember(groupId);
+        allow read, delete: if isMember(groupId);
+        allow update: if isMember(groupId)
+          && (request.resource.data.get('giftId', '') == resource.data.get('giftId', '')
+            || (!pollRunning(groupId, resource.data.giftId)
+              && !pollRunning(groupId, request.resource.data.giftId)));
         allow create: if isMember(groupId)
           && !pollRunning(groupId, request.resource.data.giftId);
       }
@@ -141,9 +181,10 @@ service cloud.firestore {
       // oder falsch gehende Uhren kippen so kein beendetes Ergebnis.
       match /polls/{doc}        {
         allow read, delete: if isMember(groupId);
-        allow create: if isMember(groupId) && validPoll(request.resource.data);
+        allow create: if isMember(groupId) && validPoll(request.resource.data)
+          && noVotes(request.resource.data);
         allow update: if isMember(groupId) && validPoll(request.resource.data)
-          && (!onlyVotesChanged() || isRunningPoll(resource.data));
+          && votesUpdateAllowed(groupId) && startedAtUpdateAllowed();
       }
 
       // Archiv-Verlauf für Restore. Schreibt die archiveGroupDocChange-

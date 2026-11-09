@@ -294,6 +294,9 @@ describe("groups/{g}/polls – Validierung", () => {
   });
 
   it("Stimme setzen, beenden und löschen", async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), `groups/${G}/members/alice`), { uid: "alice", joinedAt: 1, identityPersonId: "p2" });
+    });
     await assertSucceeds(setDoc(pollRef(), fresh));
     await assertSucceeds(updateDoc(pollRef(), new FieldPath("votes", "p2"), arrayUnion("s1")));
     await assertSucceeds(updateDoc(pollRef(), new FieldPath("votes", "p2"), deleteField()));
@@ -314,7 +317,13 @@ describe("groups/{g}/polls – Stimmen nur in der laufenden Runde (KOR-10)", () 
 
   async function seedPoll(data: Record<string, unknown>) {
     await env.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), `groups/${G}/polls/gift1`), {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `groups/${G}/members/alice`), {
+        uid: "alice",
+        joinedAt: 1,
+        identityPersonId: "p2",
+      });
+      await setDoc(doc(db, `groups/${G}/polls/gift1`), {
         giftId: "gift1",
         votes: { p2: ["s0"] },
         ...data,
@@ -357,5 +366,121 @@ describe("groups/{g}/polls – Stimmen nur in der laufenden Runde (KOR-10)", () 
     await assertSucceeds(updateDoc(pollRef(), { endsAt: now + HOUR }));
     await seedPoll({ status: "active", startedAt: now - 3 * HOUR, endsAt: now - HOUR });
     await assertSucceeds(updateDoc(pollRef(), { status: "closed", closedAt: now - HOUR, closedReason: "timeout" }));
+  });
+});
+
+describe("groups/{g}/polls – Stimmen, Rundenstart und Zeitstempel (R8, S2, S3, S4)", () => {
+  const HOUR = 3_600_000;
+  const pollRef = (uid = "alice") => doc(dbAs(uid), `groups/${G}/polls/gift1`);
+
+  async function seed(data: Record<string, unknown>, identity: string | null = "p2") {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `groups/${G}/members/alice`), {
+        uid: "alice",
+        joinedAt: 1,
+        ...(identity ? { identityPersonId: identity } : {}),
+      });
+      await setDoc(doc(db, `groups/${G}/polls/gift1`), { giftId: "gift1", votes: { p3: ["s0"] }, ...data });
+    });
+  }
+  const running = () => ({ status: "active", startedAt: Date.now() - HOUR, endsAt: Date.now() + HOUR });
+  const closed = () => ({ status: "closed", startedAt: Date.now() - 3 * HOUR, endsAt: Date.now() - HOUR, closedAt: Date.now() - HOUR });
+
+  it("S4: fremde Stimme ist in der laufenden Runde verboten", async () => {
+    await seed(running());
+    await assertFails(updateDoc(pollRef(), new FieldPath("votes", "p3"), ["s1"]));
+    await assertSucceeds(updateDoc(pollRef(), new FieldPath("votes", "p2"), ["s1"]));
+  });
+
+  it("S4: ohne Identität im Member-Doc keine Stimme", async () => {
+    await seed(running(), null);
+    await assertFails(updateDoc(pollRef(), new FieldPath("votes", "p2"), ["s1"]));
+  });
+
+  it("R8: Zusatzfeld hebelt die Bindung an die laufende Runde nicht aus", async () => {
+    await seed(closed());
+    await assertFails(updateDoc(pollRef(), new FieldPath("votes", "p2"), ["s1"], "closedBy", "p2"));
+  });
+
+  it("neue Runde auf einer beendeten: Stimmen dürfen geleert, nicht vorbelegt werden", async () => {
+    const now = Date.now();
+    const next = { giftId: "gift1", status: "active", startedAt: now, startedBy: "p2", endsAt: now + HOUR };
+    await seed(closed());
+    await assertFails(setDoc(pollRef(), { ...next, votes: { p3: ["s9"] } }));
+    await assertSucceeds(setDoc(pollRef(), { ...next, votes: {} }));
+  });
+
+  it("S2: startedAt bleibt, solange eine Runde läuft", async () => {
+    await seed(running());
+    await assertFails(updateDoc(pollRef(), { startedAt: Date.now() }));
+    await assertFails(setDoc(pollRef(), { giftId: "gift1", status: "active", startedAt: Date.now(), votes: {} }));
+  });
+
+  it("S2: Verlängern der laufenden Runde bleibt erlaubt", async () => {
+    await seed(running());
+    await assertSucceeds(updateDoc(pollRef(), { endsAt: Date.now() + 2 * HOUR }));
+  });
+
+  it("S4: neu angelegte Runde startet ohne Stimmen", async () => {
+    const now = Date.now();
+    const fresh = { giftId: "gift1", status: "active", startedAt: now, endsAt: now + HOUR };
+    await assertFails(setDoc(pollRef(), { ...fresh, votes: { p3: ["s1"] } }));
+    await assertSucceeds(setDoc(pollRef(), { ...fresh, votes: {} }));
+  });
+
+  it("S3: Zeitstempel müssen ganzzahlig und im Rahmen sein", async () => {
+    const now = Date.now();
+    const base = { giftId: "gift1", status: "active", votes: {} };
+    await assertFails(setDoc(pollRef(), { ...base, startedAt: now, endsAt: 1e18 }));
+    await assertFails(setDoc(pollRef(), { ...base, startedAt: "gestern", endsAt: now + HOUR }));
+    await assertFails(setDoc(pollRef(), { ...base, startedAt: 1e18, endsAt: now + HOUR }));
+    await assertSucceeds(setDoc(pollRef(), { ...base, startedAt: now, endsAt: now + 7 * 24 * HOUR }));
+  });
+
+  it("S3: extremes endsAt ist auch per Update verboten", async () => {
+    await seed(running());
+    await assertFails(updateDoc(pollRef(), { endsAt: 1e18 }));
+  });
+});
+
+describe("groups/{g}/suggestions – Umhängen (S6)", () => {
+  const HOUR = 3_600_000;
+  const ideaRef = () => doc(dbAs("alice"), `groups/${G}/suggestions/s1`);
+
+  async function seed(runningGift: string | null) {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, `groups/${G}/gifts/gift2`), { personId: "p3", status: "open" });
+      await setDoc(doc(db, `groups/${G}/suggestions/s1`), { giftId: "gift1", title: "Alt", suggestedBy: "p2", createdAt: 1 });
+      if (runningGift) {
+        await setDoc(doc(db, `groups/${G}/polls/${runningGift}`), {
+          status: "active",
+          startedAt: Date.now() - HOUR,
+          endsAt: Date.now() + HOUR,
+          votes: {},
+        });
+      }
+    });
+  }
+
+  it("nicht in ein Geschenk mit laufender Abstimmung", async () => {
+    await seed("gift2");
+    await assertFails(updateDoc(ideaRef(), { giftId: "gift2" }));
+  });
+
+  it("nicht aus einem Geschenk mit laufender Abstimmung", async () => {
+    await seed("gift1");
+    await assertFails(updateDoc(ideaRef(), { giftId: "gift2" }));
+  });
+
+  it("ohne laufende Abstimmung erlaubt (Doppel-Aufräumen verschiebt Ideen)", async () => {
+    await seed(null);
+    await assertSucceeds(updateDoc(ideaRef(), { giftId: "gift2" }));
+  });
+
+  it("andere Felder bleiben auch während der Abstimmung änderbar", async () => {
+    await seed("gift1");
+    await assertSucceeds(updateDoc(ideaRef(), { paidBy: "p2" }));
   });
 });

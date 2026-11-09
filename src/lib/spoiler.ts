@@ -1,4 +1,4 @@
-import { daysUntilForGift, giftDate } from "./birthdays";
+import { daysUntilForGift, formatShortDate, giftDate } from "./birthdays";
 import type { Gift, ID, Person } from "./types";
 
 // Spoiler-Schutz: Die Identität ist ein selbst gewähltes Label (Trust-Prinzip).
@@ -67,8 +67,8 @@ export function surpriseOccasion(occasion: string | undefined): string {
   return !occ || occ === "Geburtstag" ? "deinen Geburtstag" : `„${occ}“`;
 }
 
-/** Banner auf der eigenen Wunschliste, z. B. „🤫 Für deinen Geburtstag am 8.10. wird schon geplant – …“. */
+/** Banner auf der eigenen Wunschliste, z. B. „🤫 Für deinen Geburtstag am 8. Okt wird schon geplant – …“. */
 export function surpriseBanner(occasion: string | undefined, date: Date | null): string {
-  const day = date ? ` am ${date.getDate()}.${date.getMonth() + 1}.` : "";
+  const day = date ? ` am ${formatShortDate(date)}` : "";
   return `🤫 Für ${surpriseOccasion(occasion)}${day} wird schon geplant – ergänze gern Wünsche.`;
 }

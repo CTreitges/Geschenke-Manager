@@ -90,7 +90,7 @@ test("Hilfe-Sheet: Tutorial zuerst, Neu-Punkt verschwindet nach „Was ist neu�
   // Häufige Fragen: native <details>, Spoiler-Schutz-Frage vorhanden.
   await page.getByRole("dialog", { name: "Hilfe" }).getByRole("button", { name: /^Häufige Fragen/ }).click();
   await page.waitForURL(/\/help$/);
-  await page.getByText("Warum soll ich „Wer bin ich?“ festlegen?").click();
+  await page.getByText("Warum soll ich „Wer bist du?“ festlegen?").click();
   await expect(page.getByText(/Spoiler-Schutz greift/)).toBeVisible();
   const faqA11y = await seriousA11yViolations(page);
 

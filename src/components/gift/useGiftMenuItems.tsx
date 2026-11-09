@@ -27,11 +27,11 @@ export function useGiftMenuItems(): (gift: Gift, person: Person, now: number) =>
           label: "Diesmal aussetzen",
           icon: <CirclePause size={18} />,
           disabled: state.skip === "locked",
-          hint: state.skip === "locked" ? SKIP_LOCKED_REASON : "Karte ausblenden, Ideen bleiben erhalten",
+          hint: state.skip === "locked" ? SKIP_LOCKED_REASON : "Für alle ausblenden – Ideen bleiben erhalten",
           onSelect: () =>
             void setSkipped(true)
               .then(() =>
-                toast(`${person.name}: diesmal ausgesetzt`, {
+                toast(`${person.name}: für alle ausgesetzt`, {
                   description: "Wieder aufnehmen unter Personen → Geschenke",
                   action: { label: "Rückgängig", onClick: () => void setSkipped(false) },
                 }),

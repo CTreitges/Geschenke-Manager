@@ -22,7 +22,7 @@ export const FAQ: FaqEntry[] = [
   },
   {
     id: "wer-bin-ich",
-    question: "Warum soll ich „Wer bin ich?“ festlegen?",
+    question: "Warum soll ich „Wer bist du?“ festlegen?",
     answer:
       "Damit Stimmen und Wünsche dir gehören – und damit der Spoiler-Schutz greift: Nur wenn die App weiß, wer du bist, kann sie die Pläne für dein Geschenk vor dir verbergen. Du wählst dich einmal pro Gruppe aus der Personenliste aus. Ändern kannst du das jederzeit in den Einstellungen.",
   },
@@ -72,6 +72,6 @@ export const FAQ: FaqEntry[] = [
     id: "keine-admins",
     question: "Warum gibt es keine Admins?",
     answer:
-      "Die App setzt auf Vertrauen: Wer das Gruppen-Passwort kennt, darf alles – Rollen und Rechte braucht es unter Freunden nicht. „Wer bin ich?“ ist deshalb eine Auswahl und kein Login. Andere Gruppen bleiben trotzdem abgeschottet: Ohne ihr Passwort kommt niemand hinein.",
+      "Die App setzt auf Vertrauen: Wer das Gruppen-Passwort kennt, darf alles – Rollen und Rechte braucht es unter Freunden nicht. „Wer bist du?“ ist deshalb eine Auswahl und kein Login. Andere Gruppen bleiben trotzdem abgeschottet: Ohne ihr Passwort kommt niemand hinein.",
   },
 ];

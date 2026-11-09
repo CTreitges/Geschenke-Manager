@@ -169,7 +169,7 @@ export default function Settings() {
             <span className="shrink-0 text-meta font-semibold text-accent-text">{me ? "Ändern" : "Auswählen"}</span>
           </button>
           <p className="m-0 px-3.5 pb-3 text-xs text-fg-muted">
-            <span aria-hidden>🤫 </span>Deine Wahl schützt auch vor Spoilern: Geschenke für dich siehst du nicht.
+            <span aria-hidden>🤫 </span>Deine Auswahl schützt auch vor Spoilern: Geschenke für dich siehst du nicht.
           </p>
           {me && participation ? (
             <SettingsRow
@@ -182,7 +182,7 @@ export default function Settings() {
           ) : (
             <SettingsRow
               label="Wo mache ich mit?"
-              hint="Erst „Wer bin ich?“ wählen, dann pro Person an- und abhaken."
+              hint="Erst „Wer bist du?“ wählen, dann pro Person an- und abhaken."
               icon={<UsersRound size={18} />}
             />
           )}
@@ -220,7 +220,7 @@ export default function Settings() {
           </SettingsRow>
           <SettingsRow
             label={`${members.length} ${members.length === 1 ? "Konto" : "Konten"} beigetreten`}
-            hint={`${claimed} davon mit „Wer bin ich?“ · ${persons.length} Personen angelegt`}
+            hint={`${claimed} davon mit „Wer bist du?“ · ${persons.length} Personen angelegt`}
             icon={<UserRoundCheck size={18} />}
           />
         </SettingsGroup>

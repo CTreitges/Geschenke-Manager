@@ -86,3 +86,10 @@ test("„Wo mache ich mit?“ zeigt die Teilnahmen als Schalter", async ({ page 
   await expect(sheet.getByRole("switch", { name: "Bei Max mitmachen" })).toHaveAttribute("aria-checked", "false");
   await expect(sheet.getByRole("switch", { name: "Bei Anna mitmachen" })).toHaveCount(0);
 });
+
+test("Feedback-Platzhalter fragt nach der App, nicht nach Wünschen (UX-11)", async ({ page }) => {
+  await loginAs(page, "Ben");
+  await page.goto("/feedback");
+  await expect(page.getByPlaceholder("Was fehlt dir in der App? Was nervt?")).toBeVisible();
+  await expect(page.getByPlaceholder(/Was wünschst du dir/)).toHaveCount(0);
+});

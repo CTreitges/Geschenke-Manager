@@ -114,7 +114,7 @@ describe("surpriseOccasion / surpriseBanner", () => {
 
   it("Banner mit und ohne Datum", () => {
     expect(surpriseBanner(undefined, new Date(2026, 9, 8))).toBe(
-      "🤫 Für deinen Geburtstag am 8.10. wird schon geplant – ergänze gern Wünsche.",
+      "🤫 Für deinen Geburtstag am 8. Okt wird schon geplant – ergänze gern Wünsche.",
     );
     expect(surpriseBanner("Reise", null)).toBe("🤫 Für „Reise“ wird schon geplant – ergänze gern Wünsche.");
   });

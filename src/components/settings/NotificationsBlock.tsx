@@ -119,7 +119,7 @@ export function NotificationsBlock({ groupId }: { groupId: string | null }) {
         </Button>
       </SettingsRow>
       <p className="m-0 border-t border-line-subtle px-3.5 py-2.5 text-xs text-fg-muted">
-        Ohne „Wer bin ich?“ keine Abstimmungs-Pushes (Spoiler-Schutz).
+        Ohne „Wer bist du?“ keine Abstimmungs-Pushes (Spoiler-Schutz).
       </p>
     </>
   );

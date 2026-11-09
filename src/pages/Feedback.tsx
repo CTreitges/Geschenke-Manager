@@ -84,7 +84,7 @@ export default function Feedback() {
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
               }}
-              placeholder="Was wünschst du dir? Was nervt? Was fehlt?"
+              placeholder="Was fehlt dir in der App? Was nervt?"
               rows={3}
               className="flex-1 resize-none border-none bg-transparent px-1 py-2 text-sm leading-snug text-fg outline-none placeholder:text-fg-muted"
             />

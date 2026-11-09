@@ -57,7 +57,7 @@ test("Diesmal aussetzen blendet die Karte aus, Wieder aufnehmen holt sie zurück
 
   await page.getByRole("button", { name: "Mehr zu Ben" }).click();
   await page.getByRole("dialog", { name: "Geschenk für Ben" }).getByRole("button", { name: /Diesmal aussetzen/ }).click();
-  await expect(page.getByText("Ben: diesmal ausgesetzt")).toBeVisible();
+  await expect(page.getByText("Ben: für alle ausgesetzt")).toBeVisible();
   await expect(card(page, "Ben")).toHaveCount(0);
   await expect
     .poll(async () => (await getDb().doc(`groups/${GROUP_ID}/gifts/${giftIds.ben}`).get()).get("skippedAt"))

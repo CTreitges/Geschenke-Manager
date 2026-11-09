@@ -237,7 +237,7 @@ test("Neu dabei: Person im IdentitySheet anlegen (Einstellungen)", async ({ page
 
   await page.getByRole("link", { name: "Einstellungen" }).click();
   const block = page.getByRole("button", { name: /Noch nicht gewählt/ });
-  await expect(page.getByText("Deine Wahl schützt auch vor Spoilern: Geschenke für dich siehst du nicht.")).toBeVisible();
+  await expect(page.getByText("Deine Auswahl schützt auch vor Spoilern: Geschenke für dich siehst du nicht.")).toBeVisible();
   await shots(page, testInfo, "12-settings-identity");
   await block.click();
 

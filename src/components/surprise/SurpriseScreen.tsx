@@ -92,7 +92,7 @@ export function SurpriseScreen({
           aria-haspopup="dialog"
           className="mt-3 flex min-h-tap w-full items-center justify-center text-meta text-fg-muted underline underline-offset-2"
         >
-          Du bist nicht {person.name}? Identität wechseln
+          Du bist nicht {person.name}? Bei „Wer bist du?“ wechseln
         </button>
       </div>
     </div>

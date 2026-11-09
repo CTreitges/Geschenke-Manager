@@ -15,6 +15,7 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  getDoc,
 } from "firebase/firestore";
 import { httpsCallable } from "firebase/functions";
 import { useEffect, useState } from "react";
@@ -28,6 +29,7 @@ import {
   isIosDevice,
   needsTokenSync,
   readStoredToken,
+  pushPrefsOnEnable,
   writeStoredToken,
   type PushPrefs,
   type PushState,
@@ -177,8 +179,8 @@ async function registerDeviceToken(uid: string, opts: { updateWorker?: boolean }
 }
 
 /**
- * Push für dieses Gerät einrichten und in der Gruppe beide Arten
- * einschalten. MUSS direkt aus dem Klick-Handler aufgerufen werden:
+ * Push für dieses Gerät einrichten und, solange in der Gruppe keine Art an
+ * ist, beide einschalten; bewusste Schalter bleiben stehen. MUSS direkt aus dem Klick-Handler aufgerufen werden:
  * Safari/iOS akzeptiert die Berechtigungsanfrage nur in der User-Geste.
  */
 export async function enablePushForGroup(groupId: string): Promise<void> {
@@ -193,10 +195,9 @@ export async function enablePushForGroup(groupId: string): Promise<void> {
   }
   const uid = await currentUid();
   await registerDeviceToken(uid);
-  await updateDoc(doc(db, "groups", groupId, "members", uid), {
-    notifyStack: true,
-    notifyPolls: true,
-  });
+  const ref = doc(db, "groups", groupId, "members", uid);
+  const patch = pushPrefsOnEnable((await getDoc(ref)).data() as MemberPushFlags | undefined);
+  if (patch) await updateDoc(ref, patch);
 }
 
 /** Einzelne Push-Arten der Gruppe an/aus (Token bleibt am Gerät). */
@@ -303,7 +304,7 @@ function currentPermission(): NotificationPermission | null {
  * Zustand von Push auf diesem Gerät plus die Schalter der Gruppe.
  * `state` ist null, solange die Unterstützung noch geprüft wird.
  */
-export function usePushState(groupId: string | null): { state: PushState | null; prefs: PushPrefs } {
+export function usePushState(groupId: string | null): { state: PushState | null; prefs: PushPrefs; prefsLoaded: boolean } {
   // Reagiert auch auf einen UID-Wechsel ohne Reload (PUSH-01).
   const uid = useFirebaseUser()?.uid ?? null;
   const [supported, setSupported] = useState<boolean | null>(null);
@@ -356,7 +357,7 @@ export function usePushState(groupId: string | null): { state: PushState | null;
           permission: currentPermission(),
           registered: !!stored && !!uid && stored.uid === uid,
         });
-  return { state, prefs: effectivePushPrefs(member) };
+  return { state, prefs: effectivePushPrefs(member), prefsLoaded: member !== null };
 }
 
 /**

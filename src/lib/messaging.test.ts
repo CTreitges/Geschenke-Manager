@@ -13,6 +13,8 @@ const h = vi.hoisted(() => ({
   endpoint: "https://push.example/ep-1" as string | null,
   deleteTokenError: null as Error | null,
   updateError: null as Error | null,
+  /** Inhalt des eigenen Member-Docs für getDoc. */
+  member: undefined as Record<string, unknown> | undefined,
   /** Reihenfolge der FCM-Aufrufe. */
   fcm: [] as string[],
   writes: [] as { op: "set" | "update"; path: string; data: unknown }[],
@@ -56,6 +58,7 @@ vi.mock("firebase/firestore", () => ({
     if (h.updateError) throw h.updateError;
     h.writes.push({ op: "update", path: ref.path, data: rest.length === 1 ? rest[0] : rest });
   },
+  getDoc: async () => ({ data: () => h.member }),
   deleteField: () => "<deleteField>",
   serverTimestamp: () => "<ts>",
   FieldPath: class {
@@ -256,5 +259,39 @@ describe("PUSH-08: geteiltes Gerät", () => {
     await m.unregisterPushOnLogout();
     expect(paths()).toEqual(["update pushTokens/u-start"]);
     expect(readStoredToken()).toBeNull();
+  });
+});
+
+describe("enablePushForGroup lässt bewusste Schalter stehen (R5)", () => {
+  let m: typeof import("./messaging");
+  const memberWrites = () => h.writes.filter((w) => w.path === "groups/g1/members/u-start");
+
+  beforeAll(async () => {
+    m = await import("./messaging");
+  });
+
+  beforeEach(() => {
+    h.uid = "u-start";
+    h.writes.length = 0;
+    h.member = undefined;
+  });
+
+  afterAll(() => {
+    h.member = undefined;
+  });
+
+  it("„Geburtstage aus, Abstimmungen an“ bleibt beim Einrichten erhalten", async () => {
+    h.member = { notifyStack: false, notifyPolls: true };
+    await m.enablePushForGroup("g1");
+    expect(memberWrites()).toEqual([]);
+  });
+
+  it("noch nichts gewählt oder alles aus: beide Arten an", async () => {
+    await m.enablePushForGroup("g1");
+    expect(memberWrites().map((w) => w.data)).toEqual([{ notifyStack: true, notifyPolls: true }]);
+    h.writes.length = 0;
+    h.member = { notifyStack: false, notifyPolls: false };
+    await m.enablePushForGroup("g1");
+    expect(memberWrites().map((w) => w.data)).toEqual([{ notifyStack: true, notifyPolls: true }]);
   });
 });

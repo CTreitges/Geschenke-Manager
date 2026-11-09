@@ -19,7 +19,7 @@ function deniedHelp(platform: PushPlatform): string {
 
 /** Einstellungen → Mitteilungen: Gerät einrichten, Schalter Geburtstage/Abstimmungen, Test-Push. */
 export function NotificationsBlock({ groupId }: { groupId: string | null }) {
-  const { state, prefs } = usePushState(groupId);
+  const { state, prefs, prefsLoaded } = usePushState(groupId);
   const [busy, setBusy] = useState<null | "setup" | "stack" | "polls" | "test">(null);
   const platform = pushPlatform(navigator.userAgent, navigator.platform, navigator.maxTouchPoints);
   const ready = state === "on" && !!groupId;
@@ -40,7 +40,7 @@ export function NotificationsBlock({ groupId }: { groupId: string | null }) {
   }
 
   async function togglePref(kind: "stack" | "polls") {
-    if (!groupId || busy) return;
+    if (!groupId || busy || !prefsLoaded) return;
     setBusy(kind);
     try {
       // Beide Werte explizit schreiben: sonst würde „Geburtstage aus“ über
@@ -108,10 +108,10 @@ export function NotificationsBlock({ groupId }: { groupId: string | null }) {
         {deviceAction}
       </SettingsRow>
       <SettingsRow label="Geburtstage" hint="30 Tage vorher, wenn jemand in die Übersicht rutscht" icon={<Cake size={18} />}>
-        <Switch label="Geburtstage" checked={ready && prefs.stack} onChange={() => togglePref("stack")} disabled={!ready || busy !== null} />
+        <Switch label="Geburtstage" checked={ready && prefs.stack} onChange={() => togglePref("stack")} disabled={!ready || !prefsLoaded || busy !== null} />
       </SettingsRow>
       <SettingsRow label="Abstimmungen" hint="Start und Erinnerung – nie für dein eigenes Geschenk" icon={<Vote size={18} />}>
-        <Switch label="Abstimmungen" checked={ready && prefs.polls} onChange={() => togglePref("polls")} disabled={!ready || busy !== null} />
+        <Switch label="Abstimmungen" checked={ready && prefs.polls} onChange={() => togglePref("polls")} disabled={!ready || !prefsLoaded || busy !== null} />
       </SettingsRow>
       <SettingsRow label="Test-Push senden" hint="Prüft, ob Mitteilungen ankommen" icon={<Send size={18} />}>
         <Button variant="secondary" size="sm" onClick={testPush} loading={busy === "test"} disabled={!ready || busy !== null}>

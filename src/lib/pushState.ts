@@ -121,6 +121,16 @@ export function derivePushState(env: {
   return "off";
 }
 
+/**
+ * Was „Mitteilungen einrichten“ im Member-Doc setzt: Ist schon eine Art an,
+ * bleibt die Wahl stehen; sonst (noch nichts gewählt oder alles aus) beide an.
+ */
+export function pushPrefsOnEnable(
+  member?: { notifyStack?: boolean; notifyPolls?: boolean } | null,
+): { notifyStack: true; notifyPolls: true } | null {
+  return member?.notifyStack === true || member?.notifyPolls === true ? null : { notifyStack: true, notifyPolls: true };
+}
+
 export function effectivePushPrefs(member?: { notifyStack?: boolean; notifyPolls?: boolean } | null): PushPrefs {
   const stack = member?.notifyStack === true;
   return { stack, polls: member?.notifyPolls ?? stack };

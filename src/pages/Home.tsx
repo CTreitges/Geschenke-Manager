@@ -302,7 +302,7 @@ function StackCard({
         <span className="flex items-center gap-1 text-xs text-fg-muted">
           <Icon.users size={12} />
           <span className="sr-only">Teilnehmer:</span>
-          {participants} · {formatEuro(participants * gift.budgetPerPerson)}
+          {participants} · {formatEuro(info.total ?? participants * gift.budgetPerPerson)}
         </span>
         {badge && (
           <button

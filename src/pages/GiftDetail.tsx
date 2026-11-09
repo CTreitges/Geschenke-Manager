@@ -25,6 +25,8 @@ import { withLiveParticipants } from "@/lib/cascade";
 import { useMyId, useStore } from "@/lib/hooks";
 import { isIdentitySkipped, skipIdentity } from "@/lib/identity";
 import { useBack } from "@/lib/nav";
+import { giftPhase } from "@/lib/giftPhase";
+import { decidedBudgetLine } from "@/lib/money";
 import { pollModel } from "@/lib/pollModel";
 import { lockMessage, startPollBlocker } from "@/lib/pollOps";
 import { markPrompted, votePromptKey } from "@/lib/pollPrompts";
@@ -103,6 +105,12 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
   const ideas = useMemo(() => sortIdeas(suggestions.filter((s) => s.giftId === gift.id)), [suggestions, gift.id]);
   const personsById = useMemo(() => Object.fromEntries(persons.map((p) => [p.id, p])), [persons]);
   const model = pollModel(gift, poll, ideas, myId, now);
+  const totalBudget = gift.participantIds.length * gift.budgetPerPerson;
+  const decidedTotal = gift.status !== "open" ? giftPhase(gift, poll, ideas, myId, now).total : undefined;
+  const selectionLine =
+    decidedTotal === undefined
+      ? undefined
+      : decidedBudgetLine(decidedTotal, gift.participantIds.filter((id) => id !== gift.personId).length, totalBudget);
 
   const [startOpen, setStartOpen] = useState(false);
   const [directOpen, setDirectOpen] = useState(false);
@@ -256,7 +264,8 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
         gift={gift}
         persons={persons}
         me={myId ? personsById[myId] : undefined}
-        totalBudget={gift.participantIds.length * gift.budgetPerPerson}
+        totalBudget={totalBudget}
+        selectionLine={selectionLine}
       />
       <WhatsappLinkSection gift={gift} />
       <div className="pb-24" />

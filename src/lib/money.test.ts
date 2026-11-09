@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatEuro, parsePrice } from "./money";
+import { decidedBudgetLine, formatEuro, parsePrice } from "./money";
 
 const NB = " "; // Intl de-DE setzt ein geschütztes Leerzeichen vor €
 
@@ -75,5 +75,19 @@ describe("formatEuro", () => {
 
   it("Rundlauf parsePrice → formatEuro", () => {
     expect(formatEuro(parsePrice(" 1.299,50 € ")!)).toBe(`1.299,50${NB}€`);
+  });
+});
+
+describe("decidedBudgetLine (UX-02)", () => {
+  const plain = (s: string) => s.replace(/\u00a0/g, " ");
+
+  it("nennt Auswahl, Anteil pro Person und die Abweichung vom Budget", () => {
+    expect(plain(decidedBudgetLine(115, 3, 60))).toBe("Auswahl 115 € · 38,33 €/Person (Budget 60 €, +55 €)");
+    expect(plain(decidedBudgetLine(50, 2, 60))).toBe("Auswahl 50 € · 25 €/Person (Budget 60 €, −10 €)");
+  });
+
+  it("ohne Abweichung und ohne Teilnehmer knapp", () => {
+    expect(plain(decidedBudgetLine(60, 3, 60))).toBe("Auswahl 60 € · 20 €/Person (Budget 60 €)");
+    expect(plain(decidedBudgetLine(60, 0, 0))).toBe("Auswahl 60 € (Budget 0 €, +60 €)");
   });
 });

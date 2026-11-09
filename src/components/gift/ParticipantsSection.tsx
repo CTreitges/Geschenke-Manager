@@ -11,11 +11,13 @@ export function ParticipantsSection({
   persons,
   me,
   totalBudget,
+  selectionLine,
 }: {
   gift: Gift;
   persons: Person[];
   me: Person | undefined;
   totalBudget: number;
+  selectionLine?: string;
 }) {
   return (
     <Section
@@ -61,7 +63,7 @@ export function ParticipantsSection({
             );
           })}
       </div>
-      <BudgetEditor gift={gift} totalBudget={totalBudget} />
+      <BudgetEditor gift={gift} totalBudget={totalBudget} selectionLine={selectionLine} />
     </Section>
   );
 }

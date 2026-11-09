@@ -57,3 +57,11 @@ export function formatEuro(value: number): string {
   const cents = Math.round(value * 100) / 100 || 0;
   return (Number.isInteger(cents) ? WHOLE : CENTS).format(cents);
 }
+
+/** Budget-Box ab „Entschieden“: „Auswahl 115 € · 38,33 €/Person (Budget 60 €, +55 €)“. */
+export function decidedBudgetLine(total: number, participantCount: number, budget: number): string {
+  const perPerson = participantCount > 0 ? ` · ${formatEuro(total / participantCount)}/Person` : "";
+  const delta = total - budget;
+  const diff = delta === 0 ? "" : `, ${delta > 0 ? "+" : "−"}${formatEuro(Math.abs(delta))}`;
+  return `Auswahl ${formatEuro(total)}${perPerson} (Budget ${formatEuro(budget)}${diff})`;
+}

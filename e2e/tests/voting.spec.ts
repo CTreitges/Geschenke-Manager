@@ -183,6 +183,38 @@ test("Neuer Snapshot hebt die Vorauswahl auf, eine eigene Auswahl bleibt (Regres
   await expect(result.getByRole("button", { pressed: true })).toHaveCount(1);
 });
 
+test("„Geschenk löschen“ nur bei manuellen Geschenken (Regression R4)", async ({ page }) => {
+  const giftId = giftIds.christof;
+  await pollRef(giftId).delete(); // sonst öffnet das VoteSheet von selbst darüber
+  await loginAs(page, "Ben");
+  await page.goto(`/gift/${giftId}`);
+  await page.getByRole("button", { name: "Weitere Aktionen" }).click();
+  const menu = page.getByRole("dialog", { name: "Geschenk für Christof" });
+  await expect(menu.getByRole("button", { name: /Link teilen/ })).toBeVisible();
+  await expect(menu.getByRole("button", { name: /Geschenk löschen/ })).toHaveCount(0);
+
+  await giftRef(giftId).update({ manuallyAdded: true });
+  await page.reload();
+  await page.getByRole("button", { name: "Weitere Aktionen" }).click();
+  await expect(menu.getByRole("button", { name: /Geschenk löschen/ })).toBeVisible();
+});
+
+test("Unlesbarer Preis blockiert das Speichern einer Idee (Regression R7)", async ({ page }) => {
+  const giftId = giftIds.christof;
+  await pollRef(giftId).delete();
+  await loginAs(page, "Ben");
+  await page.goto(`/gift/${giftId}`);
+  await page.getByRole("button", { name: "Bearbeiten" }).first().click();
+  const price = page.getByPlaceholder("€");
+  await expect(price).toHaveValue("149");
+  await price.fill("teuer");
+  await expect(page.getByText("Preis nicht erkannt – z. B. „19,99“.")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Speichern", exact: true })).toBeDisabled();
+  await price.fill("99,50");
+  await page.getByRole("button", { name: "Speichern", exact: true }).click();
+  await expect.poll(async () => (await getDb().doc(`groups/${GROUP_ID}/suggestions/s-christof-1`).get()).data()?.price).toBe(99.5);
+});
+
 test("„Ohne Auswahl abschließen“ leert eine alte Auswahl (Regression KOR-06)", async ({ page }) => {
   const giftId = giftIds.christof;
   // Nach „Entscheidung ändern“: wieder offen, die Auswahl steht noch (ohne

@@ -5,6 +5,7 @@ import { ActionMenu, Icon, useConfirm, type ActionMenuItem } from "@/components/
 import type { PollModel } from "@/lib/pollModel";
 import { useLeave } from "@/lib/nav";
 import { lockMessage } from "@/lib/pollOps";
+import { giftMenuState } from "@/lib/stack";
 import { deleteGift, markReceived } from "@/lib/storage";
 import type { Gift } from "@/lib/types";
 
@@ -73,12 +74,15 @@ export function GiftMenu({
       onSelect: () => void finishWithoutSelection(),
     });
   }
-  items.push({
-    label: "Geschenk löschen",
-    icon: <Icon.trash size={18} />,
-    tone: "danger",
-    onSelect: () => void remove(),
-  });
+  // Auto-Geschenke legt ensureAutoGift sonst gleich wieder leer an (B12).
+  if (giftMenuState(gift, undefined, Date.now()).remove) {
+    items.push({
+      label: "Geschenk löschen",
+      icon: <Icon.trash size={18} />,
+      tone: "danger",
+      onSelect: () => void remove(),
+    });
+  }
 
   return <ActionMenu items={items} title={`Geschenk für ${personName}`} />;
 }

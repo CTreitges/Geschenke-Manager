@@ -43,10 +43,13 @@ export function SuggestionCard({
     setEditing(true);
   }
 
+  const parsedPrice = parsePrice(price);
+  const priceInvalid = price.trim() !== "" && parsedPrice === undefined;
+
   function save() {
     const trimmed = title.trim();
-    if (!trimmed) return;
-    onSave({ title: trimmed, url: url.trim() || undefined, price: parsePrice(price) });
+    if (!trimmed || priceInvalid) return;
+    onSave({ title: trimmed, url: url.trim() || undefined, price: parsedPrice });
     setEditing(false);
   }
 
@@ -74,9 +77,11 @@ export function SuggestionCard({
             inputMode="decimal"
             value={price}
             onChange={(e) => setPrice(e.target.value)}
+            aria-invalid={priceInvalid || undefined}
             className="flex-1 py-2 text-meta"
           />
         </div>
+        {priceInvalid && <p className="m-0 text-meta text-danger">Preis nicht erkannt – z. B. „19,99“.</p>}
         <div className="flex gap-2 pt-1">
           <button type="button" onClick={() => setEditing(false)} className="min-h-10 rounded-btn px-3 text-xs font-semibold text-fg-soft">
             Abbrechen
@@ -84,7 +89,7 @@ export function SuggestionCard({
           <button
             type="button"
             onClick={save}
-            disabled={!title.trim()}
+            disabled={!title.trim() || priceInvalid}
             className="min-h-10 rounded-btn px-3 text-xs font-semibold text-accent-text disabled:opacity-50"
           >
             Speichern

@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Person } from "@/lib/types";
 import { participationCount } from "./ParticipationSheet";
+
+// storage.ts initialisiert beim Import Firebase; ohne echte Keys (.env.local) wirft das.
+vi.mock("@/lib/storage", () => ({ setDefaultParticipation: vi.fn() }));
 
 const person = (id: string, defaultParticipantIds?: string[]): Person =>
   ({ id, name: id, birthday: "01-01", color: "#000000", createdAt: 0, defaultParticipantIds }) as Person;

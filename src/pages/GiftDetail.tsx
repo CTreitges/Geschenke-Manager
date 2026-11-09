@@ -129,13 +129,15 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
   });
 
   // Nach dem eigenen Start öffnet das VoteSheet, sobald das Start-Sheet samt
-  // History-Eintrag weg ist; nach „Neu starten“ umgekehrt das Start-Sheet.
-  const voteAfterStart = useRef(false);
+  // History-Eintrag weg ist und die neue Runde im Snapshot steht (startPoll ist
+  // eine Transaktion, also ohne lokalen Stand – zu früh schlösse usePollSheets
+  // das Sheet gleich wieder); nach „Neu starten“ umgekehrt das Start-Sheet.
+  const voteAfterStart = useRef<number | null>(null);
   useEffect(() => {
-    if (startOpen || !voteAfterStart.current) return;
-    voteAfterStart.current = false;
+    if (startOpen || voteAfterStart.current === null || poll?.startedAt !== voteAfterStart.current) return;
+    voteAfterStart.current = null;
     void whenHistorySettled().then(sheets.open);
-  }, [startOpen, sheets.open]);
+  }, [startOpen, sheets.open, poll?.startedAt]);
   const startAfterClose = useRef(false);
   useEffect(() => {
     if (sheets.kind || !startAfterClose.current) return;
@@ -170,7 +172,7 @@ function GiftView({ gift, person, onBack }: { gift: Gift; person: Person; onBack
       const round = await startPoll(gift.id, { durationMs, startedBy: myId });
       // Das VoteSheet öffnet gleich ausdrücklich – nicht nochmal automatisch.
       if (groupId) markPrompted(votePromptKey(groupId, gift.id, round));
-      voteAfterStart.current = true;
+      voteAfterStart.current = round;
       setStartOpen(false);
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : "Starten hat nicht geklappt – bitte nochmal");

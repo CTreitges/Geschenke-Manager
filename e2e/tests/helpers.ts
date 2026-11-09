@@ -2,13 +2,14 @@ import AxeBuilder from "@axe-core/playwright";
 import type { Page } from "@playwright/test";
 import { GROUP_ID, GROUP_PASSWORD } from "../emu-seed.mjs";
 import { settle } from "../emu-session.mjs";
-import { ONBOARDING_KEYS, TUTORIAL_VERSION } from "../../src/lib/onboarding";
+import { ONBOARDING_KEYS, TUTORIAL_VERSION, dayStamp } from "../../src/lib/onboarding";
 
 // Onboarding unterdrücken (Tutorial gesehen, Identität gefragt, Install-Tipp
 // erledigt). Keys direkt aus src/lib/onboarding.ts, damit nichts auseinanderläuft.
 export const SUPPRESS_KEYS: Record<string, string> = {
   [ONBOARDING_KEYS.tutorial]: TUTORIAL_VERSION,
-  [ONBOARDING_KEYS.identityAsked]: "yes",
+  // „Später“ gilt nur für heute (Tagesstempel), danach fragt die App wieder.
+  [ONBOARDING_KEYS.identityAsked]: dayStamp(),
   [ONBOARDING_KEYS.installTip]: "yes",
 };
 

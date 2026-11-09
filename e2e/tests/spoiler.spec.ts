@@ -305,3 +305,57 @@ test("Magic-Link landet in der Wunschliste, ohne Tutorial", async ({ browser }, 
   await expect(page).not.toHaveURL(/tutorial/);
   await page.context().close();
 });
+
+test("Ohne Identität: Übersicht, Person und Archiv neutral, Bitte „Wer bist du?“ (SPO-01/02/03)", async ({ page }) => {
+  await loginWithoutIdentity(page);
+  const main = page.locator("main");
+  // Übersicht: neutrale Karten ohne Phase, Beträge, Teilnehmer, Badges und Menü.
+  await expect(main.getByRole("heading", { name: "Wer bist du?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Christof\b/ })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Lena\b/ })).toBeVisible();
+  const home = await main.innerText();
+  for (const t of ["€", "Yogamatte", "Entscheidung offen", "⏱", "💡", "Du fehlst", "Bezahlung offen"]) {
+    expect(home, `Übersicht ohne Identität: „${t}“`).not.toContain(t);
+  }
+  await expect(page.getByRole("button", { name: /^Mehr zu / })).toHaveCount(0);
+
+  // Person → Wunschliste ohne „übernommen“, Person → Geschenke erst nach der Frage.
+  await page.goto("/person/anna");
+  await expect(main).toContainText("Keramik-Workshop");
+  await expect(main).not.toContainText("übernommen");
+  await page.goto("/person/lena?tab=gifts");
+  await expect(main.getByRole("heading", { name: "Wer bist du?" })).toBeVisible();
+  await expect(main).not.toContainText("€");
+  await expect(main).not.toContainText("bestätigt");
+
+  // Alte Geschenke ohne Betrag; ein erhaltenes Geschenk fragt erst.
+  await page.goto("/past");
+  await expect(page.getByRole("button", { name: /Max/ })).toBeVisible();
+  await expect(main).not.toContainText("€");
+  await page.getByRole("button", { name: /Max/ }).click();
+  await expect(page.getByRole("dialog", { name: "Wer bist du?" })).toBeVisible();
+  await expect(page.getByText("Tamper")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  // Auswahl über das Banner → volle Übersicht.
+  await page.goto("/");
+  await main.getByRole("button", { name: "Ich wähle mich aus" }).click();
+  const sheet = page.getByRole("dialog", { name: "Wer bist du?" });
+  await sheet.getByRole("button", { name: /Ben/ }).click();
+  await sheet.getByRole("button", { name: "Ja, das bin ich" }).click();
+  await expect(page.getByRole("heading", { name: /Hallo, Ben/ })).toBeVisible();
+  await expect(main.getByRole("heading", { name: "Wer bist du?" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^Lena\b/ })).toContainText("Yogamatte");
+});
+
+test("Veraltete Identität (Person gelöscht) zählt nicht und wird geleert (SPO-05)", async ({ page }) => {
+  await loginAs(page, "Geist");
+  const main = page.locator("main");
+  await expect(main.getByRole("heading", { name: "Wer bist du?" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Wer bist du?" })).toBeVisible();
+  await expect.poll(() => page.evaluate((k) => localStorage.getItem(k), `gm:identity:v1:${GROUP_ID}`)).toBeNull();
+  expect(await main.innerText()).not.toContain("€");
+  await page.goto(`/gift/${giftIds.anna}`);
+  await expect(page.getByRole("dialog", { name: "Wer bist du?" })).toBeVisible();
+  await expect(page.getByText("Picknickdecke")).toHaveCount(0);
+});

@@ -150,6 +150,23 @@ describe("weitere Onboarding-Regeln", () => {
     expect(ob.nextOnboardingStep(ctx())).toBe("install-tip");
   });
 
+  it("„Später“ gilt nur für den Tag: am nächsten Tag fragt der App-Start wieder (Regression SPO-01)", () => {
+    const today = Date.parse("2026-10-01T09:00:00");
+    ob.markTutorialSeen(VERSION);
+    ob.markIdentityAsked(today);
+    expect(local.getItem("gm:onboarding:identity-asked")).toBe("2026-10-01");
+    expect(ob.readOnboardingFlags(Date.parse("2026-10-01T23:30:00")).identityAsked).toBe(true);
+    const tomorrow = Date.parse("2026-10-02T07:00:00");
+    expect(ob.nextOnboardingStep({ ...ctx(), ...ob.readOnboardingFlags(tomorrow) })).toBe("identity");
+  });
+
+  it("alter Wert „yes“ zählt wie ein vergangener Tag", () => {
+    local.setItem("gm:onboarding:identity-asked", "yes");
+    ob.markTutorialSeen(VERSION);
+    expect(ob.readOnboardingFlags().identityAsked).toBe(false);
+    expect(ob.nextOnboardingStep(ctx())).toBe("identity");
+  });
+
   it("gesehener Installations-Tipp (auch alter Key) → nichts mehr", async () => {
     const existing = new MemoryStorage();
     existing.setItem("gm:pwa-install-tip-seen:v1", "yes");

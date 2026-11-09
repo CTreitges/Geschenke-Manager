@@ -71,12 +71,15 @@ export default function GiftDetail() {
   // Person sieht nur die Überraschungs-Ansicht.
   const surprise = surprisePhase(gift, myId);
   if (surprise !== "none") return <SurpriseScreen gift={gift} person={person} phase={surprise} onBack={back} />;
-  // Ohne Identität zuerst fragen – außer „nur ansehen“ gilt schon oder es ist vorbei.
+  // Ohne Identität zuerst fragen – außer „nur ansehen“ gilt schon. Auch bei
+  // erhaltenen Geschenken: Preise, Bezahler und nicht gewählte Ideen bleiben
+  // der beschenkten Person verborgen.
   const skipped = skippedNow || isIdentitySkipped(groupId);
-  if (!myId && !skipped && gift.status !== "received") {
+  if (!myId && !skipped) {
     return (
       <IdentityGate
         recipientId={gift.personId}
+        received={gift.status === "received"}
         onBack={back}
         onSkip={() => {
           skipIdentity(groupId);

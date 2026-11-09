@@ -13,8 +13,8 @@ type SheetState = { mode: "new" } | { mode: "edit"; id: string } | null;
 
 // ── Wunschliste einer Person ──────────────────────────────────
 // EINE Ansicht für „Meine Wunschliste“ (isOwner) und den Tab in der
-// Personen-Seite. Spoiler-Schutz: Für die Besitzerin gibt es kein
-// „übernommen“ (wishBadges), „bekommen“ erst nach dem Erhalt.
+// Personen-Seite. Spoiler-Schutz: Für die Besitzerin (und ohne Identität)
+// gibt es kein „übernommen“ (wishBadges), „bekommen“ erst nach dem Erhalt.
 export function WishlistView({ person, isOwner }: { person: Person; isOwner: boolean }) {
   const { wishlist, suggestions, gifts, persons } = useStore();
   const myId = useMyId();
@@ -51,7 +51,8 @@ export function WishlistView({ person, isOwner }: { person: Person; isOwner: boo
         key={w.id}
         wish={w}
         addedBy={addedByLabel(w, personsById, myId)}
-        badges={wishBadges(w, { isOwner, suggestions, gifts })}
+        // Ohne Identität wie die Besitzerin: kein „übernommen“ (könnte sie selbst sein).
+        badges={wishBadges(w, { isOwner: isOwner || !myId, suggestions, gifts })}
         onOpen={() => setSheet({ mode: "edit", id: w.id })}
         footer={footer}
       />

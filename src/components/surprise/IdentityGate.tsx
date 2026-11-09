@@ -11,10 +11,13 @@ import { Button, Card, PageHeader } from "@/components/ui";
 // Inhalt, solange diese Seite steht.
 export function IdentityGate({
   recipientId,
+  received = false,
   onBack,
   onSkip,
 }: {
   recipientId: string;
+  /** Erhaltenes Geschenk: die beschenkte Person bleibt hier (Titel der Auswahl). */
+  received?: boolean;
   onBack: () => void;
   onSkip: () => void;
 }) {
@@ -28,11 +31,11 @@ export function IdentityGate({
       laterLabel: "Ich bin nicht dabei, nur ansehen",
     });
     if (result.kind === "later") onSkip();
-    else if (result.kind === "picked" && result.personId === recipientId) {
+    else if (result.kind === "picked" && result.personId === recipientId && !received) {
       toast("Psst, das ist deine Überraschung 🤫");
       nav("/wishlist", { replace: true });
     }
-  }, [open, recipientId, onSkip, nav]);
+  }, [open, recipientId, received, onSkip, nav]);
 
   // Einmal von selbst fragen (Ref übersteht den StrictMode-Doppelaufruf).
   const asked = useRef(false);

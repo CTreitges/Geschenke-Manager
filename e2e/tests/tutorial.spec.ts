@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { GROUP_ID, GROUP_PASSWORD, seed } from "../emu-seed.mjs";
-import { ONBOARDING_KEYS, TUTORIAL_VERSION } from "../../src/lib/onboarding";
+import { ONBOARDING_KEYS, TUTORIAL_VERSION, dayStamp } from "../../src/lib/onboarding";
 import { CURRENT_VERSION } from "../../src/lib/patchnotes";
 import { formatA11y, loginAs, personId, seriousA11yViolations } from "./helpers";
 
@@ -218,7 +218,7 @@ test("First-Run ohne Identität: nach dem Tutorial fragt „Wer bist du?“, „
   await sheet.getByRole("button", { name: "Später" }).click();
   await expect(sheet).toBeHidden();
   expect(new URL(page.url()).pathname).toBe("/");
-  expect(await page.evaluate((k) => localStorage.getItem(k), ONBOARDING_KEYS.identityAsked)).toBe("yes");
+  expect(await page.evaluate((k) => localStorage.getItem(k), ONBOARDING_KEYS.identityAsked)).toBe(dayStamp());
   // Der Header-Chip bleibt als Weg zur Auswahl.
   await expect(page.getByRole("button", { name: "Wer bist du?" })).toBeVisible();
 

@@ -4,10 +4,13 @@
 import { GROUP_ID, GROUP_PASSWORD } from "./emu-seed.mjs";
 
 // Onboarding unterdrücken – Keys wie in src/lib/onboarding.ts (ONBOARDING_KEYS,
-// TUTORIAL_VERSION); .mjs kann das TS-Modul nicht importieren.
+// TUTORIAL_VERSION, dayStamp); .mjs kann das TS-Modul nicht importieren.
+// „Später“ bei „Wer bist du?“ gilt nur für den heutigen Tag.
+const today = new Date();
+const dayStamp = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
 export const SUPPRESS_KEYS = {
   "gm:onboarding:tutorial": "6",
-  "gm:onboarding:identity-asked": "yes",
+  "gm:onboarding:identity-asked": dayStamp,
   "gm:pwa-install-tip-seen:v1": "yes",
 };
 

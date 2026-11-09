@@ -6,7 +6,7 @@
 export const ONBOARDING_KEYS = {
   /** localStorage: Wert = TUTORIAL_VERSION, sobald das neue Tutorial verlassen wurde. */
   tutorial: "gm:onboarding:tutorial",
-  /** localStorage: „Wer bist du?“ wurde mit „Später“ beantwortet. */
+  /** localStorage: Tag (JJJJ-MM-TT), an dem „Wer bist du?“ zuletzt mit „Später“ beantwortet wurde. */
   identityAsked: "gm:onboarding:identity-asked",
   /** localStorage: bestehender Key des Installations-Tipps (Bestandsnutzer). */
   installTip: "gm:pwa-install-tip-seen:v1",
@@ -99,8 +99,20 @@ export function isEntryLinkSession(): boolean {
   return read("session", ONBOARDING_KEYS.entryLink) === "1";
 }
 
-export function markIdentityAsked(): void {
-  write("local", ONBOARDING_KEYS.identityAsked, "yes");
+/** Lokaler Kalendertag „JJJJ-MM-TT“. */
+export function dayStamp(now: number = Date.now()): string {
+  const d = new Date(now);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/**
+ * „Später“ bei „Wer bist du?“: heute nicht mehr fragen, ab dem nächsten Tag
+ * beim nächsten App-Start wieder – ohne Identität zeigt die Übersicht keine
+ * Details, die Frage darf also nicht für immer verschwinden. Der frühere Wert
+ * „yes“ zählt wie ein vergangener Tag.
+ */
+export function markIdentityAsked(now: number = Date.now()): void {
+  write("local", ONBOARDING_KEYS.identityAsked, dayStamp(now));
 }
 
 export function markInstallTipSeen(): void {
@@ -147,11 +159,11 @@ export interface OnboardingContext extends OnboardingFlags {
 }
 
 /** Liest die gespeicherten Flags; den Rest des Kontexts liefert die App. */
-export function readOnboardingFlags(): OnboardingFlags {
+export function readOnboardingFlags(now: number = Date.now()): OnboardingFlags {
   return {
     entryLink: isEntryLinkSession(),
     tutorialDone: isTutorialDone(),
-    identityAsked: read("local", ONBOARDING_KEYS.identityAsked) === "yes",
+    identityAsked: read("local", ONBOARDING_KEYS.identityAsked) === dayStamp(now),
     installTipDone: read("local", ONBOARDING_KEYS.installTip) === "yes",
     stepShownThisSession: read("session", ONBOARDING_KEYS.stepShown) === "1",
   };

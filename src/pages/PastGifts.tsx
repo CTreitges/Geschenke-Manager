@@ -70,8 +70,10 @@ export default function PastGifts() {
               const p = personById[g.personId];
               const total = giftTotal(g.id);
               const occ = g.occasion ?? "Geburtstag";
-              // Eigene Geschenke ohne Betrag – Details zeigt die Überreicht-Ansicht.
+              // Eigene Geschenke (und ohne Identität alle) ohne Betrag – Details
+              // zeigt die Überreicht-Ansicht bzw. erst nach „Wer bist du?“.
               const mine = isRecipient(g, myId);
+              const hideAmount = mine || !myId;
               return (
                 <button
                   key={g.id}
@@ -92,7 +94,7 @@ export default function PastGifts() {
                       <div>
                         <SurpriseBadge label="für dich" />
                       </div>
-                    ) : (
+                    ) : hideAmount ? null : (
                       <div className="text-sm font-bold tabular-nums text-accent-text">
                         {formatEuro(total)}
                       </div>

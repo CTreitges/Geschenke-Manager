@@ -1,12 +1,15 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
 import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
 import { useGiftMenuItems } from "@/components/gift/useGiftMenuItems";
-import { ActionMenu, Button, Chip, EmptyState, Icon, Input, Overline } from "@/components/ui";
+import { ActionMenu, Button, Card, Chip, EmptyState, Icon, Input, Overline } from "@/components/ui";
+import { useGroupId } from "@/lib/auth";
 import { birthdayYearForPerson } from "@/lib/birthdays";
 import { cn } from "@/lib/cn";
-import { useStore } from "@/lib/hooks";
+import { useMyId, useStore } from "@/lib/hooks";
+import { isIdentitySkipped } from "@/lib/identity";
 import { formatEuro } from "@/lib/money";
 import { isSkipped } from "@/lib/stack";
 import { addGift } from "@/lib/storage";
@@ -17,7 +20,31 @@ import type { Gift, Person } from "@/lib/types";
 // `isMe` (eigene Person): laufende Geschenke nur als „Überraschung in
 // Planung“ ohne Zahlen, Status und Menü; kein „Neues Geschenk anlegen“.
 // Sonst ⋯ je Geschenk: Diesmal aussetzen / Wieder aufnehmen / Löschen.
+// Ohne Identität (und ohne „nur ansehen“) erst „Wer bist du?“ – es könnte
+// die beschenkte Person selbst sein.
 export function GiftsTab({ person, stack, past, isMe }: { person: Person; stack: Gift[]; past: Gift[]; isMe: boolean }) {
+  const myId = useMyId();
+  const groupId = useGroupId();
+  if (!myId && !isIdentitySkipped(groupId)) return <IdentityFirst person={person} />;
+  return <GiftsList person={person} stack={stack} past={past} isMe={isMe} />;
+}
+
+function IdentityFirst({ person }: { person: Person }) {
+  const { open } = useIdentityPrompt();
+  return (
+    <Card className="p-4">
+      <h2 className="m-0 mb-1 text-body font-bold text-fg">Wer bist du?</h2>
+      <p className="m-0 mb-3 text-meta text-fg-muted">
+        Damit wir dir nichts verraten, zeigen wir die Geschenke für {person.name} erst, wenn du dich ausgewählt hast.
+      </p>
+      <Button className="w-full" aria-haspopup="dialog" onClick={() => void open({ recipientId: person.id })}>
+        Ich wähle mich aus
+      </Button>
+    </Card>
+  );
+}
+
+function GiftsList({ person, stack, past, isMe }: { person: Person; stack: Gift[]; past: Gift[]; isMe: boolean }) {
   const nav = useNavigate();
   const { settings } = useStore();
   const menuItems = useGiftMenuItems();

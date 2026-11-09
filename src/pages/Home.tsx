@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
 import { Archive } from "lucide-react";
 import { ActionMenu, Avatar, Button, Card, Confetti, Dialog, EmptyState, FAB, Icon, Input, Overline, Section } from "@/components/ui";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
 import { SurpriseStackCard } from "@/components/surprise/SurpriseStackCard";
 import { useGiftMenuItems } from "@/components/gift/useGiftMenuItems";
 import { useMyId, useStore } from "@/lib/hooks";
@@ -23,6 +24,9 @@ import {
 import { withLiveParticipants } from "@/lib/cascade";
 import { cn } from "@/lib/cn";
 import { giftPhase, type GiftPhase, type GiftPhaseInfo } from "@/lib/giftPhase";
+import { useGroupId } from "@/lib/auth";
+import { isIdentitySkipped } from "@/lib/identity";
+import { markIdentityAsked } from "@/lib/onboarding";
 import { addGift, deduplicateOpenGifts, ensureAutoGift } from "@/lib/storage";
 import { isRecipient } from "@/lib/spoiler";
 import { useNow } from "@/lib/useNow";
@@ -64,14 +68,21 @@ export default function Home() {
     });
   }, [giftsHydrated, personsHydrated]);
 
+  const myId = useMyId();
+  const groupId = useGroupId();
+  const identity = useIdentityPrompt();
+  // Ohne Identität könnte die beschenkte Person zuschauen: neutrale Karten ohne
+  // Phase, Beträge und Teilnehmer – außer nach bewusstem „nur ansehen“.
+  const neutral = !myId && !isIdentitySkipped(groupId);
+
   // Gezählt wird nur, wer noch existiert (verwaiste Teilnehmer aus Altbeständen).
+  // Die eigene Karte bleibt auch ausgesetzt stehen (verrät sonst die Entscheidung).
   const stack = useMemo(() => {
     const ids = new Set(persons.map((p) => p.id));
-    return sortStack(gifts, persons).map((g) => withLiveParticipants(g, ids));
-  }, [gifts, persons]);
+    return sortStack(gifts, persons, myId).map((g) => withLiveParticipants(g, ids));
+  }, [gifts, persons, myId]);
   const hero = useMemo(() => findHero(persons), [persons]);
 
-  const myId = useMyId();
   const me = persons.find((p) => p.id === myId);
   const heroDays = hero ? daysUntilBirthday(hero) : 0;
   // Spoiler-Schutz: Habe ich selbst als Nächstes Geburtstag, führt der Hero zur Wunschliste.
@@ -87,6 +98,10 @@ export default function Home() {
           Hallo{me ? `, ${me.name}` : ""} <span aria-hidden>👋</span>
         </h1>
       </div>
+
+      {neutral && persons.length > 0 && (
+        <IdentityBanner onPick={() => void identity.open({ onLater: markIdentityAsked })} />
+      )}
 
       {/* Hero card */}
       {hero && (
@@ -156,6 +171,7 @@ export default function Home() {
               if (isRecipient(g, myId)) {
                 return <SurpriseStackCard key={g.id} gift={g} person={p} onOpen={() => nav("/wishlist")} />;
               }
+              if (neutral) return <NeutralStackCard key={g.id} gift={g} person={p} onOpen={() => nav(`/gift/${g.id}`)} />;
               const info = giftPhase(g, polls.find((x) => x.giftId === g.id), suggestions, myId, now);
               return (
                 <StackCard
@@ -178,6 +194,25 @@ export default function Home() {
 
       <FAB onClick={() => setAddOpen(true)} label="Geschenk hinzufügen" text="Geschenk" />
       <AddManualDialog open={addOpen} onClose={() => setAddOpen(false)} />
+    </div>
+  );
+}
+
+/** Ohne Identität: Bitte um „Wer bist du?“ statt Details (Spoiler-Schutz). */
+function IdentityBanner({ onPick }: { onPick: () => void }) {
+  return (
+    <div className="px-4 pb-4">
+      <div className="rounded-card border border-accent/30 bg-accent-soft px-3.5 py-3">
+        <h2 className="m-0 text-body font-bold text-fg">
+          <span aria-hidden>👋 </span>Wer bist du?
+        </h2>
+        <p className="m-0 mt-0.5 text-meta text-fg-soft">
+          Damit wir dir nichts verraten, zeigen wir Ideen, Stand und Beträge erst, wenn du dich ausgewählt hast.
+        </p>
+        <Button size="sm" className="mt-2.5" aria-haspopup="dialog" onClick={onPick}>
+          Ich wähle mich aus
+        </Button>
+      </div>
     </div>
   );
 }
@@ -291,6 +326,35 @@ function StackCard({
         )}
       </div>
     </div>
+  );
+}
+
+/** Stack-Karte ohne Identität: nur Name, Anlass, Datum und Countdown – keine Phase, kein Betrag, kein Menü. */
+function NeutralStackCard({ gift, person, onOpen }: { gift: Gift; person: Person; onOpen: () => void }) {
+  const days = daysUntilForGift(gift, person);
+  const date = giftDate(gift, person);
+  const occasion = gift.occasion && gift.occasion !== "Geburtstag" ? gift.occasion : null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2.5 rounded-card border border-line-subtle bg-surface p-3 text-left shadow-card active:scale-[0.99]"
+    >
+      <span aria-hidden>
+        <Avatar person={person} size={42} />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-fg">
+        {person.name}
+        <span className="font-medium text-fg-muted">
+          {occasion && ` · ${occasion}`}
+          {date && ` · ${formatShortDate(date)}`}
+        </span>
+      </span>
+      <span className={cn("shrink-0 text-xs", days <= 7 ? "font-semibold text-accent-text" : "font-medium text-fg-muted")}>
+        {formatDaysShort(days)}
+      </span>
+      <Icon.chev className="shrink-0 text-fg-muted" />
+    </button>
   );
 }
 

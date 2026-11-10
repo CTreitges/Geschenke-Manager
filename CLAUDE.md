@@ -22,7 +22,7 @@ Trust-basierte Webapp (PWA, mobile-first, Deutsch) für Geburtstagsgeschenke im 
 | Design-Check | `npm run check:design` |
 
 ## Repo-Etikette
-- Default-Branch `main`; Tests neben dem Code (`src/**/*.test.ts`), Functions-Tests `functions/test/`, E2E `e2e/tests/`.
+- Default-Branch `main`; Tests neben dem Code (`src/**/*.test.ts`), Functions-Tests ebenso neben dem Code (`functions/src/**/*.test.ts`, Helfer in `functions/test/`), E2E `e2e/tests/`.
 - Emulator-Läufe nur mit `demo-geschenke`; die `pre*`/`post*`-Scripts räumen Emulator-Reste (`e2e/emu-cleanup.mjs`).
 
 ## Projekt-Gotchas

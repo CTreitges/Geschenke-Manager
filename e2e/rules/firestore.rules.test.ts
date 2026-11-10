@@ -25,6 +25,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import { afterAll, beforeAll, beforeEach, describe, it } from "vitest";
+import { FEEDBACK_OWNER_UID } from "../../src/lib/feedback-owner";
 
 const PROJECT_ID = "demo-geschenke";
 const G = "g1";
@@ -482,5 +483,32 @@ describe("groups/{g}/suggestions – Umhängen (S6)", () => {
   it("andere Felder bleiben auch während der Abstimmung änderbar", async () => {
     await seed("gift1");
     await assertSucceeds(updateDoc(ideaRef(), { paidBy: "p2" }));
+  });
+});
+
+describe("feedback – Owner per UID (CTR-137)", () => {
+  const seedFeedback = () =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), "feedback/f1"), { byUid: "jemand" });
+    });
+
+  it("Owner liest fremdes Feedback", async () => {
+    await seedFeedback();
+    await assertSucceeds(getDoc(doc(dbAs(FEEDBACK_OWNER_UID), "feedback/f1")));
+  });
+
+  it("Owner löscht fremdes Feedback", async () => {
+    await seedFeedback();
+    await assertSucceeds(deleteDoc(doc(dbAs(FEEDBACK_OWNER_UID), "feedback/f1")));
+  });
+
+  it("andere UID liest fremdes Feedback nicht", async () => {
+    await seedFeedback();
+    await assertFails(getDoc(doc(dbAs("andere-uid"), "feedback/f1")));
+  });
+
+  it("eigenes Feedback bleibt lesbar", async () => {
+    await seedFeedback();
+    await assertSucceeds(getDoc(doc(dbAs("jemand"), "feedback/f1")));
   });
 });

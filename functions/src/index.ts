@@ -6,7 +6,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall, onRequest } from "firebase-functions/v2/https";
 import { onSchedule } from "firebase-functions/v2/scheduler";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import { defineSecret } from "firebase-functions/params";
+import { defineSecret, defineString } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
@@ -22,7 +22,8 @@ const db = admin.firestore();
 const REGION = "europe-west1";
 const APP_URL = "https://geschenke-manager-ec19e.web.app";
 // Must match Brevo verified-sender record EXACTLY (case-sensitive).
-const MAIL_FROM = "Geschenke-Manager <christof.treitges@gmail.com>";
+// Context7: firebase-functions params; Wert in functions/.env (gitignored)
+const MAIL_FROM = defineString("MAIL_FROM");
 const UNSUB_SECRET = defineSecret("UNSUB_SECRET");
 const BREVO_SMTP_USER = defineSecret("BREVO_SMTP_USER");
 const BREVO_SMTP_PASS = defineSecret("BREVO_SMTP_PASS");
@@ -55,7 +56,7 @@ async function sendMailViaSmtp(mail: MailContent): Promise<void> {
     debug: true,
   });
   const info = await transport.sendMail({
-    from: MAIL_FROM,
+    from: MAIL_FROM.value(),
     to: mail.to,
     subject: mail.subject,
     html: mail.html,

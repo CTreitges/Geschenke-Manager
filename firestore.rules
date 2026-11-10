@@ -104,8 +104,7 @@ service cloud.firestore {
 
     function isFeedbackOwner() {
       return request.auth != null
-        && request.auth.token.email != null
-        && request.auth.token.email.lower() == 'christof.treitges@gmail.com';
+        && request.auth.uid == 't7DmIhxGu9ZniAnmeGVmgEGnW4F2'; // wie FEEDBACK_OWNER_UID in src/lib/feedback-owner.ts
     }
 
     // Cross-group feedback inbox. Owner sees all; everyone else only sees

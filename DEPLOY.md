@@ -15,7 +15,8 @@ Produktion: Projekt `geschenke-manager-ec19e`. Alle Befehle aus dem Repo-Root, i
    `npm --prefix functions run build && npm --prefix functions test`
 3. `.env.local` enthält die echten `VITE_FIREBASE_*`-Werte **inkl. `VITE_FIREBASE_VAPID_KEY`**
    (sonst schlägt „Mitteilungen einrichten“ fehl). `npm run build` danach erneut.
-4. `firebase --version` (≥ 15) und `node -v` (22.x).
+4. `firebase --version` (≥ 15) und `node -v` (22.x). `functions/.env` (gitignored) muss
+   `MAIL_FROM="Name <Adresse>"` mit dem bei Brevo verifizierten Absender enthalten.
 5. `firebase functions:list --project geschenke-manager-ec19e`: deployt sind höchstens die
    14 Exporte aus `functions/src/index.ts` (neu: `sendTestPush`, `onPollWritten`, `sweepPolls`).
 6. Indizes vergleichen: `firebase firestore:indexes --project geschenke-manager-ec19e` gegen

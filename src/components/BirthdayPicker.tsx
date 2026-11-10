@@ -48,14 +48,15 @@ export function BirthdayPicker({
 
   return (
     <div>
-      <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5 pl-0.5">
+      <div aria-hidden className="mb-1.5 block pl-0.5 text-meta font-semibold text-fg-muted">
         {label}
-      </label>
+      </div>
       <div className="flex gap-2">
         <select
           value={day}
           onChange={(e) => setDay(e.target.value)}
-          className="flex-1 min-w-0 h-11 px-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-[15px]"
+          aria-label={`${label}: Tag`}
+          className="h-11 min-w-0 flex-1 rounded-xl border border-line-control bg-surface px-3 text-body text-fg"
         >
           <option value="">Tag</option>
           {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
@@ -67,7 +68,8 @@ export function BirthdayPicker({
         <select
           value={month}
           onChange={(e) => setMonth(e.target.value)}
-          className="flex-[1.4] min-w-0 h-11 px-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 text-[15px]"
+          aria-label={`${label}: Monat`}
+          className="h-11 min-w-0 flex-[1.4] rounded-xl border border-line-control bg-surface px-3 text-body text-fg"
         >
           <option value="">Monat</option>
           {MONTHS.map((m, i) => (

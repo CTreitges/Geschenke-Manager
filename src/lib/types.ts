@@ -1,3 +1,5 @@
+import type { PollDoc } from "@shared/poll";
+
 export type ID = string;
 
 export interface Person {
@@ -46,6 +48,9 @@ export interface Gift {
   customDate?: string;
   /** Shared WhatsApp / chat group invite link for participants of this gift. */
   whatsappLink?: string;
+  /** „Diesmal aussetzen“ (Zeitpunkt): Karte verschwindet aus der Übersicht, das
+   *  Dokument bleibt – ensureAutoGift legt für dieses Jahr kein neues an. */
+  skippedAt?: number;
 }
 
 export interface Suggestion {
@@ -69,18 +74,29 @@ export interface WishlistItem {
   url?: string;
   price?: number;
   createdAt: number;
+  /** Freitext: Größe, Farbe, Variante („Schwarz, nicht die XM5“). */
+  note?: string;
+  /** Herzenswunsch (steht oben). */
+  favorite?: boolean;
+  /** Identität dessen, der den Wunsch notiert hat; leer = Altbestand bzw. ohne Identität. */
+  addedBy?: ID;
+  /** Zuletzt bearbeitet bzw. „Noch aktuell ✓“ bestätigt. */
+  updatedAt?: number;
+  /** Beim „Geschenk erhalten“ gesetzt, wenn eine ausgewählte Idee aus diesem Wunsch stammt. */
+  fulfilledAt?: number;
+  fulfilledGiftId?: ID;
 }
 
-export type PollStatus = "none" | "active" | "closed";
+export type { PollCloseReason, PollStatus } from "@shared/poll";
 
-export interface Poll {
+/**
+ * Poll-Doc unter /groups/{gid}/polls/{giftId} (Doc-ID = giftId), gelesen
+ * über normalizePoll. Neu seit v1.8: startedBy, endsAt (gilt nur, wenn
+ * > startedAt), closedBy, closedReason. `votes`: personId → suggestionId[]
+ * (frühere Version Record<ID, ID> wird beim Lesen normalisiert).
+ */
+export interface Poll extends PollDoc {
   giftId: ID;
-  status: PollStatus;
-  startedAt?: number;
-  closedAt?: number;
-  /** Mehrfach-Stimmen pro Person: personId → suggestionId[].
-   *  (Frühere Version war Record<ID, ID> — wird beim Lesen normalisiert.) */
-  votes: Record<ID, ID[]>;
 }
 
 export interface Feedback {
@@ -111,6 +127,8 @@ export interface Member {
   uid: ID;
   joinedAt?: number;
   notifyStack?: boolean;
+  /** Abstimmungs-Pushes. Effektiv: notifyPolls ?? (notifyStack === true). */
+  notifyPolls?: boolean;
   /** Welche Person dieser User in der Gruppe als „Wer bin ich" gesetzt
    *  hat. Wird vom Client synchronisiert (siehe storage.setMyIdentityCloud). */
   identityPersonId?: ID;

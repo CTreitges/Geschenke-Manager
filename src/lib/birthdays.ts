@@ -84,13 +84,72 @@ export function daysUntilForGift(g: Gift, p: Person | undefined, ref: Date = new
   return p ? daysUntilBirthday(p, ref) : 9999;
 }
 
+/** Datum des Anlasses: customDate (falls gültig), sonst der nächste Geburtstag; null ohne beides. */
+export function giftDate(g: Gift, p: Person | undefined, ref: Date = new Date()): Date | null {
+  if (g.customDate) {
+    const parts = g.customDate.split("-").map(Number);
+    if (parts.length === 3 && parts.every((n) => !isNaN(n))) {
+      const [y, m, d] = parts;
+      return new Date(y, m - 1, d);
+    }
+  }
+  return p ? nextBirthday(p, ref) : null;
+}
+
+const WEEKDAYS_SHORT = ["So", "Mo", "Di", "Mi", "Do", "Fr", "Sa"];
+const MONTHS_SHORT = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
+
+/** Kurzes Datum „15. Okt“. */
+export function formatShortDate(date: Date): string {
+  return `${date.getDate()}. ${MONTHS_SHORT[date.getMonth()]}`;
+}
+
+/** Übergabe-Datum zum Geschenkjahr: „15. Nov“, bei anderem Jahr „15. Nov 2025“. */
+export function formatReceivedDate(ts: number, year: number): string {
+  const date = new Date(ts);
+  const short = formatShortDate(date);
+  return date.getFullYear() === year ? short : `${short} ${date.getFullYear()}`;
+}
+
+/** Knappe Frist für Karten: „heute 🎂“, „morgen“, „in 5 T.“ */
+export function formatDaysShort(days: number): string {
+  if (days === 0) return "heute 🎂";
+  if (days === 1) return "morgen";
+  if (days < 0) return `vor ${-days} T.`;
+  return `in ${days} T.`;
+}
+
+/** Datumszeile unter dem Geschenk-Titel: „Mi, 15. Okt · in 15 Tagen“ (customDate beachtet). */
+export function giftDateLine(g: Gift, p: Person | undefined, ref: Date = new Date()): string {
+  const date = giftDate(g, p, ref);
+  if (!date) return "";
+  const day = (d: Date) => `${WEEKDAYS_SHORT[d.getDay()]}, ${d.getDate()}. ${MONTHS_SHORT[d.getMonth()]}`;
+  // Erhalten: der Anlass im Jahr des Geschenks, ohne Countdown zum nächsten Geburtstag.
+  if (g.status === "received") {
+    let past = date;
+    if (!g.customDate && p) {
+      const { month, day: d } = parseBD(p.birthday);
+      past = new Date(g.year, month - 1, d);
+    }
+    return `${day(past)} ${past.getFullYear()} · erhalten`;
+  }
+  return `${day(date)} · ${formatDaysUntil(daysUntilForGift(g, p, ref))}`;
+}
+
 /** Sort gifts in the stack (open + confirmed) by upcoming relevant date
  *  (nearest first). Bestätigte Geschenke bleiben im Stack — sie verschwinden
- *  erst, wenn der Status auf "received" gewechselt wird. */
-export function sortStack(gifts: Gift[], persons: Person[]): Gift[] {
+ *  erst, wenn der Status auf "received" gewechselt wird. Ausgesetzte
+ *  („Diesmal aussetzen“, skippedAt) fehlen – außer für die beschenkte Person
+ *  selbst (`myId`): Ihre Karte „Überraschung läuft“ bleibt, sonst verriete
+ *  das Verschwinden die Entscheidung der anderen. */
+export function sortStack(gifts: Gift[], persons: Person[], myId?: string | null): Gift[] {
   const personById = Object.fromEntries(persons.map((p) => [p.id, p]));
   return [...gifts]
-    .filter((g) => g.status === "open" || g.status === "confirmed")
+    .filter(
+      (g) =>
+        (g.status === "open" || g.status === "confirmed") &&
+        (g.skippedAt === undefined || (!!myId && g.personId === myId)),
+    )
     .sort((a, b) => {
       const da = daysUntilForGift(a, personById[a.personId]);
       const db = daysUntilForGift(b, personById[b.personId]);

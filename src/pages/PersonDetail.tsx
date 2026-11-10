@@ -1,440 +1,132 @@
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { FlaskConical } from "lucide-react";
+import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader, Segmented, Skeleton, useConfirm } from "@/components/ui";
 import { BirthdayPicker } from "@/components/BirthdayPicker";
-import { useStore } from "@/lib/hooks";
+import { GiftsTab } from "@/components/person/GiftsTab";
+import { SurpriseBadge } from "@/components/surprise/SurpriseBadge";
+import { WishlistView } from "@/components/wishlist/WishlistView";
+import { useMyId, useStore } from "@/lib/hooks";
+import { mySurpriseGiftIds } from "@/lib/spoiler";
 import {
-  addGift,
-  addWishItem,
-  deleteGift,
   deletePerson,
-  deleteWishItem,
   sendTestMailCF,
   updatePerson,
 } from "@/lib/storage";
-import {
-  ageOnNextBirthday,
-  birthdayYearForPerson,
-  daysUntilBirthday,
-  formatBirthday,
-} from "@/lib/birthdays";
-import type { WishlistItem, Person } from "@/lib/types";
+import { ageOnNextBirthday, daysUntilBirthday, formatBirthday, formatDaysUntil } from "@/lib/birthdays";
+import type { Person } from "@/lib/types";
 import { getIdentity, setIdentity } from "@/lib/auth";
-import { formatRelativeDate } from "@/lib/dates";
+import { useBack, useLeave } from "@/lib/nav";
+import { isNewEmail } from "@/lib/onboarding";
+import { isSkipped } from "@/lib/stack";
 import { toast } from "sonner";
 
 type Tab = "wishlist" | "gifts" | "profile";
+const TABS: { value: Tab; label: string }[] = [
+  { value: "wishlist", label: "Wunschliste" },
+  { value: "gifts", label: "Geschenke" },
+  { value: "profile", label: "Profil" },
+];
 
 export default function PersonDetail() {
   const { id } = useParams<{ id: string }>();
-  const { persons, wishlist, gifts } = useStore();
+  const { persons, wishlist, gifts, personsHydrated } = useStore();
   const nav = useNavigate();
+  const back = useBack("/people");
   const person = persons.find((p) => p.id === id);
-  const [tab, setTab] = useState<Tab>("wishlist");
+  // Tab steht in der URL (?tab=gifts), damit Zurück vom Geschenk wieder dort landet.
+  const [params, setParams] = useSearchParams();
+  const tab: Tab = TABS.find((t) => t.value === params.get("tab"))?.value ?? "wishlist";
+  const setTab = (t: Tab) => setParams(t === "wishlist" ? {} : { tab: t }, { replace: true });
+  const isMe = useMyId() === id;
 
+  // Bis die Personen geladen sind: Platzhalter statt „nicht gefunden“ (B28).
+  if (!personsHydrated) {
+    return (
+      <div aria-busy="true">
+        <PageHeader onBack={back} />
+        <span className="sr-only">Person wird geladen …</span>
+        <div className="flex items-center gap-3.5 px-5">
+          <Skeleton className="h-16 w-16 rounded-full" />
+          <div className="flex-1 space-y-2">
+            <Skeleton className="h-6 w-1/2" />
+            <Skeleton className="h-4 w-1/3" />
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (!person) {
     return (
-      <div className="px-4 py-8">
-        <p>Person nicht gefunden.</p>
-        <Button onClick={() => nav("/people")} className="mt-4">Zurück</Button>
+      <div>
+        <PageHeader onBack={back} title="Person" />
+        <EmptyState
+          emoji="👥"
+          title="Person nicht gefunden"
+          subtitle="Vielleicht wurde sie gerade gelöscht."
+          action={<Button onClick={() => nav("/people", { replace: true })}>Zu den Personen</Button>}
+        />
       </div>
     );
   }
 
-  const myWishes = wishlist.filter((w) => w.personId === person.id);
+  const myWishes = wishlist.filter((w) => w.personId === person.id && !w.fulfilledAt);
   const myGifts = gifts.filter((g) => g.personId === person.id);
-  // Stack = offen + bestätigt; past = erhalten.
+  // Stack = offen + bestätigt (inkl. ausgesetzter, für „Wieder aufnehmen“); past = erhalten.
   const stack = myGifts.filter((g) => g.status === "open" || g.status === "confirmed");
   const past = myGifts.filter((g) => g.status === "received");
-
-  const tabs: { id: Tab; label: string }[] = [
-    { id: "wishlist", label: "Wunschliste" },
-    { id: "gifts", label: "Geschenke" },
-    { id: "profile", label: "Profil" },
-  ];
+  // Für die beschenkte Person zählt auch ein ausgesetztes Geschenk – der Chip
+  // „Überraschung läuft“ verschwände sonst und verriete die Entscheidung.
+  const activeCount = stack.filter((g) => isMe || !isSkipped(g)).length;
 
   return (
     <div>
       <PageHeader
-        onBack={() => nav(-1)}
+        onBack={back}
         title={person.name}
-        subtitle={`${formatBirthday(person)} · in ${daysUntilBirthday(person)} Tagen`}
+        subtitle={`${formatBirthday(person)} · ${formatDaysUntil(daysUntilBirthday(person))}`}
       />
 
       {/* Hero strip */}
-      <div className="px-5 pb-3.5 flex items-center gap-3.5">
+      <div className="flex items-center gap-3.5 px-5 pb-3.5">
         <Avatar person={person} size={64} />
-        <div className="flex-1 min-w-0">
-          <div className="text-[13px] text-stone-500 dark:text-stone-400 font-medium">
-            {ageOnNextBirthday(person) ? `wird ${ageOnNextBirthday(person)} · ` : ""}
-            {person.email || "keine Mail"}
-          </div>
-          <div className="flex flex-wrap gap-1.5 mt-1.5">
-            {stack.length > 0 && <Chip variant="accent">{stack.length} im Stack</Chip>}
+        <div className="min-w-0 flex-1">
+          {(ageOnNextBirthday(person) || person.email) && (
+            <div className="truncate text-meta font-medium text-fg-muted">
+              {[ageOnNextBirthday(person) && `wird ${ageOnNextBirthday(person)}`, person.email].filter(Boolean).join(" · ")}
+            </div>
+          )}
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {activeCount > 0 &&
+              (isMe ? <SurpriseBadge label="Überraschung läuft" /> : <Chip variant="accent">{activeCount} in Planung</Chip>)}
             <Chip variant="neutral">{myWishes.length} Wünsche</Chip>
             <Chip variant="neutral">{past.length} erhalten</Chip>
           </div>
         </div>
       </div>
 
-      {/* Tab pills */}
-      <div className="mx-5 p-1 rounded-xl bg-[#F5F1ED] dark:bg-stone-800 flex gap-0.5">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            className={`flex-1 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
-              tab === t.id
-                ? "bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 shadow-sm"
-                : "text-stone-500 dark:text-stone-400"
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <Segmented label={`Bereiche von ${person.name}`} value={tab} onChange={setTab} options={TABS} className="mx-5" />
 
       <div className="px-4 py-4 pb-24">
-        {tab === "wishlist" && <WishlistTab personId={person.id} person={person} items={myWishes} />}
-        {tab === "gifts" && <GiftsTab person={person} stack={stack} past={past} />}
+        {tab === "wishlist" && <WishlistView person={person} isOwner={isMe} />}
+        {tab === "gifts" && <GiftsTab person={person} stack={stack} past={past} isMe={isMe} />}
         {tab === "profile" && <ProfileTab person={person} />}
       </div>
     </div>
   );
 }
 
-function WishlistTab({ personId, person, items }: { personId: string; person: Person; items: WishlistItem[] }) {
-  const [text, setText] = useState("");
-  const [url, setUrl] = useState("");
-  const [price, setPrice] = useState("");
-  const [showExtra, setShowExtra] = useState(false);
-
-  function add() {
-    if (!text.trim()) return;
-    addWishItem({
-      personId,
-      title: text.trim(),
-      url: url.trim() || undefined,
-      price: price ? +price : undefined,
-    });
-    toast.success("Wunsch hinzugefügt");
-    setText("");
-    setUrl("");
-    setPrice("");
-    setShowExtra(false);
-  }
-
-  return (
-    <div>
-      <Card className="p-3 mb-3">
-        <div className="flex items-center gap-2">
-          <span className="text-lg pl-1 shrink-0">✨</span>
-          <input
-            placeholder={`Was wünscht sich ${person.name}?`}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && add()}
-            className="flex-1 min-w-0 px-1 py-2.5 border-none outline-none bg-transparent text-stone-900 dark:text-stone-50"
-          />
-          <button
-            onClick={add}
-            disabled={!text.trim()}
-            className="rounded-[10px] w-9 h-9 shrink-0 flex items-center justify-center text-white"
-            style={{
-              background: text.trim()
-                ? "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)"
-                : "#D6D3D1",
-            }}
-          >
-            <Icon.plus size={18} />
-          </button>
-        </div>
-        {!showExtra && text && (
-          <button
-            onClick={() => setShowExtra(true)}
-            className="block w-full mt-1 py-1 pl-7 text-left text-[12px] font-semibold text-violet-700 dark:text-violet-400"
-          >
-            + Link / Preis
-          </button>
-        )}
-        {showExtra && (
-          <div className="flex gap-2 mt-2.5 pl-7">
-            <Input placeholder="Link (optional)" value={url} onChange={(e) => setUrl(e.target.value)} className="flex-[2] py-2" />
-            <Input placeholder="€" value={price} onChange={(e) => setPrice(e.target.value)} type="number" className="flex-1 py-2" />
-          </div>
-        )}
-      </Card>
-
-      {items.length === 0 ? (
-        <EmptyState
-          emoji="📝"
-          title="Noch keine Wünsche — leg los!"
-          subtitle="Schreib einfach rein, was dir vorschwebt. Auch lose Ideen helfen."
-        />
-      ) : (
-        <div className="flex flex-col gap-2">
-          {[...items].sort((a, b) => b.createdAt - a.createdAt).map((it) => (
-            <div
-              key={it.id}
-              className="px-3.5 py-3.5 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-start gap-2.5"
-            >
-              <div className="flex-1 min-w-0">
-                <div className="text-[14.5px] font-semibold text-stone-900 dark:text-stone-50 leading-snug">
-                  {it.title}
-                </div>
-                <div className="flex gap-2.5 mt-1.5 items-center text-xs flex-wrap">
-                  {it.price != null && (
-                    <span className="text-violet-700 dark:text-violet-400 font-semibold">
-                      {it.price} €
-                    </span>
-                  )}
-                  {it.url && (
-                    <a
-                      href={it.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-stone-500 dark:text-stone-400 no-underline flex items-center gap-1"
-                    >
-                      <Icon.link /> Link
-                    </a>
-                  )}
-                  <span className="text-stone-400">
-                    {formatRelativeDate(it.createdAt) || "—"}
-                  </span>
-                </div>
-              </div>
-              <button
-                onClick={() => deleteWishItem(it.id)}
-                className="text-stone-400 hover:text-red-500 p-1"
-              >
-                <Icon.trash />
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function GiftsTab({
-  person,
-  stack,
-  past,
-}: {
-  person: Person;
-  stack: import("@/lib/types").Gift[];
-  past: import("@/lib/types").Gift[];
-}) {
-  const nav = useNavigate();
-  const { settings } = useStore();
-  const all = [...stack, ...past];
-
-  const [newGiftOpen, setNewGiftOpen] = useState(false);
-  const [newGiftYear, setNewGiftYear] = useState(birthdayYearForPerson(person));
-  const [newGiftOccasion, setNewGiftOccasion] = useState("Geburtstag");
-  const [useCustomDate, setUseCustomDate] = useState(false);
-  const [customDate, setCustomDate] = useState("");
-
-  function createGift() {
-    const occ = newGiftOccasion.trim() || "Geburtstag";
-    const finalDate = useCustomDate && customDate ? customDate : undefined;
-    // Carry over the last gift's group-chat link for the same person+occasion
-    const lastSameKind = [...stack, ...past]
-      .filter((g) => (g.occasion ?? "Geburtstag") === occ)
-      .sort((a, b) => b.enteredStackAt - a.enteredStackAt)[0];
-    addGift({
-      personId: person.id,
-      year: finalDate ? +finalDate.slice(0, 4) || newGiftYear : newGiftYear,
-      status: "open",
-      budgetPerPerson: settings.defaultBudget,
-      manuallyAdded: true,
-      occasion: occ,
-      customDate: finalDate,
-      whatsappLink: lastSameKind?.whatsappLink,
-    });
-    toast.success(`Geschenk angelegt`);
-    setNewGiftOpen(false);
-    setNewGiftOccasion("Geburtstag");
-    setUseCustomDate(false);
-    setCustomDate("");
-  }
-
-  function removeGift(g: import("@/lib/types").Gift) {
-    if (
-      !confirm(
-        `Geschenk ${g.year} für ${person.name} wirklich löschen?\n\nVorschläge + Abstimmung gehen verloren.`,
-      )
-    )
-      return;
-    deleteGift(g.id);
-    toast.success("Gelöscht");
-  }
-
-  const byYear: Record<number, typeof all> = {};
-  all.forEach((g) => {
-    (byYear[g.year] ||= []).push(g);
-  });
-  const years = Object.keys(byYear).map(Number).sort((a, b) => b - a);
-
-  return (
-    <div>
-      {all.length === 0 ? (
-        <EmptyState
-          emoji="🎁"
-          title="Noch kein Geschenk hier"
-          subtitle={`Lege ein neues Geschenk für ${person.name} an.`}
-        />
-      ) : (
-        years.map((y) => (
-          <div key={y} className="mb-4">
-            <div className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400 mb-2 pl-1">
-              {y}
-            </div>
-            <div className="flex flex-col gap-2">
-              {byYear[y].map((g) => (
-                <div
-                  key={g.id}
-                  className="px-3.5 py-3 bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] flex items-center gap-2.5"
-                >
-                  <button
-                    onClick={() => nav(`/gift/${g.id}`)}
-                    className="flex items-center gap-2.5 flex-1 min-w-0 text-left"
-                  >
-                    <div
-                      className="w-9 h-9 rounded-[10px] flex items-center justify-center shrink-0"
-                      style={{
-                        background:
-                          g.status !== "received"
-                            ? "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)"
-                            : undefined,
-                        color: g.status !== "received" ? "#fff" : undefined,
-                      }}
-                    >
-                      {g.status !== "received" ? (
-                        <Icon.gift />
-                      ) : (
-                        <span className="text-stone-500">
-                          <Icon.gift />
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-sm font-semibold text-stone-900 dark:text-stone-50">
-                        {g.occasion ?? "Geburtstag"} {y}
-                      </div>
-                      <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5">
-                        {g.status !== "received"
-                          ? `${g.participantIds.length} Personen · ${g.participantIds.length * g.budgetPerPerson} €`
-                          : "erhalten"}
-                      </div>
-                    </div>
-                    <Chip
-                      variant={
-                        g.status === "open"
-                          ? "info"
-                          : g.status === "confirmed"
-                            ? "accent"
-                            : "success"
-                      }
-                    >
-                      {g.status === "open"
-                        ? "offen"
-                        : g.status === "confirmed"
-                          ? "bestätigt"
-                          : "erhalten"}
-                    </Chip>
-                  </button>
-                  <button
-                    onClick={() => removeGift(g)}
-                    className="text-stone-500 dark:text-stone-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 p-2 rounded-lg shrink-0"
-                    aria-label="Geschenk löschen"
-                    title="Geschenk löschen"
-                  >
-                    <Icon.trash />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))
-      )}
-
-      {!newGiftOpen ? (
-        <Button
-          variant="secondary"
-          onClick={() => {
-            setNewGiftYear(birthdayYearForPerson(person));
-            setNewGiftOpen(true);
-          }}
-          className="w-full mt-1"
-        >
-          <Icon.plus /> Neues Geschenk anlegen
-        </Button>
-      ) : (
-        <div className="bg-white dark:bg-stone-800 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] p-3.5 mt-1 space-y-2.5">
-          <Input
-            label="Anlass"
-            type="text"
-            value={newGiftOccasion}
-            onChange={(e) => setNewGiftOccasion(e.target.value)}
-            placeholder="z.B. Geburtstag, Reise, Hochzeit"
-          />
-          <Input
-            label="Jahr"
-            type="number"
-            value={newGiftYear}
-            onChange={(e) => setNewGiftYear(parseInt(e.target.value, 10) || newGiftYear)}
-            disabled={useCustomDate}
-          />
-          <label className="flex items-start gap-3 cursor-pointer select-none py-1 px-0.5">
-            <input
-              type="checkbox"
-              checked={useCustomDate}
-              onChange={(e) => setUseCustomDate(e.target.checked)}
-              className="mt-0.5 w-4 h-4 accent-violet-600"
-            />
-            <span className="text-[14px] text-stone-700 dark:text-stone-200">
-              Anderes Datum (statt {person.name}s Geburtstag)
-            </span>
-          </label>
-          {useCustomDate && (
-            <Input
-              label="Datum"
-              type="date"
-              value={customDate}
-              onChange={(e) => setCustomDate(e.target.value)}
-            />
-          )}
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={() => setNewGiftOpen(false)}
-              className="flex-1"
-            >
-              Abbrechen
-            </Button>
-            <Button
-              onClick={createGift}
-              disabled={useCustomDate && !customDate}
-              className="flex-1"
-            >
-              Anlegen
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function ProfileTab({ person }: { person: Person }) {
-  const nav = useNavigate();
+  const leave = useLeave("/people");
+  const confirm = useConfirm();
+  const { gifts } = useStore();
   const [name, setName] = useState(person.name);
   const [bd, setBd] = useState(person.birthday);
   const [email, setEmail] = useState(person.email ?? "");
   const [remindersOn, setRemindersOn] = useState(person.emailOptIn !== false);
   const [testing, setTesting] = useState(false);
+  // Kontext-Hinweis statt des früheren Test-Mail-Dialogs in der First-Run-Kette.
+  const [testMailHint, setTestMailHint] = useState(false);
 
   async function sendTest() {
     if (testing) return;
@@ -461,18 +153,35 @@ function ProfileTab({ person }: { person: Person }) {
       emailOptIn: trimmedEmail ? remindersOn : undefined,
     });
     toast.success("Gespeichert");
+    setTestMailHint(isNewEmail(person.email, trimmedEmail));
   }
 
-  function remove() {
+  async function remove() {
     const isSelf = getIdentity() === person.id;
-    const msg = isSelf
-      ? `${person.name} wirklich löschen?\n\nDas ist deine aktuelle Identität — danach bist du wieder „niemand" und kannst dich neu zuordnen.\n\nAlle Geschenke + Wünsche werden mitgelöscht.`
-      : `${person.name} wirklich löschen? Alle Geschenke + Wünsche gehen verloren.`;
-    if (!confirm(msg)) return;
-    deletePerson(person.id);
-    if (isSelf) setIdentity(null);
-    toast.success("Gelöscht");
-    nav("/people");
+    // Warnen statt verbieten: eine laufende Planung geht mit verloren.
+    const planning = mySurpriseGiftIds(gifts, person.id).size > 0;
+    const body = [
+      planning &&
+        (isSelf
+          ? "Für dich läuft gerade eine Überraschung – die Planung deiner Freunde geht dabei verloren."
+          : `Für ${person.name} wird gerade geplant – Ideen und Abstimmung gehen dabei verloren.`),
+      isSelf && "Das ist deine aktuelle Identität – danach kannst du dich neu zuordnen.",
+      "Alle Geschenke, Ideen und Wünsche werden mitgelöscht.",
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const ok = await confirm({ title: `${person.name} wirklich löschen?`, body, confirmLabel: "Löschen", tone: "danger" });
+    if (!ok) return;
+    // Erst zurück, dann löschen – sonst steht kurz „nicht gefunden“ da und
+    // Zurück führt wieder auf die gelöschte Person (B13).
+    leave(() =>
+      deletePerson(person.id)
+        .then(() => {
+          if (isSelf) setIdentity(null);
+          toast.success(`${person.name} gelöscht`);
+        })
+        .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal")),
+    );
   }
 
   return (
@@ -488,13 +197,13 @@ function ProfileTab({ person }: { person: Person }) {
                 type="checkbox"
                 checked={remindersOn}
                 onChange={(e) => setRemindersOn(e.target.checked)}
-                className="mt-0.5 w-4 h-4 accent-violet-600"
+                className="mt-0.5 w-4 h-4 accent-accent"
               />
-              <span className="text-[13px] text-stone-600 dark:text-stone-300 leading-snug">
+              <span className="text-meta leading-snug text-fg-soft">
                 <b>Geburtstags-Erinnerung per Mail</b>
                 <br />
-                <span className="text-stone-500 dark:text-stone-400">
-                  60 / 30 / 14 Tage vor dem Geburtstag — Folge-Erinnerungen entfallen, sobald eine Wunschliste angelegt ist.
+                <span className="text-fg-muted">
+                  60 / 30 / 14 Tage vor dem Geburtstag — Folge-Erinnerungen entfallen, solange eigene Wünsche aus den letzten 4 Monaten auf der Liste stehen.
                 </span>
               </span>
             </label>
@@ -502,6 +211,12 @@ function ProfileTab({ person }: { person: Person }) {
           <Button onClick={save} className="w-full mt-1">Speichern</Button>
         </div>
       </Card>
+      {testMailHint && (
+        <p role="status" className="m-0 mt-3 rounded-tile border border-accent/30 bg-accent-soft px-3 py-2.5 text-meta text-fg-soft">
+          <strong className="text-accent-text">Tipp:</strong> Schick einmal eine Test-Mail und markiere sie als „Kein Spam“ –
+          dann landen die Geburtstags-Erinnerungen sicher im Posteingang.
+        </p>
+      )}
       {person.email && (
         <Button
           variant="secondary"
@@ -509,10 +224,11 @@ function ProfileTab({ person }: { person: Person }) {
           disabled={testing}
           className="w-full mt-3"
         >
-          {testing ? "Sende Test-Mail…" : `🧪 Test-Mail an ${person.email} senden`}
+          <FlaskConical size={16} aria-hidden />
+          {testing ? "Sende Test-Mail…" : `Test-Mail an ${person.email} senden`}
         </Button>
       )}
-      <Button variant="danger" onClick={remove} className="w-full mt-3.5">
+      <Button variant="danger" onClick={() => void remove()} className="w-full mt-3.5">
         <Icon.trash /> Person löschen
       </Button>
     </div>

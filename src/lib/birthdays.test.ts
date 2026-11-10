@@ -1,0 +1,201 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  daysUntilBirthday,
+  formatDaysShort,
+  formatReceivedDate,
+  formatShortDate,
+  giftDate,
+  giftDateLine,
+  isInStackWindow,
+  sortStack,
+} from "./birthdays";
+import type { Gift, Person } from "./types";
+
+// Fester Referenztag (lokale Zeit): Sonntag, 20. Dezember 2026, 9 Uhr.
+const REF = new Date(2026, 11, 20, 9, 0);
+
+const person = (id: string, birthday: string): Person => ({
+  id,
+  name: id,
+  birthday,
+  color: "#000000",
+  createdAt: 0,
+});
+
+const gift = (id: string, personId: string, extra: Partial<Gift> = {}): Gift => ({
+  id,
+  personId,
+  year: 2026,
+  status: "open",
+  budgetPerPerson: 20,
+  manuallyAdded: false,
+  stackOrder: 0,
+  enteredStackAt: 0,
+  participantIds: [],
+  ...extra,
+});
+
+describe("daysUntilBirthday", () => {
+  it("zählt Tage bis zum Geburtstag im selben Jahr (Geburtsjahr egal)", () => {
+    expect(daysUntilBirthday(person("a", "12-25"), REF)).toBe(5);
+    expect(daysUntilBirthday(person("a", "1990-12-25"), REF)).toBe(5);
+  });
+
+  it("liefert 0 am Geburtstag selbst, auch spät am Abend", () => {
+    expect(daysUntilBirthday(person("a", "12-20"), REF)).toBe(0);
+    expect(daysUntilBirthday(person("a", "12-20"), new Date(2026, 11, 20, 23, 59))).toBe(0);
+  });
+
+  it("springt über den Jahreswechsel", () => {
+    expect(daysUntilBirthday(person("a", "01-05"), REF)).toBe(16);
+    // Gestern gewesen → erst wieder in knapp einem Jahr.
+    expect(daysUntilBirthday(person("a", "12-19"), REF)).toBe(364);
+  });
+
+  it("rechnet über die Sommerzeit-Umstellung ganze Tage", () => {
+    expect(daysUntilBirthday(person("a", "04-01"), new Date(2026, 2, 25))).toBe(7);
+  });
+});
+
+describe("isInStackWindow", () => {
+  it("nimmt Geburtstage bis einschließlich 30 Tage auf, auch über den Jahreswechsel", () => {
+    expect(isInStackWindow(person("a", "01-19"), REF)).toBe(true); // 30 Tage
+    expect(isInStackWindow(person("a", "01-20"), REF)).toBe(false); // 31 Tage
+    expect(isInStackWindow(person("a", "12-20"), REF)).toBe(true); // heute
+    expect(isInStackWindow(person("a", "12-19"), REF)).toBe(false); // gestern
+  });
+});
+
+describe("sortStack", () => {
+  // sortStack rechnet mit dem aktuellen Datum → Systemzeit festsetzen.
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(REF);
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  const persons = [
+    person("neujahr", "01-05"), // 16 Tage
+    person("weihnachten", "12-25"), // 5 Tage
+    person("silvester", "12-31"), // 11 Tage
+    person("zwilling", "12-31"), // 11 Tage
+  ];
+
+  it("sortiert nach nächstem Termin, auch über den Jahreswechsel", () => {
+    const sorted = sortStack(
+      [gift("g1", "neujahr"), gift("g2", "weihnachten"), gift("g3", "silvester")],
+      persons,
+    );
+    expect(sorted.map((g) => g.id)).toEqual(["g2", "g3", "g1"]);
+  });
+
+  it("filtert erhaltene Geschenke heraus und behält bestätigte", () => {
+    const sorted = sortStack(
+      [
+        gift("g1", "neujahr", { status: "confirmed" }),
+        gift("g2", "weihnachten", { status: "received" }),
+      ],
+      persons,
+    );
+    expect(sorted.map((g) => g.id)).toEqual(["g1"]);
+  });
+
+  it("blendet ausgesetzte Geschenke aus (skippedAt), auch bestätigte", () => {
+    const sorted = sortStack(
+      [
+        gift("g1", "neujahr", { skippedAt: 1 }),
+        gift("g2", "weihnachten"),
+        gift("g3", "silvester", { status: "confirmed", skippedAt: 2 }),
+      ],
+      persons,
+    );
+    expect(sorted.map((g) => g.id)).toEqual(["g2"]);
+  });
+
+  it("die beschenkte Person sieht ihre ausgesetzte Karte weiter (Regression SPO-04)", () => {
+    const gifts = [gift("g1", "neujahr", { skippedAt: 1 }), gift("g2", "weihnachten", { skippedAt: 1 })];
+    expect(sortStack(gifts, persons, "neujahr").map((g) => g.id)).toEqual(["g1"]);
+    expect(sortStack(gifts, persons, null).map((g) => g.id)).toEqual([]);
+  });
+
+  it("nutzt bei gleichem Termin die Reihenfolge des Eintritts in den Stack", () => {
+    const sorted = sortStack(
+      [
+        gift("spaet", "zwilling", { enteredStackAt: 200 }),
+        gift("frueh", "silvester", { enteredStackAt: 100 }),
+      ],
+      persons,
+    );
+    expect(sorted.map((g) => g.id)).toEqual(["frueh", "spaet"]);
+  });
+
+  it("bevorzugt ein eigenes Datum (customDate) vor dem Geburtstag", () => {
+    const sorted = sortStack(
+      [gift("g1", "weihnachten"), gift("g2", "neujahr", { customDate: "2026-12-21" })],
+      persons,
+    );
+    expect(sorted.map((g) => g.id)).toEqual(["g2", "g1"]);
+  });
+
+  it("gibt die Eingabe nicht verändert zurück", () => {
+    const input = [gift("g1", "neujahr"), gift("g2", "weihnachten")];
+    sortStack(input, persons);
+    expect(input.map((g) => g.id)).toEqual(["g1", "g2"]);
+  });
+});
+
+describe("giftDate / giftDateLine", () => {
+  it("Geburtstag: nächster Termin mit Wochentag und Abstand", () => {
+    const p = person("anna", "1990-12-25");
+    expect(giftDate(gift("g", "anna"), p, REF)).toEqual(new Date(2026, 11, 25));
+    expect(giftDateLine(gift("g", "anna"), p, REF)).toBe("Fr, 25. Dez · in 5 Tagen");
+  });
+
+  it("eigener Anlass: customDate statt Geburtstag (B29)", () => {
+    const p = person("anna", "12-25");
+    const g = gift("g", "anna", { customDate: "2027-01-02", occasion: "Hochzeit" });
+    expect(giftDate(g, p, REF)).toEqual(new Date(2027, 0, 2));
+    expect(giftDateLine(g, p, REF)).toBe("Sa, 2. Jan · in 13 Tagen");
+  });
+
+  it("heute und ungültiges customDate", () => {
+    const p = person("anna", "12-20");
+    expect(giftDateLine(gift("g", "anna"), p, REF)).toBe("So, 20. Dez · heute! 🎉");
+    expect(giftDate(gift("g", "anna", { customDate: "kaputt" }), p, REF)).toEqual(new Date(2026, 11, 20));
+    expect(giftDate(gift("g", "x"), undefined, REF)).toBeNull();
+    expect(giftDateLine(gift("g", "x"), undefined, REF)).toBe("");
+  });
+
+  it("erhalten: Anlass im Jahr des Geschenks statt Countdown zum nächsten Geburtstag", () => {
+    const p = person("max", "1988-11-14");
+    expect(giftDateLine(gift("g", "max", { year: 2025, status: "received" }), p, REF)).toBe("Fr, 14. Nov 2025 · erhalten");
+    // Dieses Jahr schon überreicht, der Geburtstag ist vorbei
+    expect(giftDateLine(gift("g", "max", { status: "received" }), p, REF)).toBe("Sa, 14. Nov 2026 · erhalten");
+    const wedding = gift("g", "max", { status: "received", customDate: "2026-06-06" });
+    expect(giftDateLine(wedding, p, REF)).toBe("Sa, 6. Jun 2026 · erhalten");
+  });
+});
+
+describe("formatShortDate / formatDaysShort", () => {
+  it("formatiert Datum und Frist knapp für Karten", () => {
+    expect(formatShortDate(new Date(2026, 9, 15))).toBe("15. Okt");
+    expect(formatDaysShort(0)).toBe("heute 🎂");
+    expect(formatDaysShort(1)).toBe("morgen");
+    expect(formatDaysShort(12)).toBe("in 12 T.");
+    expect(formatDaysShort(-2)).toBe("vor 2 T.");
+  });
+});
+
+describe("formatReceivedDate (UX-09)", () => {
+  const ts = new Date(2025, 10, 15).getTime();
+
+  it("lässt das Jahr weg, wenn es dem Geschenkjahr entspricht", () => {
+    expect(formatReceivedDate(ts, 2025)).toBe("15. Nov");
+  });
+
+  it("nennt das Jahr, wenn es abweicht", () => {
+    expect(formatReceivedDate(ts, 2024)).toBe("15. Nov 2025");
+  });
+});

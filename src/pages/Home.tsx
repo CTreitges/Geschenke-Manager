@@ -1,28 +1,45 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useNavigate } from "react-router-dom";
-import { Avatar, Card, Chip, Confetti, Dialog, EmptyState, FAB, Icon, Button } from "@/components/ui";
-import { useStore } from "@/lib/hooks";
+import { Archive } from "lucide-react";
+import { ActionMenu, Avatar, Button, Card, Confetti, Dialog, EmptyState, FAB, Icon, Input, Overline, Section } from "@/components/ui";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
+import { SurpriseStackCard } from "@/components/surprise/SurpriseStackCard";
+import { useGiftMenuItems } from "@/components/gift/useGiftMenuItems";
+import { useMyId, useStore } from "@/lib/hooks";
+import { formatEuro } from "@/lib/money";
 import {
   ageOnNextBirthday,
   birthdayYearForPerson,
-  daysAgo,
   daysUntilBirthday,
+  daysUntilForGift,
   findHero,
   formatBirthday,
+  formatDaysShort,
+  formatShortDate,
   formatTodayHeader,
+  giftDate,
   isInStackWindow,
   sortStack,
 } from "@/lib/birthdays";
-import { addGift, deduplicateOpenGifts, deleteGift, ensureAutoGift } from "@/lib/storage";
-import { useIdentity } from "@/lib/auth";
+import { withLiveParticipants } from "@/lib/cascade";
+import { cn } from "@/lib/cn";
+import { giftPhase, type GiftPhase, type GiftPhaseInfo } from "@/lib/giftPhase";
+import { useGroupId } from "@/lib/auth";
+import { isIdentitySkipped } from "@/lib/identity";
+import { markIdentityAsked } from "@/lib/onboarding";
+import { addGift, deduplicateOpenGifts, ensureAutoGift } from "@/lib/storage";
+import { isRecipient } from "@/lib/spoiler";
+import { useNow } from "@/lib/useNow";
 import { toast } from "sonner";
-import type { Person } from "@/lib/types";
+import type { Gift, Person } from "@/lib/types";
 
 export default function Home() {
   const store = useStore();
-  const { persons, gifts, settings, giftsHydrated, personsHydrated } = store;
+  const { persons, gifts, polls, suggestions, settings, giftsHydrated, personsHydrated, suggestionsHydrated, pollsHydrated } = store;
   const nav = useNavigate();
   const [addOpen, setAddOpen] = useState(false);
+  const now = useNow(60_000);
+  const menuItems = useGiftMenuItems();
 
   // Auto-create gifts when persons enter the 30-day window.
   // Uses ensureAutoGift() which writes to a deterministic doc id
@@ -30,6 +47,8 @@ export default function Home() {
   // check an atomic Firestore-side getDoc() instead of relying on the
   // local-snapshot cache, which previously produced duplicates on
   // every reload due to the cache-vs-server snapshot race.
+  // Ausgesetzte Geschenke („Diesmal aussetzen“) bleiben als Dokument bestehen,
+  // deshalb entsteht für dieses Jahr kein neues.
   useEffect(() => {
     if (!personsHydrated) return;
     persons.forEach((p) => {
@@ -43,141 +62,157 @@ export default function Home() {
   // entries created by older cached bundles still running the legacy
   // random-id path on other devices.
   useEffect(() => {
-    if (!giftsHydrated || !personsHydrated) return;
+    if (!giftsHydrated || !personsHydrated || !suggestionsHydrated || !pollsHydrated) return;
     deduplicateOpenGifts().then((n) => {
       if (n > 0) console.log(`[gm] cleaned up ${n} duplicate gift(s)`);
     });
-  }, [giftsHydrated, personsHydrated]);
+  }, [giftsHydrated, personsHydrated, suggestionsHydrated, pollsHydrated]);
 
-  const stack = useMemo(() => sortStack(gifts, persons), [gifts, persons]);
+  const myId = useMyId();
+  const groupId = useGroupId();
+  const identity = useIdentityPrompt();
+  // Ohne Identität könnte die beschenkte Person zuschauen: neutrale Karten ohne
+  // Phase, Beträge und Teilnehmer – außer nach bewusstem „nur ansehen“.
+  const neutral = !myId && !isIdentitySkipped(groupId);
+
+  // Gezählt wird nur, wer noch existiert (verwaiste Teilnehmer aus Altbeständen).
+  // Die eigene Karte bleibt auch ausgesetzt stehen (verrät sonst die Entscheidung).
+  const stack = useMemo(() => {
+    const ids = new Set(persons.map((p) => p.id));
+    return sortStack(gifts, persons, myId).map((g) => withLiveParticipants(g, ids));
+  }, [gifts, persons, myId]);
   const hero = useMemo(() => findHero(persons), [persons]);
 
-  const myId = useIdentity();
   const me = persons.find((p) => p.id === myId);
   const heroDays = hero ? daysUntilBirthday(hero) : 0;
+  // Spoiler-Schutz: Habe ich selbst als Nächstes Geburtstag, führt der Hero zur Wunschliste.
+  const heroIsMe = !!hero && hero.id === myId;
+  const heroDaysText = heroDays === 0 ? "Heute! 🎉" : heroDays === 1 ? "Morgen" : `in ${heroDays} Tagen`;
 
   return (
-    <div>
+    <div className="pb-16">
       {/* Greeting */}
-      <div className="px-5 pt-4 pb-2 flex items-center justify-between">
-        <div>
-          <div className="text-xs font-semibold text-stone-400 tracking-[0.05em] uppercase">
-            {formatTodayHeader()}
-          </div>
-          <h1 className="m-0 mt-0.5 text-[26px] font-extrabold text-stone-900 dark:text-stone-50 tracking-tight">
-            Hallo{me ? `, ${me.name}` : ""} 👋
-          </h1>
-        </div>
+      <div className="px-5 pt-4 pb-2">
+        <Overline>{formatTodayHeader()}</Overline>
+        <h1 className="m-0 mt-0.5 text-title font-extrabold tracking-tight text-fg">
+          Hallo{me ? `, ${me.name}` : ""} <span aria-hidden>👋</span>
+        </h1>
       </div>
+
+      {neutral && persons.length > 0 && (
+        <IdentityBanner onPick={() => void identity.open({ onLater: markIdentityAsked })} />
+      )}
 
       {/* Hero card */}
       {hero && (
         <div className="px-4 pt-1 pb-4">
-          <div
+          <button
+            type="button"
             onClick={() => {
+              if (heroIsMe) return nav("/wishlist");
               const sg = stack.find((g) => g.personId === hero.id);
               if (sg) nav(`/gift/${sg.id}`);
               else nav(`/person/${hero.id}`);
             }}
-            className="relative overflow-hidden rounded-3xl text-white cursor-pointer"
-            style={{
-              padding: "20px 20px 22px",
-              background: "linear-gradient(135deg, #2563EB 0%, #7C3AED 100%)",
-              boxShadow:
-                "0 18px 36px -12px rgba(124,58,237,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)",
-            }}
+            className="relative block w-full overflow-hidden rounded-sheet bg-grad-hero px-5 pb-[22px] pt-5 text-left text-white"
+            style={{ boxShadow: "0 18px 36px -12px rgba(124,58,237,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)" }}
           >
             <Confetti active={heroDays <= 3} />
-            <div className="flex items-center gap-2 text-[13px] font-semibold opacity-95">
-              <span>🎂</span> Als Nächstes hat Geburtstag …
+            <div className="flex items-center gap-2 text-meta font-semibold opacity-95">
+              <span aria-hidden>🎂</span> {heroIsMe ? "Als Nächstes hast du Geburtstag!" : "Als Nächstes hat Geburtstag …"}
             </div>
-            <div className="flex items-end gap-3.5 mt-3">
-              <Avatar person={hero} size={56} />
-              <div className="flex-1 min-w-0">
-                <div className="text-[32px] font-extrabold leading-none tracking-tight mb-1">
-                  {hero.name}
-                </div>
-                <div className="text-[13px] opacity-95 font-medium">
+            <div className="mt-3 flex items-end gap-3.5">
+              {/* weißer Ring, damit der Avatar nicht im Verlauf verschwindet */}
+              <span className="rounded-full ring-2 ring-white/80">
+                <Avatar person={hero} size={56} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 truncate text-display font-extrabold leading-none tracking-tight">{hero.name}</div>
+                <div className="text-meta font-medium opacity-95">
                   {formatBirthday(hero)}
                   {ageOnNextBirthday(hero) && ` · wird ${ageOnNextBirthday(hero)}`}
                 </div>
               </div>
             </div>
-            <div
-              className="mt-3.5 px-3.5 py-2.5 rounded-2xl flex items-center justify-between"
-              style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(8px)" }}
-            >
-              <div className="text-[22px] font-extrabold tracking-tight">
-                {heroDays === 0 ? "Heute! 🎉" : heroDays === 1 ? "Morgen" : `in ${heroDays} Tagen`}
+            <div className="mt-3.5 flex items-center justify-between rounded-card bg-white/20 px-3.5 py-2.5 backdrop-blur">
+              <div className="text-title font-extrabold tracking-tight">
+                {heroDaysText}
+                {heroIsMe && <span className="ml-1.5 text-sm font-semibold opacity-95">· Wunschliste pflegen</span>}
               </div>
               <Icon.chev className="opacity-90" />
             </div>
-          </div>
+          </button>
         </div>
       )}
 
       {!hero && (
         <div className="px-4 pb-4">
           <Card>
-            <EmptyState emoji="👋" title="Noch keine Personen" subtitle="Lege im Personen-Tab die ersten Freunde an." />
+            <EmptyState
+              emoji="👋"
+              title="Noch keine Personen"
+              subtitle="Leg die ersten Freunde an – sie erscheinen 30 Tage vor ihrem Geburtstag hier."
+              action={<Button onClick={() => nav("/people")}>Personen anlegen</Button>}
+            />
           </Card>
         </div>
       )}
 
-      {/* Section header */}
-      <div className="px-5 pt-1.5 pb-2.5 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <h2 className="m-0 text-[17px] font-bold text-stone-900 dark:text-stone-50 tracking-tight">
-            Aktuelle Übersicht
-          </h2>
-          <Chip variant="accent">{stack.length}</Chip>
+      <Section title="Aktuelle Übersicht" count={stack.length} hint="nächster oben">
+        <div className="flex flex-col gap-2.5">
+          {stack.length === 0 ? (
+            <Card>
+              <EmptyState emoji="🎉" title="Gerade steht nichts an" subtitle="Personen erscheinen automatisch 30 Tage vor ihrem Geburtstag." />
+            </Card>
+          ) : (
+            stack.map((g) => {
+              const p = persons.find((x) => x.id === g.personId);
+              if (!p) return null;
+              if (isRecipient(g, myId)) {
+                return <SurpriseStackCard key={g.id} gift={g} person={p} onOpen={() => nav("/wishlist")} />;
+              }
+              if (neutral) return <NeutralStackCard key={g.id} gift={g} person={p} onOpen={() => nav(`/gift/${g.id}`)} />;
+              const info = giftPhase(g, polls.find((x) => x.giftId === g.id), suggestions, myId, now);
+              return (
+                <StackCard
+                  key={g.id}
+                  gift={g}
+                  person={p}
+                  info={info}
+                  onOpen={(vote) => nav(`/gift/${g.id}${vote ? "?vote=1" : ""}`)}
+                  menu={<ActionMenu items={menuItems(g, p, now)} label={`Mehr zu ${p.name}`} title={`Geschenk für ${p.name}`} />}
+                />
+              );
+            })
+          )}
         </div>
-        <span className="text-xs text-stone-400 font-medium">nächster oben</span>
-      </div>
+      </Section>
 
-      {/* Stack */}
-      <div className="px-4 pb-24 flex flex-col gap-2.5">
-        {stack.length === 0 ? (
-          <Card>
-            <EmptyState emoji="🎉" title="Stack ist leer" subtitle="Personen erscheinen automatisch 30 Tage vor ihrem Geburtstag." />
-          </Card>
-        ) : (
-          stack.map((g) => {
-            const p = persons.find((x) => x.id === g.personId);
-            if (!p) return null;
-            return (
-              <StackCard
-                key={g.id}
-                giftId={g.id}
-                person={p}
-                year={g.year}
-                days={daysUntilBirthday(p)}
-                inStackDays={daysAgo(g.enteredStackAt)}
-                participants={g.participantIds.length}
-                budget={g.participantIds.length * g.budgetPerPerson}
-                onOpen={() => nav(`/gift/${g.id}`)}
-                onRemove={() => {
-                  if (
-                    confirm(
-                      `Geschenk für ${p.name} (${g.year}) aus dem Stack entfernen?\n\nAlle Vorschläge + die Abstimmung gehen verloren.`,
-                    )
-                  ) {
-                    deleteGift(g.id);
-                    toast.success(`Geschenk entfernt`);
-                  }
-                }}
-              />
-            );
-          })
-        )}
-      </div>
-
-      <div className="px-4 mt-2">
+      <div className="px-4">
         <PastGiftsLink count={gifts.filter((g) => g.status === "received").length} />
       </div>
 
-      <FAB onClick={() => setAddOpen(true)} />
+      <FAB onClick={() => setAddOpen(true)} label="Geschenk hinzufügen" text="Geschenk" />
       <AddManualDialog open={addOpen} onClose={() => setAddOpen(false)} />
+    </div>
+  );
+}
+
+/** Ohne Identität: Bitte um „Wer bist du?“ statt Details (Spoiler-Schutz). */
+function IdentityBanner({ onPick }: { onPick: () => void }) {
+  return (
+    <div className="px-4 pb-4">
+      <div className="rounded-card border border-accent/30 bg-accent-soft px-3.5 py-3">
+        <h2 className="m-0 text-body font-bold text-fg">
+          <span aria-hidden>👋 </span>Wer bist du?
+        </h2>
+        <p className="m-0 mt-0.5 text-meta text-fg-soft">
+          Damit wir dir nichts verraten, zeigen wir Ideen, Stand und Beträge erst, wenn du dich ausgewählt hast.
+        </p>
+        <Button size="sm" className="mt-2.5" aria-haspopup="dialog" onClick={onPick}>
+          Ich wähle mich aus
+        </Button>
+      </div>
     </div>
   );
 }
@@ -187,92 +222,147 @@ function PastGiftsLink({ count }: { count: number }) {
   if (count === 0) return null;
   return (
     <button
+      type="button"
       onClick={() => nav("/past")}
-      className="w-full px-3.5 py-3 rounded-2xl border border-[#F0EBE6] dark:border-[#3A3633] bg-white dark:bg-stone-800 flex items-center gap-3 active:scale-[0.99] transition-transform"
+      className="flex w-full items-center gap-3 rounded-card border border-line-subtle bg-surface px-3.5 py-3 shadow-card transition-transform active:scale-[0.99]"
     >
-      <div className="w-9 h-9 rounded-[10px] bg-stone-100 dark:bg-stone-700 flex items-center justify-center text-base">
-        📦
+      <div aria-hidden className="flex h-9 w-9 items-center justify-center rounded-tile bg-surface-2 text-fg-soft">
+        <Archive size={18} />
       </div>
       <div className="flex-1 text-left">
-        <div className="text-[14px] font-bold text-stone-900 dark:text-stone-50">
-          Alte Geschenke
-        </div>
-        <div className="text-[12px] text-stone-500 dark:text-stone-400">
+        <div className="text-sm font-bold text-fg">Alte Geschenke</div>
+        <div className="text-xs text-fg-muted">
           {count} {count === 1 ? "erhaltenes Geschenk" : "erhaltene Geschenke"} ansehen
         </div>
       </div>
-      <Icon.chev />
+      <Icon.chev className="text-fg-muted" />
     </button>
   );
 }
 
+// Farbe der Phasenzeile (immer mit Emoji + Text, nie Farbe allein).
+const PHASE_TEXT: Record<GiftPhase, string> = {
+  ideas: "text-status-open",
+  voting: "text-status-vote",
+  result: "text-accent-text",
+  decided: "text-status-done",
+  received: "text-status-received",
+};
+
+/**
+ * Stack-Karte: Name · Datum, Frist, Phasenzeile aus giftPhase() und
+ * Teilnehmer/Budget. „Du fehlst“ öffnet direkt das VoteSheet (?vote=1).
+ * ⋯ = Diesmal aussetzen / Löschen (useGiftMenuItems).
+ */
 function StackCard({
+  gift,
   person,
-  year,
-  days,
-  inStackDays,
-  participants,
-  budget,
+  info,
   onOpen,
-  onRemove,
+  menu,
 }: {
-  giftId: string;
+  gift: Gift;
   person: Person;
-  year: number;
-  days: number;
-  inStackDays: number;
-  participants: number;
-  budget: number;
-  onOpen: () => void;
-  onRemove: () => void;
+  info: GiftPhaseInfo;
+  onOpen: (vote?: boolean) => void;
+  menu: ReactNode;
 }) {
-  const isUrgent = days <= 7;
+  const days = daysUntilForGift(gift, person);
+  const date = giftDate(gift, person);
+  const occasion = gift.occasion && gift.occasion !== "Geburtstag" ? gift.occasion : null;
+  const participants = gift.participantIds.length;
+  const badge = info.badge;
 
   return (
-    <div className="flex items-center gap-2.5 pl-3 pr-3 py-3.5 bg-white dark:bg-stone-800 rounded-[18px] border border-[#F0EBE6] dark:border-[#3A3633] shadow-[0_1px_2px_rgba(28,25,23,0.04)]">
-      <Avatar person={person} size={42} />
-      <button onClick={onOpen} className="flex-1 min-w-0 text-left">
-        <div className="text-base font-bold text-stone-900 dark:text-stone-50 tracking-tight truncate">
-          {person.name}{" "}
-          <span className="text-stone-400 font-medium">· {formatBirthday(person)}</span>
-          <span className="ml-1.5 text-[10px] font-semibold text-stone-400 tracking-wide">
-            {year}
+    <div className="relative rounded-card border border-line-subtle bg-surface shadow-card">
+      <button type="button" onClick={() => onOpen()} className="flex w-full items-start gap-2.5 pb-2 pl-3 pr-3 pt-3 text-left">
+        {/* Initialen nicht mitlesen: der Button-Name beginnt mit dem Namen */}
+        <span aria-hidden>
+          <Avatar person={person} size={42} />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-baseline gap-2 pr-10">
+            <span className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-fg">
+              {person.name}
+              <span className="font-medium text-fg-muted">
+                {occasion && ` · ${occasion}`}
+                {date && ` · ${formatShortDate(date)}`}
+              </span>
+            </span>
+            <span className={cn("shrink-0 text-xs", days <= 7 ? "font-semibold text-accent-text" : "font-medium text-fg-muted")}>
+              {formatDaysShort(days)}
+            </span>
           </span>
-        </div>
-        <div className="text-xs text-stone-500 dark:text-stone-400 mt-0.5 flex gap-2 items-center">
-          <span
-            className={isUrgent ? "font-semibold" : "font-medium"}
-            style={{ color: isUrgent ? "#5B21B6" : undefined }}
-          >
-            {days === 0 ? "🎂 heute!" : `in ${days} T.`}
-          </span>
-          <span className="opacity-50">·</span>
-          <span>seit {inStackDays} T. im Stack</span>
-        </div>
+          <span className={cn("mt-1 block truncate text-meta font-semibold", PHASE_TEXT[info.phase])}>{info.label}</span>
+        </span>
       </button>
-      <div className="flex flex-col gap-1 items-end">
-        <div className="flex gap-1">
-          <Chip variant="neutral">
-            <Icon.users size={12} className="-mr-px" />
-            {participants}
-          </Chip>
-          <Chip variant="accent">{budget} €</Chip>
-        </div>
-        <button
-          onClick={onRemove}
-          aria-label="Geschenk aus Stack löschen"
-          title="Aus Übersicht entfernen"
-          className="mt-1 w-7 h-7 rounded-full border border-stone-200 dark:border-stone-700 text-stone-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950 flex items-center justify-center"
-        >
-          <Icon.trash size={14} />
-        </button>
+      <div className="absolute right-0.5 top-0.5">{menu}</div>
+      {/* Teilnehmer/Budget und ggf. Badge in einer Zeile unter dem Text (Badge ist ein eigener Knopf) */}
+      <div className="flex min-h-7 items-center justify-between gap-2 pb-2.5 pl-16 pr-2.5">
+        <span className="flex items-center gap-1 text-xs text-fg-muted">
+          <Icon.users size={12} />
+          <span className="sr-only">Teilnehmer:</span>
+          {participants} · {formatEuro(info.total ?? participants * gift.budgetPerPerson)}
+        </span>
+        {badge && (
+          <button
+            type="button"
+            onClick={() => onOpen(badge === "du-fehlst")}
+            className={cn(
+              "-my-1 inline-flex min-h-8 items-center gap-1.5 rounded-full px-3 text-xs font-bold",
+              badge === "du-fehlst" ? "bg-status-vote-soft text-status-vote" : "bg-accent-soft text-accent-text",
+            )}
+          >
+            {badge === "du-fehlst" ? (
+              <>
+                <span aria-hidden className="h-2 w-2 animate-pulse rounded-full bg-status-vote" />
+                Du fehlst
+                <span className="sr-only"> – jetzt abstimmen</span>
+              </>
+            ) : (
+              "Bezahlung offen"
+            )}
+          </button>
+        )}
       </div>
     </div>
   );
 }
 
+/** Stack-Karte ohne Identität: nur Name, Anlass, Datum und Countdown – keine Phase, kein Betrag, kein Menü. */
+function NeutralStackCard({ gift, person, onOpen }: { gift: Gift; person: Person; onOpen: () => void }) {
+  const days = daysUntilForGift(gift, person);
+  const date = giftDate(gift, person);
+  const occasion = gift.occasion && gift.occasion !== "Geburtstag" ? gift.occasion : null;
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="flex w-full items-center gap-2.5 rounded-card border border-line-subtle bg-surface p-3 text-left shadow-card active:scale-[0.99]"
+    >
+      <span aria-hidden>
+        <Avatar person={person} size={42} />
+      </span>
+      <span className="min-w-0 flex-1 truncate text-base font-bold tracking-tight text-fg">
+        {person.name}
+        <span className="font-medium text-fg-muted">
+          {occasion && ` · ${occasion}`}
+          {date && ` · ${formatShortDate(date)}`}
+        </span>
+      </span>
+      <span className={cn("shrink-0 text-xs", days <= 7 ? "font-semibold text-accent-text" : "font-medium text-fg-muted")}>
+        {formatDaysShort(days)}
+      </span>
+      <Icon.chev className="shrink-0 text-fg-muted" />
+    </button>
+  );
+}
+
 function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { persons, settings, gifts } = useStore();
+  const { persons: allPersons, settings, gifts } = useStore();
+  const myId = useMyId();
+  // Geschenke für mich legen die anderen an (Spoiler-Schutz).
+  const persons = allPersons.filter((p) => p.id !== myId);
   const [personId, setPersonId] = useState("");
   const [year, setYear] = useState(new Date().getFullYear());
   const [occasion, setOccasion] = useState("Geburtstag");
@@ -299,7 +389,7 @@ function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void
       customDate: finalDate,
       whatsappLink: lastSameKind?.whatsappLink,
     });
-    toast.success(`${p.name} zum Stack hinzugefügt`);
+    toast.success(`${p.name} zur Übersicht hinzugefügt`);
     setPersonId("");
     setOccasion("Geburtstag");
     setUseCustomDate(false);
@@ -309,77 +399,55 @@ function AddManualDialog({ open, onClose }: { open: boolean; onClose: () => void
 
   return (
     <Dialog open={open} onClose={onClose} title="Geschenk manuell hinzufügen">
-      <div className="space-y-3 px-5 pb-2">
+      <div className="space-y-3 pb-2">
         <div>
-          <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
+          <label htmlFor="manual-person" className="mb-1.5 block pl-0.5 text-meta font-semibold text-fg-muted">
             Person
           </label>
           <select
+            id="manual-person"
             value={personId}
             onChange={(e) => setPersonId(e.target.value)}
-            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
+            className="w-full rounded-xl border border-line-control bg-surface px-3.5 py-3 text-fg"
           >
             <option value="">— wählen —</option>
             {persons.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
             ))}
           </select>
         </div>
-        <div>
-          <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
-            Anlass
-          </label>
-          <input
-            type="text"
-            value={occasion}
-            onChange={(e) => setOccasion(e.target.value)}
-            placeholder="z.B. Geburtstag, Reise, Hochzeit"
-            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
-          />
-        </div>
-        <div>
-          <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
-            Jahr
-          </label>
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(+e.target.value)}
-            disabled={useCustomDate}
-            className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700 disabled:opacity-50"
-          />
-        </div>
-        <label className="flex items-start gap-3 cursor-pointer select-none py-1">
+        <Input
+          label="Anlass"
+          type="text"
+          value={occasion}
+          onChange={(e) => setOccasion(e.target.value)}
+          placeholder="z.B. Geburtstag, Reise, Hochzeit"
+        />
+        <Input
+          label="Jahr"
+          type="number"
+          value={year}
+          onChange={(e) => setYear(+e.target.value)}
+          disabled={useCustomDate}
+          className="disabled:opacity-50"
+        />
+        <label className="flex cursor-pointer select-none items-start gap-3 py-1">
           <input
             type="checkbox"
             checked={useCustomDate}
             onChange={(e) => setUseCustomDate(e.target.checked)}
-            className="mt-0.5 w-4 h-4 accent-violet-600"
+            className="mt-0.5 h-4 w-4 accent-accent"
           />
-          <span className="text-[14px] text-stone-700 dark:text-stone-200">
-            Anderes Datum (statt Geburtstag)
-          </span>
+          <span className="text-sm text-fg-soft">Anderes Datum (statt Geburtstag)</span>
         </label>
-        {useCustomDate && (
-          <div>
-            <label className="block text-[13px] font-semibold text-stone-500 dark:text-stone-400 mb-1.5">
-              Datum
-            </label>
-            <input
-              type="date"
-              value={customDate}
-              onChange={(e) => setCustomDate(e.target.value)}
-              className="w-full px-3.5 py-3 rounded-xl bg-white dark:bg-stone-900 border border-stone-200 dark:border-stone-700"
-            />
-          </div>
-        )}
+        {useCustomDate && <Input label="Datum" type="date" value={customDate} onChange={(e) => setCustomDate(e.target.value)} />}
         <div className="flex gap-2 pt-3">
-          <Button variant="secondary" onClick={onClose} className="flex-1">Abbrechen</Button>
-          <Button
-            onClick={submit}
-            disabled={!personId || (useCustomDate && !customDate)}
-            className="flex-1"
-          >
+          <Button variant="secondary" onClick={onClose} className="flex-1">
+            Abbrechen
+          </Button>
+          <Button onClick={submit} disabled={!personId || (useCustomDate && !customDate)} className="flex-1">
             Hinzufügen
           </Button>
         </div>

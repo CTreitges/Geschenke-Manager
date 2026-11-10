@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { GlowScreen } from "@/components/GlowScreen";
 import { Layout } from "@/components/Layout";
-import { PwaInstallTipDialog } from "@/components/PwaInstallTipDialog";
-import { TestMailTipDialog } from "@/components/TestMailTipDialog";
+import { OnboardingFlow } from "@/components/OnboardingFlow";
+import { useIdentityPrompt } from "@/components/IdentitySheet";
 import Login from "@/pages/Login";
 import CreateGroup from "@/pages/CreateGroup";
 import Home from "@/pages/Home";
@@ -15,7 +16,10 @@ import MyWishlist from "@/pages/MyWishlist";
 import PastGifts from "@/pages/PastGifts";
 import Tutorial from "@/pages/Tutorial";
 import Feedback from "@/pages/Feedback";
+import WhatsNew from "@/pages/WhatsNew";
+import Help from "@/pages/Help";
 import MagicLink from "@/pages/MagicLink";
+import GroupLink from "@/pages/GroupLink";
 import ShareGift from "@/pages/ShareGift";
 import {
   addKnownGroup,
@@ -27,9 +31,11 @@ import {
   useGroupId,
 } from "@/lib/auth";
 import { consumeGoogleRedirectResult } from "@/lib/firebase";
+import { markIdentityAsked } from "@/lib/onboarding";
 import { useStore } from "@/lib/hooks";
 import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
+import { syncPushToken, usePushNavigation } from "@/lib/messaging";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -115,22 +121,16 @@ function GoogleRedirectHandler() {
   return null;
 }
 
-const TUTORIAL_SEEN_KEY = "gm:tutorial-seen:v5";
-
 /**
- * Auto-open the tutorial on first visit per browser. Marks itself as
- * seen via localStorage so it never auto-opens again on this device.
+ * Push: Klicks auf Meldungen (GM_NAVIGATE vom Push-Worker) im Router
+ * ausführen und den FCM-Token beim Start frisch halten (höchstens 1×/Tag,
+ * nur mit erteilter Berechtigung, nur angemeldet).
  */
-function FirstRunTutorial() {
-  const nav = useNavigate();
-  const location = useLocation();
+function PushBridge({ groupId }: { groupId: string | null }) {
+  usePushNavigation();
   useEffect(() => {
-    if (location.pathname === "/tutorial") return;
-    if ((location.state as Record<string, unknown>)?.fromShareLink) return;
-    if (localStorage.getItem(TUTORIAL_SEEN_KEY) === "yes") return;
-    localStorage.setItem(TUTORIAL_SEEN_KEY, "yes");
-    nav("/tutorial");
-  }, [location.pathname, nav]);
+    if (groupId && isAuthed()) void syncPushToken();
+  }, [groupId]);
   return null;
 }
 
@@ -197,16 +197,11 @@ export default function App() {
   return (
     <>
       <GoogleRedirectHandler />
+      <PushBridge groupId={groupId} />
       {!bootDone ? (
-        <div
-          className="min-h-screen flex items-center justify-center text-stone-500 dark:text-stone-400 text-sm"
-          style={{
-            background:
-              "radial-gradient(120% 60% at 50% 0%, #EDE9FE 0%, var(--gm-bg) 55%)",
-          }}
-        >
-          Lade Gruppendaten…
-        </div>
+        <GlowScreen className="flex items-center justify-center text-sm text-fg-muted">
+          <span role="status">Lade Gruppendaten…</span>
+        </GlowScreen>
       ) : (
         <AppRoutes />
       )}
@@ -215,19 +210,33 @@ export default function App() {
 }
 
 function AppRoutes() {
+  // Onboarding-Schritt „Wer bist du?“: IdentitySheet; „Später“ bzw. Schließen
+  // ohne Auswahl merkt sich die Frage. useCallback, weil der Callback in den
+  // Effekt-Deps von OnboardingFlow steht.
+  const { open } = useIdentityPrompt();
+  const needIdentity = useCallback(() => void open({ onLater: markIdentityAsked }), [open]);
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/login/new" element={<CreateGroup />} />
       <Route path="/m/:token" element={<MagicLink />} />
       <Route path="/g/:groupId/gift/:giftId" element={<ShareGift />} />
+      <Route path="/g/:groupId" element={<GroupLink to="/" />} />
+      <Route path="/g/:groupId/wishlist" element={<GroupLink to="/wishlist" />} />
+      {/* Tutorial ohne Header und Tab-Bar (außerhalb von Layout) */}
+      <Route
+        path="/tutorial"
+        element={
+          <RequireAuth>
+            <Tutorial />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/*"
         element={
           <RequireAuth>
-            <FirstRunTutorial />
-            <PwaInstallTipDialog />
-            <TestMailTipDialog />
+            <OnboardingFlow onNeedIdentity={needIdentity} />
             <Layout>
               <Routes>
                 <Route path="/" element={<Home />} />
@@ -236,7 +245,8 @@ function AppRoutes() {
                 <Route path="/gift/:id" element={<GiftDetail />} />
                 <Route path="/wishlist" element={<MyWishlist />} />
                 <Route path="/past" element={<PastGifts />} />
-                <Route path="/tutorial" element={<Tutorial />} />
+                <Route path="/whats-new" element={<WhatsNew />} />
+                <Route path="/help" element={<Help />} />
                 <Route path="/feedback" element={<Feedback />} />
                 <Route path="/settings" element={<Settings />} />
                 <Route path="*" element={<Navigate to="/" replace />} />

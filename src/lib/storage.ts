@@ -8,6 +8,9 @@ import {
   setDoc,
   arrayUnion,
   arrayRemove,
+  deleteField,
+  FieldPath,
+  runTransaction,
   writeBatch,
   getDoc,
   getDocs,
@@ -15,10 +18,28 @@ import {
   where,
   limit,
 } from "firebase/firestore";
+import { getGiftLocks, normalizePoll, pollPhase, type PollCloseReason } from "@shared/poll";
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
+import { getIdentity } from "./auth";
 import { auth, authReady, db, functions } from "./firebase";
+import { dedupPlan, personDeletion, withLiveParticipants } from "./cascade";
 import { isFeedbackOwner } from "./feedback-owner";
+import { toUpdate } from "./patch";
+import { assertNotRecipient } from "./spoiler";
+import { adoptedSuggestionId, fulfilledWishIds } from "./wishlist";
+import {
+  assertCanStartPoll,
+  closeFields,
+  extendedEndsAt,
+  isPaidByOnlyPatch,
+  legacyVoterIds,
+  newPollDoc,
+  PollLockedError,
+  startPollBlocker,
+  toggledVotes,
+  type LockedAction,
+} from "./pollOps";
 import type {
   Feedback,
   Gift,
@@ -46,6 +67,12 @@ interface State {
   giftsHydrated: boolean;
   /** First persons snapshot has been received. */
   personsHydrated: boolean;
+  /** Persons-Stand kam mindestens einmal vom Server (nicht nur aus dem Offline-Cache). */
+  personsFromServer: boolean;
+  /** First suggestions snapshot has been received. */
+  suggestionsHydrated: boolean;
+  /** First polls snapshot has been received. */
+  pollsHydrated: boolean;
   /** Currently active group id (null when not in any group). */
   activeGroupId: string | null;
   /** Set when group reads come back permission-denied (e.g. lost membership). */
@@ -70,11 +97,17 @@ const emptyState = (): State => ({
   loaded: false,
   giftsHydrated: false,
   personsHydrated: false,
+  personsFromServer: false,
+  suggestionsHydrated: false,
+  pollsHydrated: false,
   activeGroupId: null,
   permissionError: false,
 });
 
 let state: State = emptyState();
+
+/** giftId → Personen, deren Stimme im Doc noch als String steht (siehe setMyVote). */
+let legacyVoters = new Map<ID, Set<ID>>();
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -229,12 +262,15 @@ export function setActiveGroup(groupId: string | null) {
       unsubscribers.push(
         onSnapshot(
           collection(db, "groups", groupId, "persons"),
+          // Sonst käme nach einem Cache-Snapshot ohne Änderung nie die Server-Bestätigung.
+          { includeMetadataChanges: true },
           (snap) => {
             state.persons = snap.docs.map((d) => ({
               id: d.id,
               ...(d.data() as Omit<Person, "id">),
             }));
             state.personsHydrated = true;
+            if (!snap.metadata.fromCache) state.personsFromServer = true;
             notify();
           },
           onErr("persons"),
@@ -266,6 +302,7 @@ export function setActiveGroup(groupId: string | null) {
               id: d.id,
               ...(d.data() as Omit<Suggestion, "id">),
             }));
+            state.suggestionsHydrated = true;
             notify();
           },
           onErr("suggestions"),
@@ -301,21 +338,10 @@ export function setActiveGroup(groupId: string | null) {
         onSnapshot(
           collection(db, "groups", groupId, "polls"),
           (snap) => {
-            state.polls = snap.docs.map((d) => {
-              const raw = d.data() as {
-                status?: Poll["status"];
-                startedAt?: number;
-                closedAt?: number;
-                votes?: Record<string, unknown>;
-              };
-              return {
-                giftId: d.id,
-                status: raw.status ?? "none",
-                startedAt: raw.startedAt,
-                closedAt: raw.closedAt,
-                votes: normalizeVotes(raw.votes),
-              };
-            });
+            // Doc-ID = giftId; normalizePoll liest auch Alt-Formate (Stimme als String).
+            state.polls = snap.docs.map((d) => ({ ...normalizePoll(d.data()), giftId: d.id }));
+            legacyVoters = new Map(snap.docs.map((d) => [d.id, new Set(legacyVoterIds(d.data().votes))]));
+            state.pollsHydrated = true;
             notify();
           },
           onErr("polls"),
@@ -362,27 +388,6 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
   const out = {} as T;
   for (const k in obj) {
     if (obj[k] !== undefined) out[k] = obj[k];
-  }
-  return out;
-}
-
-/**
- * Konvertiert das Vote-Mapping in das aktuelle Multi-Vote-Format. Akzeptiert
- * sowohl alte String-Werte (`{ personId: suggestionId }`) als auch das neue
- * Array-Format (`{ personId: suggestionId[] }`) — alte Daten werden
- * transparent in die einlementige Liste hochgeschrieben.
- */
-function normalizeVotes(raw: Record<string, unknown> | undefined): Record<ID, ID[]> {
-  if (!raw) return {};
-  const out: Record<ID, ID[]> = {};
-  for (const [pid, v] of Object.entries(raw)) {
-    if (Array.isArray(v)) {
-      out[pid] = v.filter((x): x is string => typeof x === "string");
-    } else if (typeof v === "string" && v) {
-      out[pid] = [v];
-    } else {
-      out[pid] = [];
-    }
   }
   return out;
 }
@@ -518,62 +523,61 @@ export async function setMyIdentityCloud(personId: ID | null): Promise<void> {
 }
 
 // ─── Persons ────────────────────────────────────────────
-export async function addPerson(p: Omit<Person, "id" | "createdAt">) {
-  await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));
+/** Legt eine Person an und liefert ihre neue ID (z. B. „Ich bin noch nicht dabei“). */
+export async function addPerson(p: Omit<Person, "id" | "createdAt">): Promise<ID> {
+  const ref = await addDoc(gcol("persons"), clean({ ...p, createdAt: Date.now() }));
+  return ref.id;
 }
 
 export async function updatePerson(id: ID, patch: Partial<Person>) {
-  await updateDoc(gdoc("persons", id), clean(patch as Record<string, unknown>));
+  await updateDoc(gdoc("persons", id), toUpdate(patch as Record<string, unknown>, deleteField));
 }
 
+/**
+ * Löscht die Person samt ihrer Geschenke, deren Ideen und Abstimmungen und
+ * ihrer Wünsche (B30) und trägt sie im selben Batch aus fremden Geschenken
+ * und Standard-Teilnehmern aus (KOR-05).
+ */
 export async function deletePerson(id: ID) {
   if (!state.activeGroupId) throw new Error("No active group");
+  const plan = personDeletion(id, state);
   const batch = writeBatch(db);
   batch.delete(gdoc("persons", id));
-  state.gifts
-    .filter((g) => g.personId === id)
-    .forEach((g) => batch.delete(gdoc("gifts", g.id)));
-  state.wishlist
-    .filter((w) => w.personId === id)
-    .forEach((w) => batch.delete(gdoc("wishlist", w.id)));
+  plan.gifts.forEach((gid) => batch.delete(gdoc("gifts", gid)));
+  plan.suggestions.forEach((sid) => batch.delete(gdoc("suggestions", sid)));
+  plan.polls.forEach((pid) => batch.delete(gdoc("polls", pid)));
+  plan.wishlist.forEach((wid) => batch.delete(gdoc("wishlist", wid)));
+  plan.participantOf.forEach((gid) => batch.update(gdoc("gifts", gid), { participantIds: arrayRemove(id) }));
+  plan.defaultParticipantOf.forEach((pid) =>
+    batch.update(gdoc("persons", pid), { defaultParticipantIds: arrayRemove(id) }),
+  );
   await batch.commit();
 }
 
 /**
- * Deduplicate open gifts: same (personId, year) → keep richest, drop rest.
+ * Doppelte offene Auto-Geschenke (gleiche Person, Jahr, Anlass) aufräumen:
+ * das reichste bleibt; Ideen der Doppel wandern mit, ihre Polls fallen weg
+ * (B30). Manuelle, ausgesetzte und laufend abgestimmte bleiben (KOR-11).
  */
 let dedupRunning = false;
 export async function deduplicateOpenGifts(): Promise<number> {
   if (dedupRunning) return 0;
+  // Ohne Ideen verwaisten sie beim Löschen, ohne Abstimmungen träfe es auch laufende.
+  if (!state.giftsHydrated || !state.suggestionsHydrated || !state.pollsHydrated) return 0;
   dedupRunning = true;
   try {
-    const groups = new Map<string, Gift[]>();
-    state.gifts
-      .filter((g) => g.status === "open")
-      .forEach((g) => {
-        const key = `${g.personId}:${g.year}`;
-        const arr = groups.get(key);
-        if (arr) arr.push(g);
-        else groups.set(key, [g]);
-      });
-    const toDelete: string[] = [];
-    for (const arr of groups.values()) {
-      if (arr.length < 2) continue;
-      arr.sort((a, b) => {
-        const da =
-          a.participantIds.length + (a.selectedSuggestionIds?.length ?? 0) * 0.5;
-        const db =
-          b.participantIds.length + (b.selectedSuggestionIds?.length ?? 0) * 0.5;
-        if (db !== da) return db - da;
-        return a.enteredStackAt - b.enteredStackAt;
-      });
-      toDelete.push(...arr.slice(1).map((g) => g.id));
-    }
-    if (toDelete.length === 0) return 0;
+    const now = Date.now();
+    const running = new Set(state.polls.filter((p) => pollPhase(p, now) === "running").map((p) => p.giftId));
+    const plan = dedupPlan(state.gifts, state.suggestions, running);
+    if (plan.gifts.length === 0) return 0;
     const batch = writeBatch(db);
-    toDelete.forEach((id) => batch.delete(gdoc("gifts", id)));
+    plan.gifts.forEach((id) => {
+      batch.delete(gdoc("gifts", id));
+      batch.delete(gdoc("polls", id));
+    });
+    plan.moves.forEach((m) => batch.update(gdoc("suggestions", m.id), { giftId: m.giftId }));
     await batch.commit();
-    return toDelete.length;
+    return plan.gifts.length;
   } finally {
     dedupRunning = false;
   }
@@ -698,6 +702,12 @@ export async function updateGift(id: ID, patch: Partial<Gift>) {
   await updateDoc(gdoc("gifts", id), clean(patch as Record<string, unknown>));
 }
 
+/** „Diesmal aussetzen“ (on) bzw. „Wieder aufnehmen“ (off). Das Dokument bleibt,
+ *  damit ensureAutoGift für dieses Jahr kein neues, leeres anlegt. */
+export async function setGiftSkipped(id: ID, on: boolean) {
+  await updateDoc(gdoc("gifts", id), { skippedAt: on ? Date.now() : deleteField() });
+}
+
 export async function reorderGifts(orderedIds: ID[]) {
   const batch = writeBatch(db);
   orderedIds.forEach((id, i) => {
@@ -715,13 +725,67 @@ export async function toggleParticipant(giftId: ID, personId: ID) {
   });
 }
 
-export async function markReceived(giftId: ID) {
-  await updateGift(giftId, { status: "received", receivedAt: Date.now() });
+/** Trägt eine Person als Teilnehmer ein (idempotent, z. B. „Mitmachen & abstimmen“). */
+export async function addParticipant(giftId: ID, personId: ID) {
+  await updateDoc(gdoc("gifts", giftId), { participantIds: arrayUnion(personId) });
 }
 
-/** Auswahl festschnallen (Zwischen-Status vor "received"). */
-export async function markConfirmed(giftId: ID) {
-  await updateGift(giftId, { status: "confirmed" });
+/** Schließt einen aktiven Poll des Geschenks im selben Batch (Zustand aus dem lokalen Snapshot). */
+function closeActivePollInBatch(
+  batch: ReturnType<typeof writeBatch>,
+  giftId: ID,
+  by: { closedBy?: ID | null; reason: PollCloseReason },
+  now: number,
+) {
+  const poll = state.polls.find((p) => p.giftId === giftId);
+  if (poll?.status !== "active") return;
+  batch.update(gdoc("polls", giftId), { ...closeFields(poll, by, now) });
+}
+
+/**
+ * Geschenk erhalten; eine noch aktive Abstimmung endet im selben Batch.
+ * Wünsche hinter ausgewählten Ideen gelten ab jetzt als bekommen.
+ * `withoutSelection` („Ohne Auswahl abschließen“): eine alte Auswahl (z. B.
+ * nach „Entscheidung ändern“) wird im selben Batch geleert.
+ */
+export async function markReceived(giftId: ID, closedBy?: ID | null, opts: { withoutSelection?: boolean } = {}) {
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.update(gdoc("gifts", giftId), {
+    status: "received",
+    receivedAt: now,
+    ...(opts.withoutSelection ? { selectedSuggestionIds: [] } : {}),
+  });
+  closeActivePollInBatch(batch, giftId, { closedBy, reason: "gift-received" }, now);
+  const gift = state.gifts.find((g) => g.id === giftId);
+  if (gift && !opts.withoutSelection) {
+    const wishIds = new Set(state.wishlist.map((w) => w.id));
+    for (const wid of fulfilledWishIds(gift, state.suggestions, wishIds)) {
+      batch.update(gdoc("wishlist", wid), { fulfilledAt: now, fulfilledGiftId: giftId });
+    }
+  }
+  await batch.commit();
+}
+
+/** Auswahl festschnallen (Zwischen-Status vor "received"); schließt eine aktive Abstimmung mit. */
+export async function markConfirmed(giftId: ID, closedBy?: ID | null) {
+  const now = Date.now();
+  const batch = writeBatch(db);
+  batch.update(gdoc("gifts", giftId), { status: "confirmed" });
+  closeActivePollInBatch(batch, giftId, { closedBy, reason: "gift-confirmed" }, now);
+  await batch.commit();
+}
+
+/**
+ * „Entscheidung festlegen“: EIN Batch aus Poll schließen (falls aktiv),
+ * Auswahl setzen und Status confirmed.
+ */
+export async function decideGift(giftId: ID, selectedIds: ID[], closedBy?: ID | null) {
+  const now = Date.now();
+  const batch = writeBatch(db);
+  closeActivePollInBatch(batch, giftId, { closedBy, reason: "gift-confirmed" }, now);
+  batch.update(gdoc("gifts", giftId), { selectedSuggestionIds: selectedIds, status: "confirmed" });
+  await batch.commit();
 }
 
 /** Bestätigung wieder aufheben — zurück in den "open"-Zustand. */
@@ -748,73 +812,200 @@ export async function deleteGift(giftId: ID) {
 }
 
 // ─── Suggestions ────────────────────────────────────────
+/** Wirft PollLockedError, solange die Abstimmung des Geschenks läuft (lokaler Snapshot). */
+function assertUnlocked(giftId: ID | undefined, action: LockedAction) {
+  const gift = state.gifts.find((g) => g.id === giftId);
+  if (!gift) return;
+  const poll = state.polls.find((p) => p.giftId === gift.id);
+  if (getGiftLocks(gift, poll, Date.now())[action].locked) throw new PollLockedError(action);
+}
+
+/** Neue Idee bzw. Wunsch-Übernahme (mit fromWishItemId). */
 export async function addSuggestion(s: Omit<Suggestion, "id" | "createdAt">) {
+  assertNotRecipient(state.gifts.find((g) => g.id === s.giftId), s.suggestedBy);
+  assertUnlocked(s.giftId, s.fromWishItemId ? "adoptWish" : "addIdea");
   await addDoc(gcol("suggestions"), clean({ ...s, createdAt: Date.now() }));
 }
 
 export async function deleteSuggestion(id: ID) {
+  assertUnlocked(state.suggestions.find((s) => s.id === id)?.giftId, "deleteIdea");
   await deleteDoc(gdoc("suggestions", id));
 }
 
 export async function updateSuggestion(id: ID, patch: Partial<Suggestion>) {
-  await updateDoc(gdoc("suggestions", id), clean(patch as Record<string, unknown>));
+  if (!isPaidByOnlyPatch(patch)) {
+    assertUnlocked(state.suggestions.find((s) => s.id === id)?.giftId, "editIdea");
+  }
+  // Geleerte Felder (Link, Preis) wirklich löschen (B26).
+  await updateDoc(gdoc("suggestions", id), toUpdate(patch as Record<string, unknown>, deleteField));
+}
+
+/** Rückgängig nach dem Löschen: gleiche ID, gleiche Felder (setDoc). */
+export async function restoreSuggestion(s: Suggestion) {
+  const { id, ...data } = s;
+  await setDoc(gdoc("suggestions", id), clean(data as Record<string, unknown>));
+}
+
+/** „Bezahlt von“ setzen oder entfernen (null löscht das Feld). */
+export async function setPaidBy(suggestionId: ID, personId: ID | null) {
+  await updateDoc(gdoc("suggestions", suggestionId), { paidBy: personId ?? deleteField() });
 }
 
 // ─── Wishlist ───────────────────────────────────────────
-export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt">) {
-  await addDoc(gcol("wishlist"), clean({ ...w, createdAt: Date.now() }));
+/** Neuer Wunsch; addedBy = aktuelle Identität (falls gesetzt). Liefert die neue ID. */
+export async function addWishItem(w: Omit<WishlistItem, "id" | "createdAt" | "addedBy">): Promise<ID> {
+  const ref = await addDoc(gcol("wishlist"), clean({ ...w, addedBy: getIdentity() ?? undefined, createdAt: Date.now() }));
+  return ref.id;
+}
+
+/** Bearbeiten bzw. „Noch aktuell ✓“: setzt updatedAt; undefined löscht ein Feld. */
+export async function updateWishItem(id: ID, patch: Partial<Omit<WishlistItem, "id" | "personId" | "createdAt">>) {
+  await updateDoc(gdoc("wishlist", id), toUpdate({ ...patch, updatedAt: Date.now() }, deleteField));
 }
 
 export async function deleteWishItem(id: ID) {
   await deleteDoc(gdoc("wishlist", id));
 }
 
-// ─── Polls ──────────────────────────────────────────────
-export async function setPollStatus(giftId: ID, status: Poll["status"]) {
-  const ref = gdoc("polls", giftId);
-  const now = Date.now();
-  const existing = state.polls.find((p) => p.giftId === giftId);
-  await setDoc(
-    ref,
-    clean({
-      status,
-      votes: existing?.votes ?? {},
-      startedAt: status === "active" ? now : existing?.startedAt,
-      closedAt: status === "closed" ? now : existing?.closedAt,
-    }),
-    { merge: true },
-  );
+/** Rückgängig nach dem Löschen: gleiche ID, gleiche Felder (setDoc). */
+export async function restoreWishItem(w: WishlistItem) {
+  const { id, ...data } = w;
+  await setDoc(gdoc("wishlist", id), clean(data as Record<string, unknown>));
 }
 
-/** Toggelt die Stimme einer Person für genau einen Vorschlag. Mehrfach-Voten
- *  unterstützt: pro Person kann eine Liste von suggestionIds existieren. */
-export async function castVote(giftId: ID, personId: ID, suggestionId: ID) {
-  const existing = state.polls.find((p) => p.giftId === giftId);
-  const current = existing?.votes[personId] ?? [];
-  const next = current.includes(suggestionId)
-    ? current.filter((x) => x !== suggestionId)
-    : [...current, suggestionId];
-  const ref = gdoc("polls", giftId);
-  await setDoc(ref, { votes: { [personId]: next } }, { merge: true });
-}
-
-/** Entfernt eine spezifische Stimme einer Person. */
-export async function removeVote(
+/**
+ * Wunsch als Idee ins Geschenk übernehmen. Deterministische ID
+ * wish_{giftId}_{wishId} und Transaktion mit Existenzprüfung: Doppeltipp
+ * oder zwei Leute gleichzeitig ergeben keine Duplikate und überschreiben
+ * nichts (created = false, wenn schon übernommen). Wirft PollLockedError
+ * während der Abstimmung; ohne Identität bzw. als beschenkte Person geht es nicht.
+ */
+export async function adoptWish(
   giftId: ID,
-  personId: ID,
-  suggestionId?: ID,
-) {
-  const existing = state.polls.find((p) => p.giftId === giftId);
-  if (!existing) return;
-  const next: Record<ID, ID[]> = { ...existing.votes };
-  if (suggestionId) {
-    const list = (next[personId] ?? []).filter((x) => x !== suggestionId);
-    if (list.length > 0) next[personId] = list;
-    else delete next[personId];
-  } else {
-    delete next[personId];
+  wish: WishlistItem,
+  by: ID | null | undefined,
+): Promise<{ id: ID; created: boolean }> {
+  if (!by) throw new Error("Wähle erst, wer du bist.");
+  assertNotRecipient(state.gifts.find((g) => g.id === giftId), by);
+  assertUnlocked(giftId, "adoptWish");
+  const id = adoptedSuggestionId(giftId, wish.id);
+  if (state.suggestions.some((s) => s.id === id)) return { id, created: false };
+  const ref = gdoc("suggestions", id);
+  return runTransaction(db, async (tx) => {
+    if ((await tx.get(ref)).exists()) return { id, created: false };
+    tx.set(
+      ref,
+      clean({
+        giftId,
+        title: wish.title,
+        url: wish.url,
+        price: wish.price,
+        suggestedBy: by,
+        fromWishItemId: wish.id,
+        createdAt: Date.now(),
+      }),
+    );
+    return { id, created: true };
+  });
+}
+
+// ─── Polls ──────────────────────────────────────────────
+// Doc-Pfad: groups/{gid}/polls/{giftId}. Kein Doc = keine Abstimmung.
+
+/**
+ * Neue Runde: set OHNE merge (alte Stimmen und Ende-Felder sind weg) – in
+ * einer Transaktion, die abbricht, wenn laut Server schon eine Runde läuft
+ * (gleichzeitiger Start, veralteter Snapshot). Liefert startedAt = Runden-Schlüssel.
+ */
+export async function startPoll(
+  giftId: ID,
+  opts: { durationMs: number; startedBy: ID },
+): Promise<number> {
+  const gift = state.gifts.find((g) => g.id === giftId);
+  if (gift) {
+    const ideas = state.suggestions.filter((s) => s.giftId === giftId).length;
+    const live = withLiveParticipants(gift, new Set(state.persons.map((p) => p.id)));
+    const blocker = startPollBlocker(live, ideas, opts.startedBy);
+    if (blocker) throw new Error(blocker);
   }
-  await updateDoc(gdoc("polls", giftId), { votes: next });
+  const ref = gdoc("polls", giftId);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    const now = Date.now();
+    assertCanStartPoll(snap.exists() ? normalizePoll(snap.data()) : null, now);
+    tx.set(ref, newPollDoc(giftId, { now, ...opts }));
+    return now;
+  });
+}
+
+/**
+ * Setzt genau eine eigene Stimme auf den gewünschten Zustand – atomar über
+ * den Feldpfad votes.{personId}, fremde Stimmen bleiben unberührt; ein
+ * Doppeltipp hebt sich nicht auf. Steht die eigene Stimme noch im Alt-Format
+ * (String), wird die ganze normalisierte Liste geschrieben.
+ */
+export async function setMyVote(giftId: ID, personId: ID, suggestionId: ID, on: boolean) {
+  assertNotRecipient(state.gifts.find((g) => g.id === giftId), personId);
+  const poll = state.polls.find((p) => p.giftId === giftId);
+  if (pollPhase(poll, Date.now()) !== "running") throw new Error("Die Abstimmung ist schon beendet.");
+  const value = legacyVoters.get(giftId)?.has(personId)
+    ? toggledVotes(poll?.votes?.[personId] ?? [], suggestionId, on)
+    : on
+      ? arrayUnion(suggestionId)
+      : arrayRemove(suggestionId);
+  await updateDoc(gdoc("polls", giftId), new FieldPath("votes", personId), value);
+}
+
+/** Nimmt alle eigenen Stimmen zurück (nur der eigene Eintrag). */
+export async function clearMyVotes(giftId: ID, personId: ID) {
+  await updateDoc(gdoc("polls", giftId), new FieldPath("votes", personId), deleteField());
+}
+
+/** Beendet eine aktive Runde; false, wenn sie schon beendet oder gelöscht war. */
+export async function closePoll(
+  giftId: ID,
+  by: { closedBy?: ID | null; reason: PollCloseReason },
+): Promise<boolean> {
+  const ref = gdoc("polls", giftId);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return false;
+    const poll = normalizePoll(snap.data());
+    if (poll.status !== "active") return false;
+    tx.update(ref, { ...closeFields(poll, by, Date.now()) });
+    return true;
+  });
+}
+
+/**
+ * Verlängert um `addMs` (ab der alten Frist, mindestens ab jetzt). Eine
+ * beendete Runde wird wieder aktiv, die Stimmen bleiben. Liefert die neue Frist.
+ */
+export async function extendPoll(giftId: ID, addMs: number): Promise<number> {
+  const ref = gdoc("polls", giftId);
+  return runTransaction(db, async (tx) => {
+    const snap = await tx.get(ref);
+    if (!snap.exists()) throw new Error("Die Abstimmung gibt es nicht mehr.");
+    const { endsAt, reopen } = extendedEndsAt(normalizePoll(snap.data()), addMs, Date.now());
+    tx.update(
+      ref,
+      reopen
+        ? {
+            endsAt,
+            status: "active",
+            closedAt: deleteField(),
+            closedBy: deleteField(),
+            closedReason: deleteField(),
+          }
+        : { endsAt },
+    );
+    return endsAt;
+  });
+}
+
+/** Verwerfen: Doc löschen – Stimmen sind wirklich weg (Archiv sichert im Hintergrund). */
+export async function discardPoll(giftId: ID) {
+  await deleteDoc(gdoc("polls", giftId));
 }
 
 // ─── Archive / History / Restore (Dev-Hilfsmittel) ──────

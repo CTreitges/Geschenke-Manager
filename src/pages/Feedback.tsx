@@ -1,8 +1,7 @@
 import { useState } from "react";
-import { Avatar, Button, Card, Chip, EmptyState, Icon, Input, PageHeader } from "@/components/ui";
-import { useStore } from "@/lib/hooks";
+import { Avatar, Button, Card, Chip, EmptyState, Icon, IconButton, PageHeader, useConfirm } from "@/components/ui";
+import { useMyId, useStore } from "@/lib/hooks";
 import { addFeedback, deleteFeedback, updateFeedback } from "@/lib/storage";
-import { useIdentity } from "@/lib/auth";
 import { useFirebaseUser } from "@/lib/firebase";
 import { isFeedbackOwner } from "@/lib/feedback-owner";
 import { toast } from "sonner";
@@ -22,7 +21,7 @@ function formatRelative(ts: number): string {
 
 export default function Feedback() {
   const { feedback, persons } = useStore();
-  const myId = useIdentity();
+  const myId = useMyId();
   const fbUser = useFirebaseUser();
   const myUid = fbUser?.uid ?? null;
   const isOwner = isFeedbackOwner(fbUser);
@@ -67,38 +66,37 @@ export default function Feedback() {
         title="Feedback"
         subtitle={
           isOwner
-            ? "Owner-Sicht: alle Feedbacks aus allen Gruppen"
+            ? "App-Betreiber-Sicht: alle Feedbacks aus allen Gruppen"
             : "Wünsche, Ideen, Bugs — alles willkommen"
         }
       />
 
       <div className="px-4 pb-24">
-        <Card className="p-3 mb-4">
+        <Card className="mb-4 p-3 focus-within:ring-2 focus-within:ring-accent/30">
           <div className="flex items-start gap-2">
-            <span className="text-lg pl-1 pt-1.5">💭</span>
+            <span aria-hidden className="pl-1 pt-1.5 text-lg">
+              💭
+            </span>
             <textarea
+              aria-label="Dein Feedback"
               value={text}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) submit();
               }}
-              placeholder="Was wünschst du dir? Was nervt? Was fehlt?"
+              placeholder="Was fehlt dir in der App? Was nervt?"
               rows={3}
-              className="flex-1 px-1 py-2 text-[14px] border-none outline-none bg-transparent text-stone-900 dark:text-stone-50 resize-none leading-snug"
+              className="flex-1 resize-none border-none bg-transparent px-1 py-2 text-sm leading-snug text-fg outline-none placeholder:text-fg-muted"
             />
           </div>
-          <div className="flex items-center justify-between mt-1 pl-7">
-            <span className="text-[11px] text-stone-400">
+          <div className="mt-1 flex items-center justify-between gap-2 pl-7">
+            <span className="text-2xs text-fg-muted">
               {myId
-                ? "Wird dir zugeordnet · nur du & der Owner sehen es"
-                : "Nur du & der Owner sehen dein Feedback"}
+                ? "Wird dir zugeordnet · nur du & der App-Betreiber sehen es"
+                : "Nur du & der App-Betreiber sehen dein Feedback"}
             </span>
-            <Button
-              size="sm"
-              onClick={submit}
-              disabled={!text.trim() || submitting}
-            >
-              <Icon.plus size={14} /> {submitting ? "…" : "Senden"}
+            <Button size="sm" onClick={submit} loading={submitting} disabled={!text.trim()}>
+              <Icon.plus size={14} /> Senden
             </Button>
           </div>
         </Card>
@@ -107,7 +105,7 @@ export default function Feedback() {
           <EmptyState
             emoji="💌"
             title="Noch nichts hier"
-            subtitle="Schreib oben was dir auf der Seele liegt."
+            subtitle="Schreib oben, was dir auf der Seele liegt."
           />
         )}
 
@@ -151,8 +149,8 @@ export default function Feedback() {
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
   return (
     <div className="mb-5">
-      <div className="flex items-center gap-2 mb-2 pl-1">
-        <h3 className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400">{title}</h3>
+      <div className="mb-2 flex items-center gap-2 pl-1">
+        <h2 className="m-0 text-2xs font-bold uppercase tracking-[.05em] text-fg-muted">{title}</h2>
         <Chip variant="neutral">{count}</Chip>
       </div>
       <div className="flex flex-col gap-2">{children}</div>
@@ -175,19 +173,18 @@ function CollapsibleSection({
 }) {
   return (
     <div className="mb-5">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center gap-2 mb-2 pl-1 text-left"
-      >
-        <Icon.chev
-          size={12}
-          className={`text-stone-400 transition-transform ${open ? "rotate-90" : ""}`}
-        />
-        <h3 className="text-[11px] font-bold tracking-[0.05em] uppercase text-stone-400">
-          {title}
-        </h3>
-        <Chip variant="neutral">{count}</Chip>
-      </button>
+      <h2 className="m-0 mb-2">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          className="flex min-h-10 w-full items-center gap-2 pl-1 text-left"
+        >
+          <Icon.chev size={12} className={`text-fg-muted transition-transform ${open ? "rotate-90" : ""}`} />
+          <span className="text-2xs font-bold uppercase tracking-[.05em] text-fg-muted">{title}</span>
+          <Chip variant="neutral">{count}</Chip>
+        </button>
+      </h2>
       {open && <div className="flex flex-col gap-2">{children}</div>}
     </div>
   );
@@ -206,6 +203,7 @@ function FeedbackCard({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(fb.text);
+  const confirm = useConfirm();
 
   function save() {
     const t = draft.trim();
@@ -218,49 +216,42 @@ function FeedbackCard({
     toast.success("Aktualisiert");
   }
 
-  function remove() {
-    if (!confirm("Feedback löschen?")) return;
-    deleteFeedback(fb.id);
-    toast.success("Gelöscht");
+  async function remove() {
+    const ok = await confirm({ title: "Feedback löschen?", confirmLabel: "Löschen", tone: "danger" });
+    if (!ok) return;
+    deleteFeedback(fb.id)
+      .then(() => toast.success("Gelöscht"))
+      .catch(() => toast.error("Löschen hat nicht geklappt – bitte nochmal"));
   }
 
   return (
-    <div
-      className="px-3.5 py-3 rounded-2xl border bg-white dark:bg-stone-800 border-[#F0EBE6] dark:border-[#3A3633]"
-      style={fb.resolved ? { opacity: 0.7 } : undefined}
-    >
+    <div className={`rounded-card border border-line-subtle bg-surface px-3.5 py-3 ${fb.resolved ? "opacity-70" : ""}`}>
       {editing ? (
         <div className="space-y-2">
           <textarea
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             rows={3}
-            className="w-full px-3 py-2 text-[14px] rounded-xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-stone-900 dark:text-stone-50 resize-none leading-snug outline-none focus:border-violet-600"
+            aria-label="Feedback bearbeiten"
+            className="w-full resize-none rounded-xl border border-line-control bg-surface px-3 py-2 text-sm leading-snug text-fg outline-none focus:border-accent"
             autoFocus
           />
-          <div className="flex gap-2 justify-end">
-            <button onClick={() => setEditing(false)} className="text-xs font-semibold text-stone-500 px-2 py-1.5">
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setEditing(false)}>
               Abbrechen
-            </button>
-            <button
-              onClick={save}
-              disabled={!draft.trim()}
-              className="text-xs font-semibold text-violet-700 dark:text-violet-300 px-2 py-1.5 disabled:opacity-50"
-            >
+            </Button>
+            <Button size="sm" onClick={save} disabled={!draft.trim()}>
               Speichern
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
         <>
-          <div
-            className="text-[14px] leading-[1.5] whitespace-pre-wrap text-stone-900 dark:text-stone-50"
-            style={fb.resolved ? { textDecoration: "line-through", textDecorationColor: "#A8A29E" } : undefined}
-          >
+          <div className={`whitespace-pre-wrap text-sm leading-normal text-fg ${fb.resolved ? "line-through decoration-fg-muted" : ""}`}>
             {fb.text}
           </div>
-          <div className="flex items-center justify-between mt-2.5">
-            <div className="flex items-center gap-1.5 text-[11px] text-stone-400 min-w-0">
+          <div className="mt-2 flex items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-1.5 text-2xs text-fg-muted">
               {author ? (
                 <>
                   <Avatar person={author} size={16} />
@@ -275,27 +266,28 @@ function FeedbackCard({
               <span className="shrink-0">{formatRelative(fb.createdAt)}</span>
             </div>
             {canEdit && (
-              <div className="flex gap-1">
+              <div className="-my-1.5 -mr-2 flex shrink-0 items-center">
                 <button
+                  type="button"
                   onClick={() => updateFeedback(fb.id, { resolved: !fb.resolved })}
-                  className="text-[11px] font-semibold text-stone-500 hover:text-emerald-600 px-1.5 py-0.5"
+                  className="min-h-tap px-2 text-xs font-semibold text-fg-soft hover:text-status-received"
                   title={fb.resolved ? "Wieder öffnen" : "Als erledigt markieren"}
                 >
                   {fb.resolved ? "↩ öffnen" : "✓ erledigt"}
                 </button>
-                <button
+                <IconButton
+                  label="Bearbeiten"
+                  size="sm"
                   onClick={() => {
                     setDraft(fb.text);
                     setEditing(true);
                   }}
-                  className="text-stone-400 hover:text-violet-600 px-1.5 py-0.5"
-                  title="Bearbeiten"
                 >
                   <Icon.pencil />
-                </button>
-                <button onClick={remove} className="text-stone-400 hover:text-red-500 px-1.5 py-0.5" title="Löschen">
+                </IconButton>
+                <IconButton label="Löschen" size="sm" onClick={() => void remove()}>
                   <Icon.trash size={14} />
-                </button>
+                </IconButton>
               </div>
             )}
           </div>
@@ -305,4 +297,3 @@ function FeedbackCard({
   );
 }
 
-void Input;

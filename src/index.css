@@ -4,11 +4,135 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design-Tokens ───────────────────────────────────────────────
+   RGB-Kanäle (ohne rgb()), damit Tailwind-Alpha funktioniert:
+   tailwind.config.js mappt sie als rgb(var(--gm-x) / <alpha-value>).
+   Dark Mode kommt weiter über die Klasse .dark am <html> (Gruppen-Setting).
+
+   Kontrast (WCAG 2.x, berechnet mit contrastRatio aus src/lib/colors.ts,
+   abgesichert in src/design-tokens.test.ts):
+     hell:   fg-muted auf surface 5,10:1 · auf canvas 4,88:1 · auf surface-2 4,54:1
+             fg-soft auf surface-2 6,79:1 · line-control auf surface 3,69:1
+             Status-Text auf -soft: open 6,59 · vote 6,37 · done 5,98 · received 4,84
+             wish-text auf wish-soft 6,84 · wish (Kante/Stern) auf surface 3,19
+     dunkel: fg-muted auf surface 6,01:1 · auf canvas 6,93:1 · auf surface-2 4,74:1
+             fg-soft auf surface-2 8,03:1 · line-control auf surface 3,16:1
+             Status-Text auf -soft: open 8,32 · vote 10,39 · done 8,25 · received 9,94
+             wish-text auf wish-soft 9,55 · wish auf surface 9,09
+     Weiß auf grad-primary: 6,29 (#4F46E5) bis 5,70:1 (#7C3AED). */
 :root {
-  --gm-bg: #FAFAF9;
+  color-scheme: light;
+  --gm-canvas: 250 250 249;       /* #FAFAF9 Seitenhintergrund */
+  --gm-surface: 255 255 255;      /* Karten */
+  --gm-surface-2: 245 241 237;    /* #F5F1ED Segmented, neutrale Chips */
+  --gm-line-subtle: 240 235 230;  /* #F0EBE6 Karten-Rand (dekorativ) */
+  --gm-line: 231 229 228;         /* stone-200 Trenner */
+  --gm-line-control: 138 132 127; /* #8A847F Rand von Inputs/Checkboxen */
+  --gm-fg: 28 25 23;              /* stone-900 */
+  --gm-fg-soft: 87 83 78;         /* stone-600 */
+  --gm-fg-muted: 115 109 104;     /* #736D68 – ersetzt stone-400 (2,5:1) */
+  --gm-accent: 124 58 237;        /* violet-600: Flächen, Ränder */
+  --gm-accent-text: 109 40 217;   /* violet-700: Text, Preise, Links */
+  --gm-accent-soft: 237 233 254;  /* violet-100 */
+  --gm-danger: 185 28 28;         /* red-700 */
+  --gm-danger-soft: 254 226 226;  /* red-100 */
+  --gm-status-open: 7 89 133;           /* sky-800 – Ideen */
+  --gm-status-open-soft: 224 242 254;   /* sky-100 */
+  --gm-status-vote: 146 64 14;          /* amber-800 – Abstimmung */
+  --gm-status-vote-soft: 254 243 199;   /* amber-100 */
+  --gm-status-done: 109 40 217;         /* violet-700 – Entschieden */
+  --gm-status-done-soft: 237 233 254;   /* violet-100 */
+  --gm-status-received: 4 120 87;       /* emerald-700 – Erhalten */
+  --gm-status-received-soft: 209 250 229; /* emerald-100 */
+  --gm-wish: 217 119 6;           /* amber-600 – Wünsche: Stern, Akzentkante */
+  --gm-wish-text: 146 64 14;      /* amber-800 */
+  --gm-wish-soft: 255 251 235;    /* amber-50 */
+  --gm-glow: 237 233 254;         /* #EDE9FE Radial-Schein oben */
+  --gm-grad-primary: linear-gradient(135deg, #4F46E5 0%, #7C3AED 100%);
+  --gm-grad-hero: linear-gradient(135deg, #2563EB 0%, #7C3AED 100%);
+  --gm-shadow-card: 0 1px 2px rgb(28 25 23 / 0.04), 0 4px 14px -8px rgb(28 25 23 / 0.08);
+  --gm-shadow-primary: 0 6px 16px -4px rgb(124 58 237 / 0.45);
+  /* Alias für bestehende Inline-Styles var(--gm-bg). */
+  --gm-bg: rgb(var(--gm-canvas));
 }
 .dark {
-  --gm-bg: #1C1917;
+  color-scheme: dark;
+  --gm-canvas: 28 25 23;          /* #1C1917 */
+  --gm-surface: 41 37 36;         /* stone-800 */
+  --gm-surface-2: 58 54 51;       /* #3A3633 */
+  --gm-line-subtle: 58 54 51;
+  --gm-line: 68 64 60;            /* stone-700 */
+  --gm-line-control: 120 113 108; /* stone-500 */
+  --gm-fg: 250 250 249;
+  --gm-fg-soft: 214 211 209;      /* stone-300 */
+  --gm-fg-muted: 168 162 158;     /* stone-400 */
+  --gm-accent: 167 139 250;       /* violet-400 */
+  --gm-accent-text: 196 181 253;  /* violet-300 */
+  --gm-accent-soft: 46 16 101;    /* violet-950 */
+  --gm-danger: 254 202 202;       /* red-200 */
+  --gm-danger-soft: 69 10 10;     /* red-950 */
+  --gm-status-open: 125 211 252;
+  --gm-status-open-soft: 8 47 73;
+  --gm-status-vote: 252 211 77;
+  --gm-status-vote-soft: 69 26 3;
+  --gm-status-done: 196 181 253;
+  --gm-status-done-soft: 46 16 101;
+  --gm-status-received: 110 231 183;
+  --gm-status-received-soft: 2 44 34;
+  --gm-wish: 251 191 36;          /* amber-400 */
+  --gm-wish-text: 252 211 77;     /* amber-300 */
+  --gm-wish-soft: 59 42 16;       /* #3B2A10 */
+  --gm-glow: 46 16 101;
+  --gm-shadow-card: inset 0 1px 0 rgb(255 255 255 / 0.04);
+  --gm-bg: rgb(var(--gm-canvas));
+}
+
+/* ── Illustrations-Tokens (Tutorial, src/components/tutorial) ────
+   Alle Farben der Inline-SVGs kommen von hier, damit der Dark Mode ohne
+   Extra-Code funktioniert. Demo-Personen haben feste Farben aus der
+   PALETTE (src/lib/colors.ts): Lea = „du“, Anna, Ben, Mia, Tom. */
+:root {
+  --ill-blob: #EDE9FE;
+  --ill-phone: #E7E5E4;
+  --ill-screen: #FFFFFF;
+  --ill-card: #FFFFFF;
+  --ill-card-line: #E7E5E4;
+  --ill-line: #D6D3D1;
+  --ill-line-strong: #A8A29E;
+  --ill-soft: #F5F3FF;
+  --ill-accent: #7C3AED;
+  --ill-grad-from: #4F46E5;
+  --ill-grad-to: #7C3AED;
+  --ill-bow: #C4B5FD;
+  --ill-on-accent: #FFFFFF;
+  --ill-amber: #F59E0B;
+  --ill-amber-soft: #FEF3C7;
+  --ill-badge: #E11D48;
+  --ill-scrim: rgba(28, 25, 23, 0.28);
+  --ill-frost: rgba(255, 255, 255, 0.72);
+  --ill-spark-1: #A78BFA;
+  --ill-spark-2: #F472B6;
+  --ill-spark-3: #FBBF24;
+  --ill-p-lea: #0D9488;
+  --ill-p-anna: #DB2777;
+  --ill-p-ben: #0284C7;
+  --ill-p-mia: #16A34A;
+  --ill-p-tom: #D97706;
+}
+.dark {
+  --ill-blob: rgba(124, 58, 237, 0.18);
+  --ill-phone: #44403C;
+  --ill-screen: #1C1917;
+  --ill-card: #292524;
+  --ill-card-line: #3A3633;
+  --ill-line: #57534E;
+  --ill-line-strong: #78716C;
+  --ill-soft: #2E1065;
+  --ill-accent: #A78BFA;
+  --ill-bow: #DDD6FE;
+  --ill-amber-soft: rgba(245, 158, 11, 0.16);
+  --ill-scrim: rgba(0, 0, 0, 0.45);
+  --ill-frost: rgba(28, 25, 23, 0.72);
 }
 
 @layer base {
@@ -18,14 +142,23 @@
   body {
     font-family: "Inter", -apple-system, system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
-    background: var(--gm-bg);
-    color: #1C1917;
+    background: rgb(var(--gm-canvas));
+    color: rgb(var(--gm-fg));
   }
-  .dark body {
-    color: #FAFAF9;
+  /* Scrollbar nur auf Touch-Geräten ausblenden – am Desktop fehlt sonst
+     jeder Scroll-Hinweis (z. B. in Sheets). */
+  @media (pointer: coarse) {
+    ::-webkit-scrollbar { width: 0; height: 0; }
   }
-  ::-webkit-scrollbar { width: 0; height: 0; }
   input::placeholder { color: #A8A29E; }
+
+  /* Sichtbarer Tastatur-Fokus für alles Bedienbare. Maus/Touch lösen
+     :focus-visible bei Buttons nicht aus; Felder mit outline-none nutzen
+     eigene Fokus-Stile (Rand/Ring). */
+  :focus-visible {
+    outline: 2px solid rgb(var(--gm-accent));
+    outline-offset: 2px;
+  }
 
   /* Mobile-Safari + Android-Chrome zoomen beim Focus rein, sobald die
      font-size eines Inputs < 16px ist (Add-Button rutscht dadurch aus dem
@@ -49,6 +182,34 @@
   .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
   .animate-slideUp { animation: slideUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1); }
   .animate-shake { animation: shake 0.4s; }
+}
+
+/* Reduzierte Bewegung (Systemeinstellung): Animationen und Übergänge aus,
+   Endlos-Animationen (Konfetti, Puls, Spinner) laufen höchstens einmal. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Tutorial: Mikro-Animationen nur auf der aktiven Seite und nur, wenn
+   keine reduzierte Bewegung gewünscht ist. */
+@media (prefers-reduced-motion: no-preference) {
+  [data-active="true"] .ill-drop { animation: illDrop 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) 0.15s both; }
+  [data-active="true"] .ill-pop { animation: illPop 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) 0.35s both; }
+}
+.ill-pop { transform-box: fill-box; transform-origin: center; }
+@keyframes illDrop {
+  from { transform: translateY(-10px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes illPop {
+  0% { transform: scale(0); }
+  70% { transform: scale(1.2); }
+  100% { transform: scale(1); }
 }
 
 @keyframes fadeIn {

@@ -25,7 +25,7 @@ export default defineConfig({
         orientation: "portrait",
         lang: "de",
         background_color: "#673EB7",
-        theme_color: "#F59E0B",
+        theme_color: "#6D28D9",
         categories: ["lifestyle", "productivity", "social"],
         icons: [
           {
@@ -95,6 +95,8 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      // Reine Logik, die Frontend und Cloud Functions teilen (kein firebase-admin).
+      "@shared": path.resolve(__dirname, "./functions/src/shared"),
     },
   },
 });

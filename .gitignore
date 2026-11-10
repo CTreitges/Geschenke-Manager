@@ -50,3 +50,10 @@ vite.config.d.ts
 vite.config.js
 scripts/
 dist-debug/
+
+# Emulator-Screenshots (npm run emu:shots)
+e2e/.shots/
+
+# Playwright (npm run e2e)
+test-results/
+playwright-report/

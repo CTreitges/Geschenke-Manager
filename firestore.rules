@@ -31,10 +31,80 @@ service cloud.firestore {
         exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
     }
 
+    // Läuft die Abstimmung zum Geschenk `giftId`? Wie pollPhase() in
+    // functions/src/shared/poll.ts: aktiv und Frist (Server-Uhr) offen.
+    function pollRunning(groupId, giftId) {
+      let path = /databases/$(database)/documents/groups/$(groupId)/polls/$(giftId);
+      return exists(path) && isRunningPoll(get(path).data);
+    }
+
+    // Ohne startedAt ist der Beginn unbekannt → gilt als abgelaufen.
+    function isRunningPoll(poll) {
+      return poll.status == 'active'
+        && 'startedAt' in poll
+        && pollEnd(poll) > request.time.toMillis();
+    }
+
+    // Wie effectiveEndsAt(): endsAt nur, wenn > startedAt (alte Clients lassen
+    // beim Neustart ein altes endsAt stehen); sonst startedAt + 48 Std
+    // (LEGACY_POLL_DURATION_MS) – auch für Alt-Runden ganz ohne endsAt.
+    function pollEnd(poll) {
+      return ('endsAt' in poll && poll.endsAt > poll.startedAt)
+        ? poll.endsAt
+        : poll.startedAt + 172800000;
+    }
+
+    // Ganzzahlig, nicht negativ und höchstens `ahead` ms in der Zukunft. Ein
+    // extremer Wert ließe sich nicht als Datum formatieren.
+    function validTimestamp(value, ahead) {
+      return value is int && value >= 0 && value <= request.time.toMillis() + ahead;
+    }
+
+    // Poll-Doc: Status active/closed; endsAt höchstens 60 Tage voraus (längste
+    // Dauer 1 Woche plus Verlängern), startedAt höchstens 1 Tag (Uhrzeit-Abweichung).
+    // Verwerfen = Doc löschen; "none" bleibt erlaubt, weil alte, gecachte
+    // Clients so verwerfen (normalizePoll/pollPhase werten es als „kein Poll“).
+    function validPoll(data) {
+      return data.status in ['active', 'closed', 'none']
+        && (!('endsAt' in data) || validTimestamp(data.endsAt, 5184000000))
+        && (!('startedAt' in data) || validTimestamp(data.startedAt, 86400000));
+    }
+
+    function pollFieldChanged(field) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasAny([field]);
+    }
+
+    function noVotes(data) {
+      return data.get('votes', {}).size() == 0;
+    }
+
+    // Die Identität ist ein selbst gewähltes Label: Das bindet Stimmen an EINE
+    // Person je Mitglied, verhindert aber nicht, die Identität zu wechseln.
+    function myPersonId(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.get('identityPersonId', '');
+    }
+
+    function onlyMyVoteChanged(groupId) {
+      return request.resource.data.get('votes', {}).diff(resource.data.get('votes', {}))
+        .affectedKeys().hasOnly([myPersonId(groupId)]);
+    }
+
+    // Stimmen ändern: nur die eigene in der laufenden Runde. Eine neue Runde
+    // darf sie leeren, aber nicht vorbelegen.
+    function votesUpdateAllowed(groupId) {
+      return !pollFieldChanged('votes')
+        || (pollFieldChanged('startedAt') && noVotes(request.resource.data))
+        || (isRunningPoll(resource.data) && onlyMyVoteChanged(groupId));
+    }
+
+    // Ein neues startedAt ist eine neue Runde (Push) – nicht über eine laufende.
+    function startedAtUpdateAllowed() {
+      return !pollFieldChanged('startedAt') || !isRunningPoll(resource.data);
+    }
+
     function isFeedbackOwner() {
       return request.auth != null
-        && request.auth.token.email != null
-        && request.auth.token.email.lower() == 'owner@example.invalid';
+        && request.auth.uid == 't7DmIhxGu9ZniAnmeGVmgEGnW4F2'; // wie FEEDBACK_OWNER_UID in src/lib/feedback-owner.ts
     }
 
     // Cross-group feedback inbox. Owner sees all; everyone else only sees
@@ -78,21 +148,43 @@ service cloud.firestore {
         allow list: if isMember(groupId);
         allow create: if false; // only via createGroup / joinGroup
         // Updates erlaubt für den eigenen Member-Eintrag, aber nur für
-        // den notifyStack-Toggle und das identityPersonId-Feld (Cloud-Sync
-        // der "Wer bin ich?"-Auswahl). Alles andere (joinedAt, uid) bleibt
+        // die Push-Schalter (notifyStack = Geburtstage, notifyPolls =
+        // Abstimmungen) und das identityPersonId-Feld (Cloud-Sync der
+        // "Wer bin ich?"-Auswahl). Alles andere (joinedAt, uid) bleibt
         // immutable.
         allow update: if request.auth != null
           && request.auth.uid == uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["notifyStack", "identityPersonId"]);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["notifyStack", "identityPersonId", "notifyPolls"]);
         allow delete: if request.auth != null && request.auth.uid == uid;
       }
 
       // Group data — only members.
       match /persons/{doc}      { allow read, write: if isMember(groupId); }
       match /gifts/{doc}        { allow read, write: if isMember(groupId); }
-      match /suggestions/{doc}  { allow read, write: if isMember(groupId); }
+      // Ideen: Anlegen ist gesperrt, solange die Abstimmung des Geschenks
+      // läuft – damit alle über dasselbe abstimmen (greift auch bei alten,
+      // gecachten App-Versionen). Der Batch von deleteGift (Ideen + Poll
+      // löschen) bleibt möglich. Umhängen geht nur zwischen Geschenken ohne
+      // laufende Abstimmung (deduplicateOpenGifts verschiebt Ideen).
+      match /suggestions/{doc}  {
+        allow read, delete: if isMember(groupId);
+        allow update: if isMember(groupId)
+          && (request.resource.data.get('giftId', '') == resource.data.get('giftId', '')
+            || (!pollRunning(groupId, resource.data.giftId)
+              && !pollRunning(groupId, request.resource.data.giftId)));
+        allow create: if isMember(groupId)
+          && !pollRunning(groupId, request.resource.data.giftId);
+      }
       match /wishlist/{doc}     { allow read, write: if isMember(groupId); }
-      match /polls/{doc}        { allow read, write: if isMember(groupId); }
+      // Stimmen ändern geht nur, solange die Runde läuft – auch alte Clients
+      // oder falsch gehende Uhren kippen so kein beendetes Ergebnis.
+      match /polls/{doc}        {
+        allow read, delete: if isMember(groupId);
+        allow create: if isMember(groupId) && validPoll(request.resource.data)
+          && noVotes(request.resource.data);
+        allow update: if isMember(groupId) && validPoll(request.resource.data)
+          && votesUpdateAllowed(groupId) && startedAtUpdateAllowed();
+      }
 
       // Archiv-Verlauf für Restore. Schreibt die archiveGroupDocChange-
       // Cloud-Function via Admin-SDK (bypasst Rules). Members dürfen
@@ -103,6 +195,13 @@ service cloud.firestore {
         allow read, delete: if isMember(groupId);
         allow create, update: if false;
       }
+
+      // Push-Idempotenz-Marker (_push) und Emulator-Versandprotokoll
+      // (_debugPush) schreiben nur Cloud Functions via Admin-SDK. Kein
+      // Client-Zugriff — auch nicht für Mitglieder (wäre ohnehin Default-
+      // Deny, steht hier zur Klarheit). deleteGroup löscht sie rekursiv mit.
+      match /_push/{doc}        { allow read, write: if false; }
+      match /_debugPush/{doc}   { allow read, write: if false; }
     }
 
     // Legacy top-level collections from the pre-multi-group era — locked.

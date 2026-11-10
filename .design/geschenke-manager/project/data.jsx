@@ -5,7 +5,7 @@ const TODAY = new Date('2026-05-08T12:00:00');
 const PEOPLE_INIT = [
   { id: 'p_kevin', name: 'Kevin',  birthday: '1996-05-15', email: 'kevin@gmx.de',  color: '#F59E0B' },
   { id: 'p_sara',  name: 'Sara',   birthday: '1995-05-28', email: 'sara@web.de',   color: '#EC4899' },
-  { id: 'p_tim',   name: 'Tim',    birthday: '1994-06-03', email: 'owner@example.invalid', color: '#06B6D4' },
+  { id: 'p_tim',   name: 'Tim',    birthday: '1994-06-03', email: 'tim@example.com', color: '#06B6D4' },
   { id: 'p_lena',  name: 'Lena',   birthday: '1997-07-12', email: 'lena@gmx.de',   color: '#8B5CF6' },
   { id: 'p_marc',  name: 'Marc',   birthday: '1993-09-05', email: 'marc@web.de',   color: '#10B981' },
   { id: 'p_anna',  name: 'Anna',   birthday: '1998-11-22', email: 'anna@me.com',   color: '#F97316' },

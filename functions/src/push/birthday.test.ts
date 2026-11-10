@@ -86,7 +86,7 @@ describe("planBirthdayPushes", () => {
     });
     expect(rest).toEqual([]);
     expect(plan.markerId).toBe("birthday-p-anna-2026");
-    expect([...plan.others.tokens].sort()).toEqual(["t-anon", "t-ben", "t-shared"]);
+    expect([...plan.others.tokens].sort()).toEqual(["t-ben", "t-shared"]);
     expect(plan.others.data.type).toBe("birthday_stack");
     expect(plan.self.tokens).toEqual(["t-anna"]);
     expect(plan.self.data.type).toBe("birthday_self");

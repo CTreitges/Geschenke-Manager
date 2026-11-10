@@ -156,8 +156,17 @@ describe("selectRecipients – Geburtstag", () => {
       }),
     );
 
-  it("alle mit notifyStack außer der beschenkten Person; Mitglieder ohne Identität bleiben dabei", () => {
-    expect(birthday()).toEqual(["t-anon", "t-ben", "t-clara"]);
+  it("alle mit notifyStack außer der beschenkten Person und Mitgliedern ohne Identität", () => {
+    expect(birthday()).toEqual(["t-ben", "t-clara"]);
+  });
+
+  it("Token eines Mitglieds ohne Identität ist auch unter anderer UID gesperrt", () => {
+    expect(
+      birthday({
+        members: [anon, ben],
+        tokensByUid: { "u-anon": ["t-shared"], "u-ben": ["t-shared", "t-ben"] },
+      }),
+    ).toEqual(["t-ben"]);
   });
 
   it("Token der beschenkten Person unter anderer UID wird gesperrt", () => {

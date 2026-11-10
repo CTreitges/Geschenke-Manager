@@ -49,8 +49,8 @@ function identityOf(member: PushMember): string {
  *
  * Gesperrt werden alle Tokens von Mitgliedern mit Identität == beschenkter
  * Person — auch wenn derselbe Token (= dasselbe Gerät) zusätzlich unter einer
- * anderen UID liegt. Bei Abstimmungen gilt dasselbe für Mitglieder ohne
- * Identität (könnte die beschenkte Person sein).
+ * anderen UID liegt. Dasselbe gilt für Mitglieder ohne Identität (könnte
+ * die beschenkte Person sein).
  */
 export function selectRecipients(input: SelectRecipientsInput): string[] {
   const { members, tokensByUid, kind, blockedPersonId } = input;
@@ -60,8 +60,7 @@ export function selectRecipients(input: SelectRecipientsInput): string[] {
   for (const m of members) {
     const id = identityOf(m);
     const isGiftee = id !== "" && id === blockedPersonId;
-    const unknownInPoll = kind === "poll" && id === "";
-    if (isGiftee || unknownInPoll) tokensOf(m.uid).forEach((t) => blocked.add(t));
+    if (isGiftee || id === "") tokensOf(m.uid).forEach((t) => blocked.add(t));
   }
 
   const targets =
@@ -76,7 +75,7 @@ export function selectRecipients(input: SelectRecipientsInput): string[] {
   for (const m of members) {
     const id = identityOf(m);
     if (id !== "" && id === blockedPersonId) continue;
-    if (kind === "poll" && id === "") continue;
+    if (id === "") continue;
     if (targets && !targets.has(id)) continue;
     if (id !== "" && excluded.has(id)) continue;
     if (input.requireNoVote && input.requireNoVote.has(id)) continue;

@@ -212,6 +212,11 @@ service cloud.firestore {
     match /polls/{doc}        { allow read, write: if false; }
     match /settings/{doc}     { allow read, write: if false; }
 
+    // Zähler des joinGroup-Rate-Limits (functions/src/rateLimit.ts) je UID
+    // bzw. Client-IP. Nur die Function via Admin-SDK; sonst könnte ein
+    // Client seine Sperre zurücksetzen oder fremde IPs/UIDs auslesen.
+    match /_rateLimits/{doc}    { allow read, write: if false; }
+
     // Birthday-reminder magic links. Only Cloud Functions read/write these.
     match /magic_tokens/{token} { allow read, write: if false; }
 

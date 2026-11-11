@@ -130,10 +130,36 @@ export function memoryFirestore(initial: Record<string, Data>, options: MemoryFi
           writes.push(() => applyUpdate(ref.path, data));
           return tx;
         },
+        set: (ref: DocRef, data: Data) => {
+          writes.push(() => docs.set(ref.path, data));
+          return tx;
+        },
+        delete: (ref: DocRef) => {
+          writes.push(() => docs.delete(ref.path));
+          return tx;
+        },
       };
       const result = await fn(tx);
       writes.forEach((w) => w());
       return result;
+    },
+    // Batch wie die Transaktion: Writes erst beim Commit.
+    batch: () => {
+      const writes: (() => void)[] = [];
+      const batch = {
+        set: (ref: DocRef, data: Data) => {
+          writes.push(() => docs.set(ref.path, data));
+          return batch;
+        },
+        update: (ref: DocRef, data: Data) => {
+          writes.push(() => applyUpdate(ref.path, data));
+          return batch;
+        },
+        commit: async () => {
+          writes.forEach((w) => w());
+        },
+      };
+      return batch;
     },
   };
 

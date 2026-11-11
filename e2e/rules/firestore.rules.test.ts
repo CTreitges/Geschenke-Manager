@@ -512,3 +512,33 @@ describe("feedback – Owner per UID (CTR-137)", () => {
     await assertSucceeds(getDoc(doc(dbAs("jemand"), "feedback/f1")));
   });
 });
+
+describe("_rateLimits – Zähler des joinGroup-Rate-Limits (TS-GM)", () => {
+  const own = "_rateLimits/join_uid_alice";
+  const seedCounter = () =>
+    env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), own), { count: 5, windowStart: 1 });
+    });
+
+  it("eigener Zähler ist weder lesbar noch auflistbar", async () => {
+    await seedCounter();
+    await assertFails(getDoc(doc(dbAs("alice"), own)));
+    await assertFails(getDocs(collection(dbAs("alice"), "_rateLimits")));
+  });
+
+  it("eigener Zähler lässt sich weder zurücksetzen, löschen noch neu anlegen", async () => {
+    await seedCounter();
+    const db = dbAs("alice");
+    await assertFails(setDoc(doc(db, own), { count: 0, windowStart: 1 }));
+    await assertFails(updateDoc(doc(db, own), { count: 0 }));
+    await assertFails(deleteDoc(doc(db, own)));
+    await assertFails(setDoc(doc(db, "_rateLimits/join_uid_neu"), { count: 0, windowStart: 1 }));
+  });
+
+  it("auch ohne Anmeldung kein Zugriff", async () => {
+    await seedCounter();
+    const anon = env.unauthenticatedContext().firestore();
+    await assertFails(getDoc(doc(anon, own)));
+    await assertFails(deleteDoc(doc(anon, own)));
+  });
+});

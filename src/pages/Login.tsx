@@ -4,6 +4,7 @@ import { Button, Icon, Input, Overline, useConfirm } from "@/components/ui";
 import { GlowScreen, LogoTile } from "@/components/GlowScreen";
 import { addKnownGroup, getGroupId, isAuthed, setAuthed, setGroupId, useKnownGroups } from "@/lib/auth";
 import { signInWithGoogle, signOutAndReanon, useFirebaseUser } from "@/lib/firebase";
+import { loginNotice } from "@/lib/accessLoss";
 import { loginTarget } from "@/lib/nav";
 import { joinGroupCF, listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { toast } from "sonner";
@@ -16,7 +17,9 @@ export default function Login() {
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
   // Nach dem Login zurück dorthin, wo RequireAuth abgefangen hat (inkl. ?vote=1).
-  const returnTo = loginTarget(useLocation().state);
+  const location = useLocation();
+  const returnTo = loginTarget(location.state);
+  const notice = loginNotice(location.state);
   const goToTarget = () => nav(returnTo, { replace: true });
   const confirm = useConfirm();
   const knownGroups = useKnownGroups();
@@ -44,6 +47,8 @@ export default function Login() {
           toast.error("Gruppe nicht gefunden");
         } else if (code === "functions/permission-denied") {
           toast.error("Falsches Passwort");
+        } else if (code === "functions/resource-exhausted") {
+          toast.error("Zu viele Versuche – bitte in 15 Minuten erneut probieren");
         } else if (code === "functions/unauthenticated") {
           toast.error("Anonyme Anmeldung läuft noch — gleich nochmal");
         } else {
@@ -190,6 +195,12 @@ export default function Login() {
         </button>
       )}
 
+      {notice && (
+        <p role="status" className="m-0 mb-5 rounded-card border border-accent/30 bg-accent-soft px-3.5 py-3 text-meta font-medium text-fg">
+          {notice}
+        </p>
+      )}
+
       {showSaved && (
         <div className="mb-5">
           <Overline className="mb-1.5 pl-1">Schon eingeloggt</Overline>
@@ -200,6 +211,8 @@ export default function Login() {
                 type="button"
                 onClick={() => {
                   setGroupId(g);
+                  // Neu abonnieren: setzt einen alten Zugangsverlust zurück.
+                  setActiveGroup(g);
                   goToTarget();
                 }}
                 className="flex min-h-12 w-full items-center gap-2 border-t border-line-subtle px-3.5 py-2.5 first:border-t-0 hover:bg-surface-2/60"

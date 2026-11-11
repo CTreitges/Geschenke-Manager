@@ -79,6 +79,7 @@ export default function ShareGift() {
       setTimeout(() => setShake(false), 400);
       if (code === "functions/not-found") toast.error("Gruppe nicht gefunden");
       else if (code === "functions/permission-denied") toast.error("Falsches Passwort");
+      else if (code === "functions/resource-exhausted") toast.error("Zu viele Versuche – bitte in 15 Minuten erneut probieren");
       else if (code === "functions/unauthenticated") toast.error("Anonyme Anmeldung startet — kurz warten und nochmal");
       else toast.error("Login fehlgeschlagen");
     } finally {

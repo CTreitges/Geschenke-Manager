@@ -12,6 +12,7 @@ import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { shouldArchive } from "./archive";
 import { runJoinGroup } from "./join";
+import { clientIp } from "./rateLimit";
 import { hashPassword, randomSalt, verifyPassword } from "./password";
 import { NOT_MEMBER_MESSAGE } from "./shared/errors";
 import { runBirthdayPush } from "./push/birthdayJob";
@@ -143,7 +144,7 @@ export const joinGroup = onCall({ region: REGION }, async (request) => {
   const password = requirePassword((request.data as { password?: unknown })?.password);
   // Rate-Limit je UID und je Client-IP (rateLimit.ts); Log ohne Passwort,
   // Gruppen-ID und IP.
-  return runJoinGroup(db, { uid, ip: request.rawRequest?.ip }, groupId, password, {
+  return runJoinGroup(db, { uid, ip: clientIp(request.rawRequest) }, groupId, password, {
     logRateLimited: ({ uid: who, scope }) =>
       logger.warn("joinGroup rate-limited", { uid: who, scope }),
   });

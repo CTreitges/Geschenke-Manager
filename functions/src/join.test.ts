@@ -6,6 +6,7 @@ import {
   JOIN_MAX_ATTEMPTS_PER_UID,
   JOIN_WINDOW_MS,
   RATE_LIMIT_COLLECTION,
+  clientIp,
   type LimitScope,
 } from "./rateLimit";
 
@@ -32,6 +33,18 @@ async function failTimes(join: (uid: string, pw: string, ip?: string) => Promise
     await expect(join(uid, `falsch-${i}`, ip)).rejects.toMatchObject({ code: "permission-denied" });
   }
 }
+
+describe("clientIp", () => {
+  it("nimmt den rechten X-Forwarded-For-Eintrag (vom Google Front End), nicht den vom Client", () => {
+    expect(clientIp({ headers: { "x-forwarded-for": "6.6.6.6, 203.0.113.9" }, ip: "6.6.6.6" })).toBe("203.0.113.9");
+    expect(clientIp({ headers: { "x-forwarded-for": "203.0.113.9" } })).toBe("203.0.113.9");
+  });
+
+  it("fällt ohne Header auf rawRequest.ip zurück, sonst undefined", () => {
+    expect(clientIp({ headers: {}, ip: "127.0.0.1" })).toBe("127.0.0.1");
+    expect(clientIp(undefined)).toBeUndefined();
+  });
+});
 
 describe("joinGroup Rate-Limit je Aufrufer", () => {
   it("lehnt nach N Fehlversuchen mit resource-exhausted ab – auch mit richtigem Passwort", async () => {
@@ -67,12 +80,21 @@ describe("joinGroup Rate-Limit je Aufrufer", () => {
     await expect(join("u1", PASSWORD)).rejects.toMatchObject({ code: "resource-exhausted" });
   });
 
-  it("ein erfolgreicher Beitritt setzt den eigenen Zähler zurück", async () => {
+  it("ein erfolgreicher Beitritt verbraucht keinen Versuch", async () => {
     const { join } = setup();
-    await failTimes(join, "u1", JOIN_MAX_ATTEMPTS_PER_UID - 1);
-    await join("u1", PASSWORD);
-    await failTimes(join, "u1", JOIN_MAX_ATTEMPTS_PER_UID - 1);
-    await expect(join("u1", PASSWORD)).resolves.toEqual({ ok: true });
+    for (let i = 0; i < JOIN_MAX_ATTEMPTS_PER_UID + 2; i++) {
+      await expect(join("u1", PASSWORD, "203.0.113.9")).resolves.toEqual({ ok: true });
+    }
+  });
+
+  it("Beitritt zur eigenen Gruppe setzt die Fehlversuche gegen eine fremde nicht zurück", async () => {
+    const { join, docs } = setup();
+    docs.set("groups/own", { defaultBudget: 10 });
+    docs.set("groups/own/_meta/auth", { salt: SALT, hash: HASH, version: 1 });
+    await failTimes(join, "attacker", JOIN_MAX_ATTEMPTS_PER_UID - 1);
+    await expect(join("attacker", PASSWORD, undefined, "own")).resolves.toEqual({ ok: true });
+    await failTimes(join, "attacker", 1);
+    await expect(join("attacker", PASSWORD)).rejects.toMatchObject({ code: "resource-exhausted" });
   });
 
   it("sperrt viele frische UIDs von einer IP nach der IP-Grenze", async () => {

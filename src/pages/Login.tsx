@@ -211,6 +211,8 @@ export default function Login() {
                 type="button"
                 onClick={() => {
                   setGroupId(g);
+                  // Neu abonnieren: setzt einen alten Zugangsverlust zurück.
+                  setActiveGroup(g);
                   goToTarget();
                 }}
                 className="flex min-h-12 w-full items-center gap-2 border-t border-line-subtle px-3.5 py-2.5 first:border-t-0 hover:bg-surface-2/60"

@@ -22,6 +22,24 @@ interface Counter {
   windowStart: number;
 }
 
+/**
+ * Client-IP für den Zähler. Der rechte X-Forwarded-For-Eintrag stammt vom
+ * Google Front End; alles links davon kann der Client selbst setzen (sonst
+ * ließe sich die IP-Grenze umgehen oder eine fremde IP aussperren).
+ * rawRequest.ip ist mit `trust proxy` der linke Eintrag – nur Fallback.
+ */
+export function clientIp(req: { headers?: Record<string, string | string[] | undefined>; ip?: string } | undefined): string | undefined {
+  const header = req?.headers?.["x-forwarded-for"];
+  const raw = Array.isArray(header) ? header.join(",") : header;
+  const last = raw?.split(",").map((s) => s.trim()).filter(Boolean).pop();
+  return last || req?.ip || undefined;
+}
+
+/** Für eine Firestore-TTL-Policy auf `_rateLimits.expireAt` (DEPLOY-Hinweis). */
+function expireAt(windowStart: number): Date {
+  return new Date(windowStart + 2 * JOIN_WINDOW_MS);
+}
+
 export interface JoinCaller {
   uid: string;
   /** Client-IP laut rawRequest; fehlt sie, zählt nur die UID. */
@@ -67,26 +85,28 @@ export async function reserveJoinAttempt(
     const blocked = scopes.find((s, i) => counters[i].count >= s.max);
     if (blocked) return blocked.scope;
     refs.forEach((ref, i) => {
-      tx.set(ref, { count: counters[i].count + 1, windowStart: counters[i].windowStart });
+      const c = counters[i];
+      tx.set(ref, { count: c.count + 1, windowStart: c.windowStart, expireAt: expireAt(c.windowStart) });
     });
     return null;
   });
 }
 
 /**
- * Nach erfolgreichem Beitritt: UID-Zähler löschen, den reservierten
- * IP-Versuch zurückgeben (sonst sperren viele echte Beitritte aus einem
- * WLAN die IP).
+ * Nach erfolgreichem Beitritt nur den eigenen Versuch zurückgeben – nicht
+ * den Zähler löschen: Sonst setzt ein Beitritt zur selbst angelegten Gruppe
+ * die Fehlversuche gegen eine fremde Gruppe zurück. Echte Beitritte aus
+ * einem WLAN verbrauchen so keine IP-Versuche.
  */
 export async function releaseJoinAttempt(db: Firestore, caller: JoinCaller, now: number): Promise<void> {
+  const scopes = scopesOf(caller);
   await db.runTransaction(async (tx) => {
-    const uidRef = db.doc(counterPath("uid", caller.uid));
-    const ipRef = caller.ip ? db.doc(counterPath("ip", caller.ip)) : null;
-    const ipSnap = ipRef ? await tx.get(ipRef) : null;
-    tx.delete(uidRef);
-    if (ipRef && ipSnap?.exists) {
-      const c = current(ipSnap.data() as Partial<Counter> | undefined, now);
-      if (c.count > 0) tx.set(ipRef, { count: c.count - 1, windowStart: c.windowStart });
-    }
+    const refs = scopes.map((s) => db.doc(counterPath(s.scope, s.key)));
+    const snaps = await Promise.all(refs.map((r) => tx.get(r)));
+    refs.forEach((ref, i) => {
+      if (!snaps[i].exists) return;
+      const c = current(snaps[i].data() as Partial<Counter> | undefined, now);
+      if (c.count > 0) tx.set(ref, { count: c.count - 1, windowStart: c.windowStart, expireAt: expireAt(c.windowStart) });
+    });
   });
 }

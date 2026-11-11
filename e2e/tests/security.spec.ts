@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 import { GROUP_ID, GROUP_PASSWORD, getDb } from "../emu-seed.mjs";
 import { currentUid } from "../emu-session.mjs";
 import { loginAs } from "./helpers";
-import { JOIN_MAX_ATTEMPTS_PER_UID } from "../../functions/src/rateLimit";
+
+// = JOIN_MAX_ATTEMPTS_PER_UID in functions/src/rateLimit.ts. Nicht importiert:
+// functions ist ein CommonJS-Paket, Playwright lädt die Spec als ESM.
+const JOIN_MAX_ATTEMPTS_PER_UID = 5;
 
 // Security Tier 2 (TS-GM) im Emulator: echte joinGroup-Function, echte
 // Rules, echte App.

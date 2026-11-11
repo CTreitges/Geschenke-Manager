@@ -368,9 +368,8 @@ export function setActiveGroup(groupId: string | null) {
       );
     })
     .catch((err) => {
+      // Kein Zugangsverlust (z. B. offline beim Start) → kein Login-Hinweis.
       console.error("auth failed in setActiveGroup:", err);
-      state.permissionError = true;
-      notify();
     });
 }
 

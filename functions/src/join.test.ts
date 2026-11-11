@@ -7,6 +7,7 @@ import {
   JOIN_WINDOW_MS,
   RATE_LIMIT_COLLECTION,
   clientIp,
+  ipBucket,
   type LimitScope,
 } from "./rateLimit";
 
@@ -43,6 +44,45 @@ describe("clientIp", () => {
   it("fällt ohne Header auf rawRequest.ip zurück, sonst undefined", () => {
     expect(clientIp({ headers: {}, ip: "127.0.0.1" })).toBe("127.0.0.1");
     expect(clientIp(undefined)).toBeUndefined();
+  });
+});
+
+describe("ipBucket", () => {
+  it("kürzt IPv6 auf das /64-Präfix, auch in Kurzschreibweise", () => {
+    expect(ipBucket("2001:db8:0:1:aaaa:bbbb:cccc:dddd")).toBe("2001:db8:0:1::/64");
+    expect(ipBucket("2001:DB8:0:1::5")).toBe("2001:db8:0:1::/64");
+    expect(ipBucket("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(ipBucket("fe80::1%eth0")).toBe("fe80:0:0:0::/64");
+  });
+
+  it("lässt IPv4 unverändert und behandelt IPv4-mapped IPv6 als IPv4", () => {
+    expect(ipBucket("203.0.113.9")).toBe("203.0.113.9");
+    expect(ipBucket("::ffff:203.0.113.9")).toBe("203.0.113.9");
+    expect(ipBucket("::ffff:cb00:7109")).toBe("203.0.113.9");
+  });
+});
+
+describe("IPv6-Zähler je /64", () => {
+  async function exhaustIp(join: (uid: string, pw: string, ip?: string) => Promise<unknown>, ips: string[], tag = "a") {
+    // Fehlversuche reihum aus den Adressen, je UID unter der UID-Grenze.
+    for (let i = 0; i < JOIN_MAX_ATTEMPTS_PER_IP; i++) {
+      const uid = `${tag}${Math.floor(i / (JOIN_MAX_ATTEMPTS_PER_UID - 1))}`;
+      await expect(join(uid, `falsch-${i}`, ips[i % ips.length])).rejects.toMatchObject({ code: "permission-denied" });
+    }
+  }
+
+  it("zwei Adressen im selben /64 teilen einen Zähler", async () => {
+    const { join } = setup();
+    await exhaustIp(join, ["2001:db8:0:1::a", "2001:db8:0:1:ffff:1:2:3"]);
+    await expect(join("neu", PASSWORD, "2001:db8:0:1:9::9")).rejects.toMatchObject({ code: "resource-exhausted" });
+  });
+
+  it("verschiedene /64 teilen keinen Zähler; IPv4-mapped zählt wie IPv4", async () => {
+    const { join } = setup();
+    await exhaustIp(join, ["2001:db8:0:1::a"]);
+    await expect(join("neu1", PASSWORD, "2001:db8:0:2::a")).resolves.toEqual({ ok: true });
+    await exhaustIp(join, ["::ffff:198.51.100.7"], "b");
+    await expect(join("neu2", PASSWORD, "198.51.100.7")).rejects.toMatchObject({ code: "resource-exhausted" });
   });
 });
 

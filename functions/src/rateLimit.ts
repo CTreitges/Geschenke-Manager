@@ -1,4 +1,5 @@
 import type { Firestore } from "firebase-admin/firestore";
+import { isIPv4, isIPv6 } from "net";
 
 // Rate-Limit für joinGroup (Security Tier 2). Gezählt wird je Aufrufer –
 // nie je Gruppe allein, sonst könnte ein Dritter mit falschen Passwörtern
@@ -35,6 +36,38 @@ export function clientIp(req: { headers?: Record<string, string | string[] | und
   return last || req?.ip || undefined;
 }
 
+/** IPv6 → 8 Hextets (Zahlen); eingebettetes IPv4 am Ende wird mit umgerechnet. */
+function ipv6Groups(addr: string): number[] {
+  let s = addr;
+  const v4 = /(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(s);
+  if (v4) {
+    const [a, b, c, d] = v4.slice(1).map(Number);
+    s = s.slice(0, v4.index) + `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const [head, tail] = s.split("::");
+  const part = (x: string | undefined) => (x ? x.split(":").map((h) => parseInt(h, 16)) : []);
+  const h = part(head);
+  const t = part(tail);
+  const zeros = tail === undefined ? [] : new Array(8 - h.length - t.length).fill(0);
+  return [...h, ...zeros, ...t];
+}
+
+/**
+ * Schlüssel des IP-Zählers. IPv6 auf das /64-Präfix gekürzt: Ein Anschluss
+ * bekommt meist ein ganzes /64, die hinteren 64 Bit wechselt der Client
+ * beliebig (Privacy Extensions) – sonst wäre jede Adresse ein neuer Zähler.
+ * IPv4 bleibt, IPv4-mapped IPv6 (::ffff:a.b.c.d) zählt als IPv4.
+ */
+export function ipBucket(ip: string): string {
+  const addr = ip.trim().replace(/%.*$/, "");
+  if (isIPv4(addr) || !isIPv6(addr)) return addr;
+  const g = ipv6Groups(addr);
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) {
+    return [g[6] >> 8, g[6] & 0xff, g[7] >> 8, g[7] & 0xff].join(".");
+  }
+  return `${g.slice(0, 4).map((x) => x.toString(16)).join(":")}::/64`;
+}
+
 /** Für eine Firestore-TTL-Policy auf `_rateLimits.expireAt` (DEPLOY-Hinweis). */
 function expireAt(windowStart: number): Date {
   return new Date(windowStart + 2 * JOIN_WINDOW_MS);
@@ -55,7 +88,7 @@ function scopesOf(caller: JoinCaller): { scope: LimitScope; key: string; max: nu
   const scopes: { scope: LimitScope; key: string; max: number }[] = [
     { scope: "uid", key: caller.uid, max: JOIN_MAX_ATTEMPTS_PER_UID },
   ];
-  if (caller.ip) scopes.push({ scope: "ip", key: caller.ip, max: JOIN_MAX_ATTEMPTS_PER_IP });
+  if (caller.ip) scopes.push({ scope: "ip", key: ipBucket(caller.ip), max: JOIN_MAX_ATTEMPTS_PER_IP });
   return scopes;
 }
 

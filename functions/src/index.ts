@@ -11,6 +11,9 @@ import { logger } from "firebase-functions/v2";
 import * as crypto from "crypto";
 import * as nodemailer from "nodemailer";
 import { shouldArchive } from "./archive";
+import { runJoinGroup } from "./join";
+import { hashPassword, randomSalt, verifyPassword } from "./password";
+import { NOT_MEMBER_MESSAGE } from "./shared/errors";
 import { runBirthdayPush } from "./push/birthdayJob";
 import { runTestPush } from "./push/testPush";
 import { birthdayYearFor, daysUntil } from "./shared/dates";
@@ -67,24 +70,6 @@ async function sendMailViaSmtp(mail: MailContent): Promise<void> {
   );
 }
 const GROUP_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9-]{2,29}$/;
-const PBKDF2_ITERATIONS = 210_000;
-const PBKDF2_KEYLEN = 32;
-const PBKDF2_DIGEST = "sha256";
-
-function hashPassword(password: string, salt: string): string {
-  return crypto
-    .pbkdf2Sync(password, salt, PBKDF2_ITERATIONS, PBKDF2_KEYLEN, PBKDF2_DIGEST)
-    .toString("hex");
-}
-
-function randomSalt(): string {
-  return crypto.randomBytes(16).toString("hex");
-}
-
-function legacySha256(text: string): string {
-  return crypto.createHash("sha256").update(text).digest("hex");
-}
-
 function requireAuth(auth: { uid?: string } | undefined): string {
   if (!auth?.uid) {
     throw new HttpsError("unauthenticated", "Anonymous sign-in required");
@@ -109,83 +94,10 @@ function requirePassword(value: unknown, field = "password"): string {
   return value;
 }
 
-interface AuthMeta {
-  salt: string;
-  hash: string;
-  version: number;
-}
-
-async function readAuthMeta(groupId: string): Promise<AuthMeta | null> {
-  const snap = await db.doc(`groups/${groupId}/_meta/auth`).get();
-  if (!snap.exists) return null;
-  const data = snap.data() as Partial<AuthMeta>;
-  if (
-    typeof data.salt !== "string" ||
-    typeof data.hash !== "string" ||
-    typeof data.version !== "number"
-  ) {
-    return null;
-  }
-  return data as AuthMeta;
-}
-
-/**
- * Look at the legacy `passwordHash` field on the group root doc (old
- * SHA-256-without-salt format) and, if it matches the supplied password,
- * upgrade in place to a salted PBKDF2 entry under `_meta/auth`. The legacy
- * field is then deleted. Returns true on successful upgrade, false otherwise.
- */
-async function migrateLegacyHash(
-  groupId: string,
-  password: string,
-): Promise<boolean> {
-  const groupSnap = await db.doc(`groups/${groupId}`).get();
-  if (!groupSnap.exists) return false;
-  const legacyHash = (groupSnap.data() as Record<string, unknown>)?.passwordHash;
-  if (typeof legacyHash !== "string") return false;
-  if (legacySha256(password) !== legacyHash) return false;
-  const salt = randomSalt();
-  const hash = hashPassword(password, salt);
-  const batch = db.batch();
-  batch.set(db.doc(`groups/${groupId}/_meta/auth`), {
-    salt,
-    hash,
-    version: 1,
-  });
-  batch.update(db.doc(`groups/${groupId}`), {
-    passwordHash: FieldValue.delete(),
-  });
-  await batch.commit();
-  return true;
-}
-
-async function verifyPassword(
-  groupId: string,
-  password: string,
-): Promise<void> {
-  let meta = await readAuthMeta(groupId);
-  if (!meta) {
-    // Maybe the group still uses the old top-level passwordHash field — try
-    // to migrate on the fly.
-    const migrated = await migrateLegacyHash(groupId, password);
-    if (!migrated) {
-      throw new HttpsError("permission-denied", "Wrong password");
-    }
-    meta = await readAuthMeta(groupId);
-    if (!meta) {
-      throw new HttpsError("internal", "Auth meta lost after migration");
-    }
-    return;
-  }
-  if (hashPassword(password, meta.salt) !== meta.hash) {
-    throw new HttpsError("permission-denied", "Wrong password");
-  }
-}
-
 async function requireMember(groupId: string, uid: string): Promise<void> {
   const member = await db.doc(`groups/${groupId}/members/${uid}`).get();
   if (!member.exists) {
-    throw new HttpsError("permission-denied", "Not a member");
+    throw new HttpsError("permission-denied", NOT_MEMBER_MESSAGE);
   }
 }
 
@@ -202,7 +114,7 @@ export const createGroup = onCall({ region: REGION }, async (request) => {
   }
 
   const salt = randomSalt();
-  const hash = hashPassword(password, salt);
+  const hash = await hashPassword(password, salt);
 
   const batch = db.batch();
   batch.set(groupRef, {
@@ -229,20 +141,12 @@ export const joinGroup = onCall({ region: REGION }, async (request) => {
   const uid = requireAuth(request.auth);
   const groupId = requireGroupId((request.data as { groupId?: unknown })?.groupId);
   const password = requirePassword((request.data as { password?: unknown })?.password);
-
-  const groupRef = db.doc(`groups/${groupId}`);
-  const groupSnap = await groupRef.get();
-  if (!groupSnap.exists) {
-    throw new HttpsError("not-found", "Group not found");
-  }
-
-  await verifyPassword(groupId, password);
-
-  await db
-    .doc(`groups/${groupId}/members/${uid}`)
-    .set({ joinedAt: Date.now(), uid }, { merge: true });
-
-  return { ok: true };
+  // Rate-Limit je UID und je Client-IP (rateLimit.ts); Log ohne Passwort,
+  // Gruppen-ID und IP.
+  return runJoinGroup(db, { uid, ip: request.rawRequest?.ip }, groupId, password, {
+    logRateLimited: ({ uid: who, scope }) =>
+      logger.warn("joinGroup rate-limited", { uid: who, scope }),
+  });
 });
 
 // ─── listMyGroups ───────────────────────────────────────
@@ -284,10 +188,10 @@ export const changePassword = onCall({ region: REGION }, async (request) => {
   );
 
   await requireMember(groupId, uid);
-  await verifyPassword(groupId, oldPassword);
+  await verifyPassword(db, groupId, oldPassword);
 
   const newSalt = randomSalt();
-  const newHash = hashPassword(newPassword, newSalt);
+  const newHash = await hashPassword(newPassword, newSalt);
   await db.doc(`groups/${groupId}/_meta/auth`).set({
     salt: newSalt,
     hash: newHash,
@@ -326,7 +230,7 @@ export const deleteGroup = onCall({ region: REGION }, async (request) => {
   const password = requirePassword((request.data as { password?: unknown })?.password);
 
   await requireMember(groupId, uid);
-  await verifyPassword(groupId, password);
+  await verifyPassword(db, groupId, password);
 
   // Recursive delete handles all subcollections (persons, gifts,
   // suggestions, wishlist, polls, members, _meta, _archive, _push,

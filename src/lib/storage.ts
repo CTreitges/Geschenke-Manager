@@ -21,6 +21,7 @@ import {
 import { getGiftLocks, normalizePoll, pollPhase, type PollCloseReason } from "@shared/poll";
 import { onAuthStateChanged } from "firebase/auth";
 import { httpsCallable } from "firebase/functions";
+import { isReadDenied, noteAccessLoss, onAccessLoss } from "./accessLoss";
 import { getIdentity } from "./auth";
 import { auth, authReady, db, functions } from "./firebase";
 import { dedupPlan, personDeletion, withLiveParticipants } from "./cascade";
@@ -253,7 +254,8 @@ export function setActiveGroup(groupId: string | null) {
           (err as { name?: string })?.name ??
           "unknown";
         console.warn(`${label} subscription error:`, code, err);
-        if (code === "permission-denied") {
+        // Zugangsverlust → AccessLossRedirect (App.tsx) schickt zum Login.
+        if (isReadDenied(err)) {
           state.permissionError = true;
           notify();
         }
@@ -393,6 +395,23 @@ function clean<T extends Record<string, unknown>>(obj: T): T {
 }
 
 // ─── Cloud Function callables ───────────────────────────
+// Lehnt eine Function mit „Not a member“ ab, hat der Aufrufer keinen Zugang
+// mehr zur Gruppe: wie bei abgelehnten Lesezugriffen permissionError setzen
+// (→ Login mit Hinweis). Der Fehler geht trotzdem an den Aufrufer weiter.
+onAccessLoss(() => {
+  state.permissionError = true;
+  notify();
+});
+
+async function memberCall<T>(call: () => Promise<T>): Promise<T> {
+  try {
+    return await call();
+  } catch (err) {
+    noteAccessLoss(err);
+    throw err;
+  }
+}
+
 type CallableResult = { ok: boolean };
 type JoinPayload = { groupId: ID; password: string };
 type CreatePayload = { groupId: ID; password: string };
@@ -453,7 +472,7 @@ export async function changePasswordCF(
   newPassword: string,
 ): Promise<void> {
   await authReady;
-  await changePasswordCallable({ groupId, oldPassword, newPassword });
+  await memberCall(() => changePasswordCallable({ groupId, oldPassword, newPassword }));
 }
 
 export async function deleteGroupCF(
@@ -461,7 +480,7 @@ export async function deleteGroupCF(
   password: string,
 ): Promise<void> {
   await authReady;
-  await deleteGroupCallable({ groupId, password });
+  await memberCall(() => deleteGroupCallable({ groupId, password }));
 }
 
 export async function listMyGroupsCF(): Promise<ID[]> {
@@ -481,7 +500,8 @@ export async function consumeMagicTokenCF(
 export async function sendTestMailCF(personId: ID): Promise<void> {
   await authReady;
   if (!state.activeGroupId) throw new Error("No active group");
-  await sendTestMailCallable({ groupId: state.activeGroupId, personId });
+  const groupId = state.activeGroupId;
+  await memberCall(() => sendTestMailCallable({ groupId, personId }));
 }
 
 // ─── Membership ─────────────────────────────────────────

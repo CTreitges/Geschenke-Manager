@@ -30,12 +30,29 @@ import {
   setGroupId,
   useGroupId,
 } from "@/lib/auth";
+import { ACCESS_LOST_NOTICE, shouldRedirectToLogin } from "@/lib/accessLoss";
 import { consumeGoogleRedirectResult } from "@/lib/firebase";
 import { markIdentityAsked } from "@/lib/onboarding";
 import { useStore } from "@/lib/hooks";
 import { listMyGroupsCF, setActiveGroup } from "@/lib/storage";
 import { autoMigrateLegacyIfNeeded, consolidateFeedbackOnce } from "@/lib/migrate";
 import { syncPushToken, usePushNavigation } from "@/lib/messaging";
+
+/**
+ * Zugangsverlust (Lesezugriff abgelehnt bzw. Function „Not a member“, siehe
+ * lib/accessLoss.ts): zum Login mit Hinweis statt still leerer Listen.
+ */
+function AccessLossRedirect() {
+  const { permissionError } = useStore();
+  const { pathname } = useLocation();
+  const nav = useNavigate();
+  useEffect(() => {
+    if (shouldRedirectToLogin(permissionError, pathname)) {
+      nav("/login", { replace: true, state: { notice: ACCESS_LOST_NOTICE } });
+    }
+  }, [permissionError, pathname, nav]);
+  return null;
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -197,6 +214,7 @@ export default function App() {
   return (
     <>
       <GoogleRedirectHandler />
+      <AccessLossRedirect />
       <PushBridge groupId={groupId} />
       {!bootDone ? (
         <GlowScreen className="flex items-center justify-center text-sm text-fg-muted">

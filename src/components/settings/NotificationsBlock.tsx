@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button, Chip, Switch } from "@/components/ui";
 import { enablePushForGroup, sendTestPush, setPushPrefs, usePushState } from "@/lib/messaging";
 import { pushPlatform, type PushPlatform } from "@/lib/pushState";
+import { noteAccessLoss } from "@/lib/accessLoss";
 import { SettingsRow } from "./SettingsGroup";
 
 /** Anleitung, wie man blockierte Mitteilungen wieder erlaubt. */
@@ -66,6 +67,7 @@ export function NotificationsBlock({ groupId }: { groupId: string | null }) {
       else toast.error("Kein Gerät erreicht – richte Mitteilungen auf diesem Gerät neu ein");
     } catch (err) {
       console.error(err);
+      noteAccessLoss(err);
       toast.error("Test-Push fehlgeschlagen");
     } finally {
       setBusy(null);

@@ -23,7 +23,7 @@ Trust-basierte Webapp (PWA, mobile-first, Deutsch) für Geburtstagsgeschenke im 
 
 ## Repo-Etikette
 - Default-Branch `main`; Tests neben dem Code (`src/**/*.test.ts`), Functions-Tests ebenso neben dem Code (`functions/src/**/*.test.ts`, Helfer in `functions/test/`), E2E `e2e/tests/`.
-- Emulator-Läufe nur mit `demo-geschenke`; die `pre*`/`post*`-Scripts räumen Emulator-Reste (`e2e/emu-cleanup.mjs`).
+- Emulator-Läufe nur mit `demo-geschenke`; die `pre*`/`post*`-Scripts räumen nur eigene Emulator-Reste (`e2e/emu-cleanup.mjs`, PID-Marker `e2e/.emu-owner.json`), fremde auf :8080 bleiben stehen. Filter: `npm run e2e -- <datei|-g text>` geht an Playwright.
 
 ## Projekt-Gotchas
 - Produktion `geschenke-manager-ec19e`; Deploy nur nach Christofs OK und nach `DEPLOY.md`, Befehle immer mit `--project geschenke-manager-ec19e`.

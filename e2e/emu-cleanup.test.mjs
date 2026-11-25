@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { cleanup, parseNetstat } from "./emu-cleanup.mjs";
+import { cleanup, parseNetstat } from "./emu-lib.mjs";
 
 // Attrappe eines Firestore-Emulators als eigener Prozess (eigene PID), nie ein
 // echter Emulator: GET / → "Ok", POST /shutdown → beendet sich (außer mit
@@ -20,7 +20,14 @@ const server = http.createServer((req, res) => {
   }
   res.end("Ok");
 });
-server.listen(port, "127.0.0.1", () => console.log(server.address().port));
+// Ein eben freigegebener Port ist unter Windows nicht immer sofort wieder frei.
+let tries = 0;
+server.on("error", (e) => {
+  if (e.code !== "EADDRINUSE" || ++tries > 50) process.exit(1);
+  setTimeout(() => server.listen(port, "127.0.0.1"), 100);
+});
+server.on("listening", () => console.log(server.address().port));
+server.listen(port, "127.0.0.1");
 `;
 
 const running = [];
@@ -31,6 +38,7 @@ function startDummy(port = 0, { ignoreShutdown = false } = {}) {
   const exited = new Promise((r) => proc.once("exit", r));
   return new Promise((resolve, reject) => {
     proc.once("error", reject);
+    exited.then((code) => reject(new Error(`Attrappe vor dem Lauschen beendet (Code ${code})`)));
     proc.stdout.once("data", (d) => resolve({ proc, pid: proc.pid, port: Number(String(d).trim()), exited }));
   });
 }
@@ -59,7 +67,8 @@ afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
 });
 
-describe("emu-cleanup cleanup", () => {
+// Prozess-Starts und netstat brauchen unter Last (parallele Testdateien) Zeit.
+describe("emu-cleanup cleanup", { timeout: 20_000 }, () => {
   it("beendet den eigenen Emulator (Marker + passende Lauscher-PID) und löscht den Marker", async () => {
     const own = await startDummy();
     writeMarker(own.port, own.pid);
@@ -96,6 +105,15 @@ describe("emu-cleanup cleanup", () => {
     expect(await cleanup({ port: own.port, markerPath, graceMs: 500 })).toBe("stopped");
     await own.exited;
     expect(await answers(own.port)).toBe(false);
+  });
+
+  it("lässt alles stehen und behält den Marker, wenn die Lauscher nicht ermittelbar sind", async () => {
+    const own = await startDummy();
+    writeMarker(own.port, own.pid);
+
+    expect(await cleanup({ port: own.port, markerPath, pidsOf: () => null })).toBe("unknown");
+    expect(await answers(own.port)).toBe(true);
+    expect(existsSync(markerPath)).toBe(true);
   });
 });
 

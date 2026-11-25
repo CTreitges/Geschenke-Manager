@@ -15,6 +15,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    include: ["src/**/*.test.{ts,tsx}"],
+    // e2e/*.test.mjs: Unit-Tests der Emulator-Skripte (ohne Emulator).
+    include: ["src/**/*.test.{ts,tsx}", "e2e/*.test.mjs"],
   },
 });

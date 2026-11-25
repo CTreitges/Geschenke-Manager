@@ -54,6 +54,9 @@ dist-debug/
 # Emulator-Screenshots (npm run emu:shots)
 e2e/.shots/
 
+# PID des eigenen Firestore-Emulators (e2e/run-emulators.mjs, emu-cleanup.mjs)
+e2e/.emu-owner.json
+
 # Playwright (npm run e2e)
 test-results/
 playwright-report/
